@@ -1,0 +1,40 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+.venv/ß
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+coverage/
+
+# IDE and macOS
+.DS_Store
+.vscode/
+.idea/
+
+# Temporary files
+tmp/
+temp/
+*.log
+
+# AWS
+.aws-sam/
+cdk.out/
+
+# Local data and PII
+data/private/
+data/local/
+*.db
