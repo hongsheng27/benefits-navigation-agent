@@ -40,6 +40,17 @@ Policy-governed State Machine
 AWS deployment, logging and observability
 ```
 
+後端拓撲已決定採用 **Modular monolith**：API、orchestration、rules、RAG、privacy
+與 AWS adapters 保持清楚的模組邊界，但先組成一個可部署的 Python application，
+模組之間以程式內 function call 溝通。部署平台仍待決定；未來若有實際需求，
+可再把 Agent module 拆到獨立 runtime。詳見
+[ADR-0001](docs/decisions/0001-backend-modular-monolith.md)。
+
+HTTP API framework 已決定使用 **FastAPI**。FastAPI 只負責 transport、request /
+response validation、routing 與 error mapping；application、orchestration、rules 與
+retrieval 保持 framework-neutral。Lambda handler 不列為 MVP 必要項目，部署平台仍待決定。
+詳見 [ADR-0002](docs/decisions/0002-use-fastapi-for-http-api.md)。
+
 預計流程狀態：
 
 ```text
@@ -64,27 +75,30 @@ UNDERSTAND_EVENT
 
 ## 暫定技術棧
 
-| Layer                      | 暫定選擇                                                                | 狀態 / 用途                                             |
-| -------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| Frontend                   | React、Vite、TypeScript、Tailwind CSS                                   | 暫定；對話、資格問題、結果與 checklist UI               |
-| Backend                    | Python、Pydantic、boto3                                                 | 暫定；API、結構化資料與 AWS 整合                        |
-| API framework              | FastAPI 或 AWS Lambda handler                                           | **待決策**                                              |
-| LLM                        | Amazon Bedrock 上的模型                                                 | 暫定使用 Bedrock；模型尚未決定                          |
-| Agent orchestration        | 自製 state machine；Strands Agents 為候選                               | **待決策**；傾向混合方案                                |
-| Agent hosting              | Amazon Bedrock AgentCore Runtime                                        | 暫定；需確認比賽帳號權限與現場可用性                    |
-| Agent tools                | `resolve_life_event`、`retrieve_official_rules`、`evaluate_eligibility` | MVP 暫定三個核心工具                                    |
-| Document storage           | Amazon S3                                                               | 暫定；存放官方文件與處理後資料                          |
-| RAG                        | Amazon Bedrock Knowledge Bases 或自製 retrieval                         | **待決策**                                              |
-| Vector store / embeddings  | 由 Bedrock Knowledge Bases 管理或自選方案                               | **待決策**                                              |
-| Entitlement graph          | JSON / Python mapping 或 DynamoDB                                       | **待決策**；不使用完整 GraphRAG / Neptune 作為 MVP 前提 |
-| Eligibility rules          | Python / JSON 規則 + Pydantic validation                                | 暫定；規則判斷必須是 deterministic                      |
-| Session / application data | DynamoDB                                                                | 選用；只有跨請求狀態需要保存時才加入                    |
-| Safety                     | Dynamic tool allowlist、輸入驗證、human-in-the-loop                     | 暫定核心機制                                            |
-| Guardrails                 | Amazon Bedrock Guardrails / AgentCore Policy                            | 選用；依時間與帳號權限決定                              |
-| Observability              | Amazon CloudWatch                                                       | 暫定；記錄狀態轉換、tool call、延遲與錯誤               |
-| Deployment                 | AWS Amplify、Lambda、AgentCore Runtime 的組合                           | **待決策**                                              |
-| Infrastructure as Code     | AWS SAM、CDK 或手動設定                                                 | **待決策**；Hackathon 以速度為優先                      |
-| Testing                    | pytest；前端測試工具待定                                                | 暫定；以 eligibility 與 end-to-end evaluation 為優先    |
+| Layer                     | 暫定選擇                                                                | 狀態 / 用途                                             |
+| ------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
+| Frontend                  | React、Vite、TypeScript、Tailwind CSS                                   | 暫定；對話、資格問題、結果與 checklist UI               |
+| Backend                   | Python、Pydantic、boto3                                                 | 暫定；API、結構化資料與 AWS 整合                        |
+| Backend topology          | Modular monolith                                                        | **已決定**；模組分離，單一 deployment unit              |
+| API framework             | FastAPI                                                                 | **已決定**；核心 application logic 不依賴 framework     |
+| LLM                       | Amazon Bedrock 上的模型                                                 | **後續決定**；chat 與 embedding model 待實測            |
+| Agent orchestration       | Policy-governed hybrid                                                  | **已決定**；state machine 控制，Agent 僅限指定節點      |
+| Agent SDK                 | Strands Agents + Amazon Bedrock                                         | **Trial / 可逆**；包在自有 `AgentRunner` interface 後方 |
+| Agent hosting             | Amazon Bedrock AgentCore Runtime                                        | **後續決定**；先確認比賽帳號權限與現場可用性            |
+| Agent tools               | `resolve_life_event`、`retrieve_official_rules`、`evaluate_eligibility` | MVP 暫定三個核心工具                                    |
+| Document storage          | Amazon S3                                                               | 暫定；存放官方文件與處理後資料                          |
+| RAG                       | Amazon Bedrock Knowledge Bases 或自製 retrieval                         | **後續決定**；先固定 `Retriever` interface              |
+| Vector store / embeddings | 由 Bedrock Knowledge Bases 管理或自選方案                               | **後續決定**                                            |
+| Entitlement graph         | JSON / Python mapping 或 DynamoDB                                       | **開賽前決定**；MVP 不使用完整 GraphRAG / Neptune       |
+| Eligibility rules         | Python / JSON 規則 + Pydantic validation                                | 暫定；規則判斷必須是 deterministic                      |
+| Session state boundary    | Client / server split                                                   | **已決定**；direct identifiers 留在 client              |
+| Session persistence       | Memory、DynamoDB 或 AgentCore Memory                                    | **後續決定**；只保存去識別化 backend state              |
+| Safety                    | Dynamic tool allowlist、輸入驗證、human-in-the-loop                     | 暫定核心機制                                            |
+| Guardrails                | Amazon Bedrock Guardrails / AgentCore Policy                            | **後續決定**；依時間與帳號權限選用                      |
+| Observability             | Amazon CloudWatch                                                       | 暫定；記錄狀態轉換、tool call、延遲與錯誤               |
+| Deployment                | AWS Amplify、Lambda、AgentCore Runtime 的組合                           | **後續決定**；本機 vertical slice 跑通後再選            |
+| Infrastructure as Code    | AWS SAM、CDK 或手動設定                                                 | **後續決定**；Hackathon 以速度為優先                    |
+| Testing                   | pytest；前端測試工具待定                                                | 暫定；以 eligibility 與 end-to-end evaluation 為優先    |
 
 ## 初步檔案結構
 
@@ -107,13 +121,14 @@ Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修�
 ├── backend/
 │   ├── README.md
 │   ├── app/
-│   │   ├── main.py                 # FastAPI 或 Lambda 入口；待選型
+│   │   ├── main.py                 # FastAPI application 入口
 │   │   ├── api/                    # Session、message、result endpoints
 │   │   ├── schemas/                # Pydantic request / response / domain models
 │   │   ├── orchestration/
 │   │   │   ├── state.py            # Workflow state 定義
 │   │   │   ├── state_machine.py    # 狀態轉換與停止條件
-│   │   │   └── strands_agent.py    # 選用：採 Strands 時才加入
+│   │   │   ├── agent_runner.py     # Framework-neutral AgentRunner interface
+│   │   │   └── strands_agent.py    # Trial：StrandsAgentRunner adapter
 │   │   ├── tools/
 │   │   │   ├── resolve_life_event.py
 │   │   │   ├── retrieve_official_rules.py
@@ -143,36 +158,53 @@ Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修�
 └── tmp/                            # 本機 PDF 提取 / 測試產物，不作為正式資料來源
 ```
 
-選用功能如 DynamoDB、Guardrails、Strands 與 IaC，等選型確定後再補。大型原始 PDF
+選用功能如 DynamoDB、Guardrails 與 IaC，等選型確定後再補。大型原始 PDF
 和處理產物原則上放 S3 或本機 `tmp/`，Git 只保存來源 metadata、可審查的規則與小型
 evaluation fixtures。
 
-## Agent Orchestration：尚未定案
+## Agent Orchestration：已定案
 
-目前考慮三種方式：
+採用 **policy-governed hybrid**：整體是可預測的 workflow，只有需要語意彈性的
+節點使用受限制的 Agent 行為。
 
-1. **自製 state machine**：控制力、可測試性最高，適合資格與隱私流程；需要自行撰寫 orchestration。
-2. **Strands Agents 主導 agent loop**：tool calling 開發較快，但執行順序較不確定。
-3. **混合方案（目前較傾向）**：自製 state machine 作為外層控制，Strands 只用在事件理解、下一題選擇與 grounded explanation 等節點。
+- **State machine** 擁有目前狀態、狀態轉換、tool allowlist、停止條件、錯誤處理與人工確認的控制權。
+- **Agent / LLM** 只負責人生事件理解、去識別化欄位提取、建議下一個必要問題與 grounded explanation。
+- **Deterministic rule engine** 擁有 `eligible`、`ineligible`、`needs_information` 與 `needs_human_review` 的資格判斷權。
 
-無論採用哪一種方案，LLM / Agent 都不直接決定福利資格，也不能繞過狀態檢查、
-PII 邊界或人工確認。
+Agent 不能直接決定福利資格，也不能繞過狀態檢查、PII 邊界或人工確認。
+Bounded agentic steps 暫定以 **Strands Agents + Amazon Bedrock** 實作，但只能透過
+自有 `AgentRunner` interface 接入；state machine、schemas、tools、rules 與 session state
+不得依賴 Strands-specific types。若 spike 無法穩定限制 tools、產生結構化輸出或清楚
+除錯，則改用 direct Bedrock implementation。詳見
+[ADR-0003](docs/decisions/0003-policy-governed-hybrid-orchestration.md)。
+實作選型與退出條件詳見
+[ADR-0004](docs/decisions/0004-trial-strands-agent-runner.md)。
 
-## 待決策清單
+## 四人初步分工
 
-- [ ] 純自製 state machine，或 state machine + Strands Agents。
-- [ ] AgentCore Runtime 是否列為 MVP 必要元件，或先以 Lambda 執行。
-- [ ] Bedrock 使用的 chat model 與 embedding model。
-- [ ] 使用 Bedrock Knowledge Bases，或自行實作小型 RAG pipeline。
-- [ ] Entitlement graph 儲存在程式內、JSON，還是 DynamoDB。
-- [ ] Backend 採 FastAPI、Lambda handler，或兩者搭配。
-- [ ] 前端部署至 Amplify，或使用其他靜態網站方案。
-- [ ] 是否需要 DynamoDB 保存 session，以及保存哪些去識別化欄位。
-- [ ] 是否加入 Bedrock Guardrails、AgentCore Policy、AgentCore Gateway 或 Memory。
-- [ ] IaC 使用 SAM、CDK，還是 Hackathon 期間先手動建立資源。
-- [ ] 官方文件的最終清單、更新日期、切分方式與 citation 格式。
-- [ ] Demo 是否只完成喪偶情境，或再加入一個較淺的人生事件。
-- [ ] 團隊分工、GitHub Issues、branch 與 pull request 流程。
+每位成員負責一個可獨立展示的部分，同時透過共同 contracts 串成完整流程。角色會在
+第一次架構會議確認後調整。
+
+| 成員 | 角色 | 主要負責 |
+| --- | --- | --- |
+| **成員 A**<br>（Will） | Technical Lead、Agent Platform / AWS | Strands agent loop、Bedrock、AgentCore spike、Agent 執行邊界、observability 與最終整合 |
+| **成員 B** | Privacy, Safety & AI Experience | React 使用流程、human-in-the-loop、PII masking、資格結果、引用與 Privacy Demo |
+| **成員 C** | Backend Workflow / Agent Tooling | FastAPI、Pydantic contracts、state machine、session、Agent tools 與 backend tests |
+| **成員 D** | Policy Intelligence / Evaluation | 官方來源、eligibility rules、retrieval data、citations、golden cases 與 evaluation |
+
+共同實作前會先對齊 API / tool contracts、PII boundary、MVP 官方資料與 integration
+checkpoints。請每位成員確認想負責的角色、希望獲得的技術經驗，以及目前看到的工作量
+或技術風險。
+
+## 已確認的工程方向
+
+- Backend 採用 modular monolith 與 FastAPI。
+- 採用 policy-governed hybrid：state machine 控制流程，Agent 僅在指定節點推理。
+- Bounded agentic steps 試用 Strands Agents + Bedrock，並透過自有 `AgentRunner` 接入。
+- 採用 client / server split state；direct identifiers 留在 client。
+
+Bedrock model、retrieval、session persistence、AgentCore 與 deployment 細節將由技術驗證
+逐步確定；已接受的共同工程決策記錄在 [Architecture Decision Records](docs/decisions/README.md)。
 
 技術選型原則：能在有限時間內完成穩定 demo、保留官方依據、可測試，且能清楚說明
 AI 與確定性程式各自負責什麼；不以使用最多 AWS 服務為目標。
@@ -188,10 +220,37 @@ AI 與確定性程式各自負責什麼；不以使用最多 AWS 服務為目標
 
 預計準備 8–12 份官方文件，以及約 8–10 個正常、邊界與不符合資格的測試案例。
 
+四個項目目前都保留；實作深度會依官方資料品質與 Hackathon 時間調整。
+
+### 候選案例提案：家人突發重病後的照護導航
+
+> 此案例仍在構想階段，尚未取代目前的 MVP。
+
+聚焦家人突發重病後，主要照顧者如何跨醫院、長照、社福、身障與照顧者支持系統，找到
+出院準備到返家初期的下一步。候選輸出包含聯絡窗口、7 / 30 / 90 天行動、缺少的評估或
+文件、辦理順序、官方來源與人工轉介。系統只提供導航，不做醫療建議，也不取代醫師、
+護理師、社工、照管人員或政府承辦人。
+
+## 未來方向
+
+- 擴展更多人生事件，並將單次 `LifeEvent` 演進為持續更新的 `CareJourney`。
+- 擴充跨機關 entitlement graph；資料規模與多跳需求增加後再評估 GraphRAG / Neptune。
+- 視需要加入 Bedrock Knowledge Bases、persistent session、AgentCore 進階服務與 Guardrails。
+- 加強進階 PII detection、authentication、streaming 與可重建的 AWS infrastructure。
+
 ## 隱私界線
 
-姓名、身分證字號、地址與聯絡方式等真實個資原則上保留在使用者裝置；
-雲端只接收資格判斷需要的去識別化屬性。實際欄位與保存政策仍待逐項確認。
+採用 **client / server split state**：
+
+- 姓名、身分證字號、地址、電話與 email 等 direct identifiers 留在使用者裝置。
+- Client 在傳輸前提示、偵測並遮罩明顯 PII，只送 sanitized text 與 allowlisted eligibility attributes。
+- Backend 使用不含個資的 random `session_id`，並擁有 authoritative workflow state。
+- Backend 只保存人生事件、資格所需的去識別化屬性、缺漏欄位、candidate benefit IDs 與判斷結果。
+- Backend 仍執行輸入驗證與 defense-in-depth redaction，避免 PII 進入 logs、model prompts 或 traces。
+- Client 傳入的 workflow state 不視為可信，狀態轉換由 backend 驗證。
+
+Session persistence 技術、精確欄位、保存期限與刪除政策仍待決定。詳見
+[ADR-0005](docs/decisions/0005-split-client-server-session-state.md)。
 
 ## 專案狀態
 
