@@ -6,26 +6,27 @@
 *.key
 
 # Python
-.venv/ß
-venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.venv/
+venv/
 .ruff_cache/
 
-# Node
+# Node / frontend
 node_modules/
 .next/
 dist/
 build/
 coverage/
+.vite/
 
 # IDE and macOS
 .DS_Store
 .vscode/
 .idea/
 
-# Temporary files
+# Local artifacts
 tmp/
 temp/
 *.log

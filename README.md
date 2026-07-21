@@ -64,27 +64,88 @@ UNDERSTAND_EVENT
 
 ## 暫定技術棧
 
-| Layer | 暫定選擇 | 狀態 / 用途 |
-| --- | --- | --- |
-| Frontend | React、Vite、TypeScript、Tailwind CSS | 暫定；對話、資格問題、結果與 checklist UI |
-| Backend | Python、Pydantic、boto3 | 暫定；API、結構化資料與 AWS 整合 |
-| API framework | FastAPI 或 AWS Lambda handler | **待決策** |
-| LLM | Amazon Bedrock 上的模型 | 暫定使用 Bedrock；模型尚未決定 |
-| Agent orchestration | 自製 state machine；Strands Agents 為候選 | **待決策**；傾向混合方案 |
-| Agent hosting | Amazon Bedrock AgentCore Runtime | 暫定；需確認比賽帳號權限與現場可用性 |
-| Agent tools | `resolve_life_event`、`retrieve_official_rules`、`evaluate_eligibility` | MVP 暫定三個核心工具 |
-| Document storage | Amazon S3 | 暫定；存放官方文件與處理後資料 |
-| RAG | Amazon Bedrock Knowledge Bases 或自製 retrieval | **待決策** |
-| Vector store / embeddings | 由 Bedrock Knowledge Bases 管理或自選方案 | **待決策** |
-| Entitlement graph | JSON / Python mapping 或 DynamoDB | **待決策**；不使用完整 GraphRAG / Neptune 作為 MVP 前提 |
-| Eligibility rules | Python / JSON 規則 + Pydantic validation | 暫定；規則判斷必須是 deterministic |
-| Session / application data | DynamoDB | 選用；只有跨請求狀態需要保存時才加入 |
-| Safety | Dynamic tool allowlist、輸入驗證、human-in-the-loop | 暫定核心機制 |
-| Guardrails | Amazon Bedrock Guardrails / AgentCore Policy | 選用；依時間與帳號權限決定 |
-| Observability | Amazon CloudWatch | 暫定；記錄狀態轉換、tool call、延遲與錯誤 |
-| Deployment | AWS Amplify、Lambda、AgentCore Runtime 的組合 | **待決策** |
-| Infrastructure as Code | AWS SAM、CDK 或手動設定 | **待決策**；Hackathon 以速度為優先 |
-| Testing | pytest；前端測試工具待定 | 暫定；以 eligibility 與 end-to-end evaluation 為優先 |
+| Layer                      | 暫定選擇                                                                | 狀態 / 用途                                             |
+| -------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
+| Frontend                   | React、Vite、TypeScript、Tailwind CSS                                   | 暫定；對話、資格問題、結果與 checklist UI               |
+| Backend                    | Python、Pydantic、boto3                                                 | 暫定；API、結構化資料與 AWS 整合                        |
+| API framework              | FastAPI 或 AWS Lambda handler                                           | **待決策**                                              |
+| LLM                        | Amazon Bedrock 上的模型                                                 | 暫定使用 Bedrock；模型尚未決定                          |
+| Agent orchestration        | 自製 state machine；Strands Agents 為候選                               | **待決策**；傾向混合方案                                |
+| Agent hosting              | Amazon Bedrock AgentCore Runtime                                        | 暫定；需確認比賽帳號權限與現場可用性                    |
+| Agent tools                | `resolve_life_event`、`retrieve_official_rules`、`evaluate_eligibility` | MVP 暫定三個核心工具                                    |
+| Document storage           | Amazon S3                                                               | 暫定；存放官方文件與處理後資料                          |
+| RAG                        | Amazon Bedrock Knowledge Bases 或自製 retrieval                         | **待決策**                                              |
+| Vector store / embeddings  | 由 Bedrock Knowledge Bases 管理或自選方案                               | **待決策**                                              |
+| Entitlement graph          | JSON / Python mapping 或 DynamoDB                                       | **待決策**；不使用完整 GraphRAG / Neptune 作為 MVP 前提 |
+| Eligibility rules          | Python / JSON 規則 + Pydantic validation                                | 暫定；規則判斷必須是 deterministic                      |
+| Session / application data | DynamoDB                                                                | 選用；只有跨請求狀態需要保存時才加入                    |
+| Safety                     | Dynamic tool allowlist、輸入驗證、human-in-the-loop                     | 暫定核心機制                                            |
+| Guardrails                 | Amazon Bedrock Guardrails / AgentCore Policy                            | 選用；依時間與帳號權限決定                              |
+| Observability              | Amazon CloudWatch                                                       | 暫定；記錄狀態轉換、tool call、延遲與錯誤               |
+| Deployment                 | AWS Amplify、Lambda、AgentCore Runtime 的組合                           | **待決策**                                              |
+| Infrastructure as Code     | AWS SAM、CDK 或手動設定                                                 | **待決策**；Hackathon 以速度為優先                      |
+| Testing                    | pytest；前端測試工具待定                                                | 暫定；以 eligibility 與 end-to-end evaluation 為優先    |
+
+## 初步檔案結構
+
+以下 MVP 骨架已建立在 repository 中。原則是讓四位組員可以分別處理前端、
+Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修改同一檔案的機會。
+目前多數檔案只是 package marker 或職責說明，尚不代表功能已完成。
+
+```text
+.
+├── README.md
+├── .env.example                    # 所需環境變數名稱，不放真實密鑰
+├── .gitignore
+├── frontend/
+│   └── src/
+│       ├── api/                    # Backend API client
+│       ├── components/             # 對話、問題卡、福利結果、來源與 checklist
+│       ├── pages/                  # 主要頁面
+│       ├── types/                  # 前後端共用資料形狀的 TypeScript 版本
+│       └── ...                     # 選定套件版本後再初始化 React app
+├── backend/
+│   ├── README.md
+│   ├── app/
+│   │   ├── main.py                 # FastAPI 或 Lambda 入口；待選型
+│   │   ├── api/                    # Session、message、result endpoints
+│   │   ├── schemas/                # Pydantic request / response / domain models
+│   │   ├── orchestration/
+│   │   │   ├── state.py            # Workflow state 定義
+│   │   │   ├── state_machine.py    # 狀態轉換與停止條件
+│   │   │   └── strands_agent.py    # 選用：採 Strands 時才加入
+│   │   ├── tools/
+│   │   │   ├── resolve_life_event.py
+│   │   │   ├── retrieve_official_rules.py
+│   │   │   └── evaluate_eligibility.py
+│   │   ├── retrieval/              # 文件切分、metadata filter、citation 組裝
+│   │   ├── rules/                  # Deterministic eligibility rules
+│   │   ├── privacy/                # PII 偵測、去識別化與欄位 allowlist
+│   │   ├── services/               # Bedrock、S3、DynamoDB 等 AWS adapters
+│   │   └── observability/          # Structured logging、trace 與 metrics
+│   └── tests/
+│       ├── unit/                   # Rules、state transitions、privacy tests
+│       └── integration/            # Tool、RAG 與 API integration tests
+├── data/
+│   ├── benefits/                   # 福利定義、負責機關與所需欄位
+│   ├── entitlement_graph/          # 跨福利 / 機關的 curated relations
+│   ├── document_metadata/          # 官方來源 URL、發布機關、日期與版本
+│   └── evaluations/                # 正常、邊界與不符合資格的測試案例
+├── scripts/
+│   ├── ingest_documents.py         # 官方文件清理、切分與匯入
+│   ├── validate_rules.py           # 規則與資料 schema 檢查
+│   └── run_evaluation.py           # 批次執行 evaluation cases
+├── infra/                          # SAM / CDK；選型確定後再建立內容
+├── docs/
+│   ├── architecture.md             # 完整架構與資料流程
+│   ├── decisions/                  # Architecture Decision Records (ADR)
+│   └── official-sources.md         # MVP 採用的政府文件清單
+└── tmp/                            # 本機 PDF 提取 / 測試產物，不作為正式資料來源
+```
+
+選用功能如 DynamoDB、Guardrails、Strands 與 IaC，等選型確定後再補。大型原始 PDF
+和處理產物原則上放 S3 或本機 `tmp/`，Git 只保存來源 metadata、可審查的規則與小型
+evaluation fixtures。
 
 ## Agent Orchestration：尚未定案
 
