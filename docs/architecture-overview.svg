@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1200" viewBox="0 0 1920 1200" role="img" aria-labelledby="title desc">
+  <title id="title">接住 Benefits Navigation Agent system architecture</title>
+  <desc id="desc">Privacy-first client, policy-governed modular monolith, domain capabilities, and AWS integrations.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#15803d"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+    <style>
+      text { font-family: Inter, "PingFang TC", "Noto Sans TC", Arial, sans-serif; fill: #0f172a; }
+      .title { font-size: 32px; font-weight: 700; }
+      .subtitle { font-size: 16px; fill: #475569; }
+      .section-title { font-size: 19px; font-weight: 700; }
+      .node-title { font-size: 17px; font-weight: 700; text-anchor: middle; }
+      .node-copy { font-size: 14px; fill: #334155; text-anchor: middle; }
+      .edge-label { font-size: 13px; font-weight: 600; fill: #475569; text-anchor: middle; }
+      .legend { font-size: 13px; fill: #334155; }
+      .edge { fill: none; stroke: #475569; stroke-width: 2.2; marker-end: url(#arrow); }
+      .edge-green { fill: none; stroke: #15803d; stroke-width: 2.4; marker-end: url(#arrow-green); }
+      .edge-dashed { fill: none; stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+      .accepted { fill: #dcfce7; stroke: #15803d; stroke-width: 2; }
+      .client { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .trial { fill: #fef3c7; stroke: #d97706; stroke-width: 2; stroke-dasharray: 7 5; }
+      .pending { fill: #f1f5f9; stroke: #64748b; stroke-width: 2; stroke-dasharray: 7 5; }
+      .output { fill: #fff7ed; stroke: #ea580c; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1200" fill="#ffffff"/>
+  <text class="title" x="48" y="52">接住 · Benefits Navigation Agent</text>
+  <text class="subtitle" x="48" y="82">Privacy-first · Policy-governed · AWS-ready modular monolith</text>
+
+  <g transform="translate(1040 32)">
+    <rect class="accepted" x="0" y="0" width="24" height="18" rx="4"/>
+    <text class="legend" x="34" y="14">已確認的核心邊界</text>
+    <rect class="trial" x="190" y="0" width="24" height="18" rx="4"/>
+    <text class="legend" x="224" y="14">Trial / 可逆</text>
+    <rect class="pending" x="350" y="0" width="24" height="18" rx="4"/>
+    <text class="legend" x="384" y="14">待技術驗證</text>
+    <rect class="client" x="520" y="0" width="24" height="18" rx="4"/>
+    <text class="legend" x="554" y="14">Client / privacy boundary</text>
+  </g>
+
+  <rect x="32" y="110" width="300" height="1035" rx="18" fill="#f8fafc" stroke="#93c5fd" stroke-width="2"/>
+  <rect x="362" y="110" width="455" height="1035" rx="18" fill="#f0fdf4" stroke="#86efac" stroke-width="2"/>
+  <rect x="847" y="110" width="570" height="1035" rx="18" fill="#fffbeb" stroke="#fcd34d" stroke-width="2"/>
+  <rect x="1447" y="110" width="441" height="1035" rx="18" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+
+  <text class="section-title" x="52" y="148">1 · Client trust boundary</text>
+  <text class="section-title" x="382" y="148">2 · Backend control</text>
+  <text class="subtitle" x="382" y="171">Python modular monolith · single deployment unit</text>
+  <text class="section-title" x="867" y="148">3 · Domain capabilities</text>
+  <text class="section-title" x="1467" y="148">4 · AWS and external services</text>
+
+  <!-- Edges are drawn first so nodes remain readable. -->
+  <path class="edge" d="M182 224 L182 275"/>
+  <path class="edge-green" d="M182 375 L182 420"/>
+  <path class="edge-dashed" d="M182 375 C275 390 275 570 182 585"/>
+  <path class="edge-green" d="M307 477 C332 477 342 380 392 380"/>
+  <rect x="284" y="420" width="132" height="42" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text class="edge-label" x="350" y="438">sanitized text</text>
+  <text class="edge-label" x="350" y="454">+ allowlisted fields</text>
+
+  <path class="edge-green" d="M590 420 L590 485"/>
+  <path class="edge-dashed" d="M590 585 L590 625"/>
+  <path class="edge-dashed" d="M392 380 C375 380 375 690 392 690"/>
+  <path class="edge-green" d="M590 585 C590 735 485 735 485 760"/>
+  <path class="edge-green" d="M580 800 L600 800"/>
+  <path class="edge-green" d="M697 840 C697 875 590 875 590 900"/>
+  <path class="edge-dashed" d="M735 535 C800 535 800 947 797 947"/>
+  <rect x="690" y="548" width="115" height="38" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+  <text class="edge-label" x="747" y="564">state-scoped</text>
+  <text class="edge-label" x="747" y="580">tool allowlist</text>
+
+  <path class="edge-green" d="M787 947 C830 947 830 757 875 757"/>
+  <path class="edge-green" d="M787 947 C830 947 830 757 1165 757"/>
+  <path class="edge-green" d="M787 947 C830 947 830 892 875 892"/>
+  <path class="edge-green" d="M787 947 C830 947 830 892 1165 892"/>
+  <path class="edge" d="M985 797 C985 955 1030 955 1030 990"/>
+  <path class="edge" d="M1275 797 C1275 955 1235 955 1235 990"/>
+  <path class="edge" d="M985 932 L1075 990"/>
+  <path class="edge" d="M1275 932 L1190 990"/>
+
+  <path class="edge-dashed" d="M787 380 L1475 380"/>
+  <text class="edge-label" x="1128" y="367">deployment target</text>
+  <path class="edge" d="M735 535 C1060 535 1150 525 1475 525"/>
+  <text class="edge-label" x="1120" y="514">needs human review</text>
+  <path class="edge" d="M787 690 L1475 690"/>
+  <text class="edge-label" x="1128" y="678">redacted telemetry</text>
+  <path class="edge" d="M787 800 C825 800 825 640 865 640 L1405 640 C1445 640 1445 800 1475 800"/>
+  <text class="edge-label" x="1135" y="628">bounded model invocation</text>
+  <path class="edge" d="M1095 892 C1125 892 1125 960 1155 960 L1405 960 C1440 960 1440 915 1475 915"/>
+  <text class="edge-label" x="1280" y="950">read official evidence</text>
+  <path class="edge-dashed" d="M1095 910 C1125 910 1125 972 1155 972 L1395 972 C1430 972 1430 1040 1475 1040"/>
+  <text class="edge-label" x="1280" y="988">optional retrieval adapter</text>
+
+  <!-- Client nodes -->
+  <ellipse cx="182" cy="210" rx="62" ry="28" fill="#fff7ed" stroke="#f59e0b" stroke-width="1.5"/>
+  <text class="node-title" x="182" y="216">使用者</text>
+
+  <rect class="client" x="57" y="275" width="250" height="100" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="182" y="310">React Web UI</text>
+  <text class="node-copy" x="182" y="336">對話 · 缺漏問題 · 結果</text>
+  <text class="node-copy" x="182" y="356">citations · checklist</text>
+
+  <rect class="accepted" x="57" y="420" width="250" height="115" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="182" y="455">Privacy layer</text>
+  <text class="node-copy" x="182" y="482">PII warning + masking</text>
+  <text class="node-copy" x="182" y="504">field allowlist</text>
+
+  <rect class="client" x="57" y="585" width="250" height="105" rx="52"/>
+  <text class="node-title" x="182" y="625">Direct identifiers</text>
+  <text class="node-copy" x="182" y="652">只留在使用者裝置</text>
+
+  <rect x="57" y="745" width="250" height="126" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+  <text class="node-title" x="182" y="778">Cloud boundary</text>
+  <text class="node-copy" x="182" y="807">只傳送 sanitized text</text>
+  <text class="node-copy" x="182" y="830">與資格所需屬性</text>
+  <text class="node-copy" x="182" y="853">不信任 client workflow state</text>
+
+  <!-- Backend control nodes -->
+  <rect class="accepted" x="392" y="340" width="395" height="80" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="590" y="373">FastAPI transport</text>
+  <text class="node-copy" x="590" y="397">routing · validation · error mapping</text>
+
+  <rect class="accepted" x="445" y="485" width="290" height="100" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="590" y="520">Explicit state machine</text>
+  <text class="node-copy" x="590" y="547">transitions · limits</text>
+  <text class="node-copy" x="590" y="569">confirmation · fallback</text>
+
+  <rect class="pending" x="392" y="625" width="190" height="90" rx="42"/>
+  <text class="node-title" x="487" y="661">Session state</text>
+  <text class="node-copy" x="487" y="686">persistence 待決定</text>
+
+  <rect class="accepted" x="600" y="625" width="187" height="90" rx="12"/>
+  <text class="node-title" x="694" y="660">Safe observability</text>
+  <text class="node-copy" x="694" y="685">redaction first</text>
+
+  <rect class="accepted" x="392" y="760" width="188" height="80" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="486" y="793">AgentRunner</text>
+  <text class="node-copy" x="486" y="817">project-owned interface</text>
+
+  <rect class="trial" x="600" y="760" width="187" height="80" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="694" y="793">Strands runner</text>
+  <text class="node-copy" x="694" y="817">Trial / reversible</text>
+
+  <rect class="accepted" x="392" y="900" width="395" height="95" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="590" y="935">Tool gateway</text>
+  <text class="node-copy" x="590" y="962">state allowlist · input validation</text>
+  <text class="node-copy" x="590" y="982">bounded execution</text>
+
+  <!-- Domain nodes -->
+  <rect class="accepted" x="875" y="715" width="220" height="82" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="985" y="748">Life-event extraction</text>
+  <text class="node-copy" x="985" y="774">approved attributes only</text>
+
+  <rect class="accepted" x="1165" y="715" width="220" height="82" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="1275" y="748">Entitlement graph</text>
+  <text class="node-copy" x="1275" y="774">benefit · agency · dependency</text>
+
+  <rect class="accepted" x="875" y="850" width="220" height="82" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="985" y="883">Official-source Retriever</text>
+  <text class="node-copy" x="985" y="909">metadata · citations</text>
+
+  <rect class="accepted" x="1165" y="850" width="220" height="82" rx="12" filter="url(#shadow)"/>
+  <text class="node-title" x="1275" y="883">Eligibility engine</text>
+  <text class="node-copy" x="1275" y="909">deterministic versioned rules</text>
+
+  <rect class="output" x="955" y="990" width="350" height="115" rx="14" filter="url(#shadow)"/>
+  <text class="node-title" x="1130" y="1025">Grounded API result</text>
+  <text class="node-copy" x="1130" y="1053">missing fields · eligibility status</text>
+  <text class="node-copy" x="1130" y="1077">reason · citations · checklist</text>
+
+  <!-- AWS / external nodes -->
+  <rect class="pending" x="1475" y="340" width="385" height="80" rx="12"/>
+  <text class="node-title" x="1668" y="373">Local / AgentCore Runtime</text>
+  <text class="node-copy" x="1668" y="397">deployment target 待驗證</text>
+
+  <rect x="1475" y="485" width="385" height="80" rx="40" fill="#fff7ed" stroke="#f59e0b" stroke-width="1.5"/>
+  <text class="node-title" x="1668" y="518">Human review</text>
+  <text class="node-copy" x="1668" y="544">醫院 · 社福 · 政府專業人員</text>
+
+  <rect class="pending" x="1475" y="650" width="385" height="80" rx="12"/>
+  <text class="node-title" x="1668" y="683">Amazon CloudWatch</text>
+  <text class="node-copy" x="1668" y="707">logs · metrics · traces</text>
+
+  <rect class="pending" x="1475" y="760" width="385" height="80" rx="12"/>
+  <text class="node-title" x="1668" y="793">Amazon Bedrock</text>
+  <text class="node-copy" x="1668" y="817">chat / embedding model 待實測</text>
+
+  <rect class="pending" x="1475" y="875" width="385" height="80" rx="12"/>
+  <text class="node-title" x="1668" y="908">Official documents</text>
+  <text class="node-copy" x="1668" y="932">government sources + Amazon S3</text>
+
+  <rect class="pending" x="1475" y="1000" width="385" height="80" rx="12"/>
+  <text class="node-title" x="1668" y="1033">Knowledge Bases / vector retrieval</text>
+  <text class="node-copy" x="1668" y="1057">optional Retriever adapter</text>
+
+  <text class="subtitle" x="48" y="1175">State machine controls the process. LLM handles semantic tasks. Deterministic rules own eligibility decisions.</text>
+</svg>
