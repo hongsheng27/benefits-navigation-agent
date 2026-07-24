@@ -134,7 +134,7 @@ Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修�
 │   │   │   ├── retrieve_official_rules.py
 │   │   │   └── evaluate_eligibility.py
 │   │   ├── retrieval/              # 文件切分、metadata filter、citation 組裝
-│   │   ├── rules/                  # Deterministic eligibility rules
+│   │   ├── rules/                  # Deterministic eligibility rulesｓ
 │   │   ├── privacy/                # PII 偵測、去識別化與欄位 allowlist
 │   │   ├── services/               # Bedrock、S3、DynamoDB 等 AWS adapters
 │   │   └── observability/          # Structured logging、trace 與 metrics
@@ -144,7 +144,7 @@ Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修�
 ├── data/
 │   ├── benefits/                   # 福利定義、負責機關與所需欄位
 │   ├── entitlement_graph/          # 跨福利 / 機關的 curated relations
-│   ├── document_metadata/          # 官方來源 URL、發布機關、日期與版本
+│   ├── document_metadata/          # 官方來源 URL、發布機關、日期與版本Ｐ
 │   └── evaluations/                # 正常、邊界與不符合資格的測試案例
 ├── scripts/
 │   ├── ingest_documents.py         # 官方文件清理、切分與匯入
