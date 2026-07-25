@@ -3,6 +3,10 @@
 This document records the repository's engineering and commit conventions.
 Keep it practical and update it when the workflow changes.
 
+For the day-to-day workflow — setup commands, the checks to run before
+committing, logging usage, and the privacy rules that apply while coding — see
+[docs/team-guide.md](docs/team-guide.md).
+
 ## Commit Message Convention
 
 Use Conventional Commit-style messages:

@@ -157,6 +157,7 @@ Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修�
 │   └── run_evaluation.py           # 批次執行 evaluation cases
 ├── infra/                          # SAM / CDK；選型確定後再建立內容
 ├── docs/
+│   ├── team-guide.md               # 開工、檢查、commit 與隱私紅線
 │   ├── positioning.md              # 產品定位與差異化判準
 │   ├── architecture.md             # 完整架構與資料流程
 │   ├── decisions/                  # Architecture Decision Records (ADR)
