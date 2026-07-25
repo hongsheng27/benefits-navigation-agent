@@ -51,6 +51,11 @@ response validation、routing 與 error mapping；application、orchestration、
 retrieval 保持 framework-neutral。Lambda handler 不列為 MVP 必要項目，部署平台仍待決定。
 詳見 [ADR-0002](docs/decisions/0002-use-fastapi-for-http-api.md)。
 
+Frontend 已決定使用 **React、Vite、TypeScript 與 Tailwind CSS**，並以 npm 管理套件。
+目前先建立單頁應用程式與 API client 邊界，不提前決定 routing、全域狀態管理、
+component library 或部署平台。詳見
+[ADR-0006](docs/decisions/0006-use-react-vite-typescript-tailwind.md)。
+
 預計流程狀態：
 
 ```text
@@ -77,7 +82,7 @@ UNDERSTAND_EVENT
 
 | Layer                     | 暫定選擇                                                                | 狀態 / 用途                                             |
 | ------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| Frontend                  | React、Vite、TypeScript、Tailwind CSS                                   | 暫定；對話、資格問題、結果與 checklist UI               |
+| Frontend                  | React、Vite、TypeScript、Tailwind CSS                                   | **已決定**；對話、資格問題、結果與 checklist UI          |
 | Backend                   | Python、Pydantic、boto3                                                 | 暫定；API、結構化資料與 AWS 整合                        |
 | Backend topology          | Modular monolith                                                        | **已決定**；模組分離，單一 deployment unit              |
 | API framework             | FastAPI                                                                 | **已決定**；核心 application logic 不依賴 framework     |
@@ -199,6 +204,7 @@ checkpoints。請每位成員確認想負責的角色、希望獲得的技術經
 ## 已確認的工程方向
 
 - Backend 採用 modular monolith 與 FastAPI。
+- Frontend 採用 React、Vite、TypeScript 與 Tailwind CSS，並使用 npm 管理套件。
 - 採用 policy-governed hybrid：state machine 控制流程，Agent 僅在指定節點推理。
 - Bounded agentic steps 試用 Strands Agents + Bedrock，並透過自有 `AgentRunner` 接入。
 - 採用 client / server split state；direct identifiers 留在 client。
