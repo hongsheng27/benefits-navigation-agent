@@ -47,12 +47,13 @@ uv run pytest
 已建立的只有 transport 邊界與工具設定：
 
 ```text
-pyproject.toml          # 相依套件、ruff 與 pytest 設定
-.python-version         # 釘住 Python 3.13
-app/main.py             # create_app() factory、CORS、router wiring
-app/config.py           # 環境變數設定
-app/api/health.py       # GET /health
-tests/integration/      # health 的 smoke test
+pyproject.toml              # 相依套件、ruff 與 pytest 設定
+.python-version             # 釘住 Python 3.13
+app/main.py                 # create_app() factory、CORS、router wiring
+app/config.py               # 環境變數設定
+app/api/health.py           # GET /health
+app/observability/logging.py # 結構化 JSON logging 與欄位 allowlist
+tests/                      # health smoke test、logging allowlist tests
 ```
 
 以下**刻意未實作**，依 `AGENTS.md` 的 learn-by-building boundary 保留給後端負責人
@@ -63,7 +64,7 @@ tests/integration/      # health 的 smoke test
 - `app/tools/` — 三個 Agent tool 的 contracts 與實作
 - `app/rules/` — deterministic eligibility rules
 - `app/privacy/` — PII 偵測、去識別化與欄位 allowlist
-- `app/retrieval/`、`app/services/`、`app/observability/`
+- `app/retrieval/`、`app/services/`
 
 `app/api/health.py` 內的 `HealthResponse` 是 transport-local 的形狀，用來對齊前端
 既有的 `BackendHealth` 型別；領域 contracts 應該放在 `app/schemas/`。
@@ -76,6 +77,28 @@ tests/integration/      # health 的 smoke test
 - 自由文字只在 `UNDERSTAND_EVENT` 接收，萃取出去識別化屬性後即丟棄，不寫入
   session、儲存或回應。
 - Logs、traces 與 metrics 只記錄結構化欄位；使用者輸入的文字永遠不作為 log 欄位。
+
+第二條由 `app/observability/logging.py` 在程式層強制。請一律使用 `log_event`，
+不要直接呼叫 `print` 或 `logging.info`：
+
+```python
+from app.observability.logging import log_event
+
+log_event(
+    "state_transitioned",
+    session_id=session_id,
+    state="UNDERSTAND_EVENT",
+    next_state="RESOLVE_ENTITLEMENTS",
+    duration_ms=elapsed_ms,
+)
+```
+
+只有 `ALLOWED_FIELDS` 內的欄位會被接受，其餘直接丟出 `DisallowedLogFieldError`。
+記錄例外時使用 `exc_info=True` 並且**不要**傳入例外訊息 —— Pydantic 的
+`ValidationError` 會把違規的輸入值寫進訊息裡，那正是我們丟棄的文字。formatter
+只保留例外類別與 stack frames。
+
+新增欄位等同於一次隱私決定，需先確認該欄位的值不可能包含使用者輸入的內容。
 
 Session id 不使用 cookie，因此 CORS 未開啟 `allow_credentials`。
 

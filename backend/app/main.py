@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.config import get_settings
+from app.observability.logging import configure_logging
 
 
 def create_app() -> FastAPI:
@@ -21,6 +22,7 @@ def create_app() -> FastAPI:
     Exposed as a factory so tests and future deployment adapters can build an
     isolated instance instead of importing shared module state.
     """
+    configure_logging()
     settings = get_settings()
 
     app = FastAPI(
