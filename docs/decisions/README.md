@@ -10,5 +10,6 @@
 - [ADR-0004: Trial Strands for the Bounded Agent Runner](0004-trial-strands-agent-runner.md)
 - [ADR-0005: Split Client and Server Session State](0005-split-client-server-session-state.md)
 - [ADR-0006: Use React, Vite, TypeScript, and Tailwind CSS](0006-use-react-vite-typescript-tailwind.md)
+- [ADR-0007: Limit Data Retention and Egress](0007-limit-data-retention-and-egress.md)
 
 新 ADR 至少記錄背景、候選方案、決定、理由與後果。

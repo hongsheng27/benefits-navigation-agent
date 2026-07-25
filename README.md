@@ -157,6 +157,7 @@ Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修�
 │   └── run_evaluation.py           # 批次執行 evaluation cases
 ├── infra/                          # SAM / CDK；選型確定後再建立內容
 ├── docs/
+│   ├── positioning.md              # 產品定位與差異化判準
 │   ├── architecture.md             # 完整架構與資料流程
 │   ├── decisions/                  # Architecture Decision Records (ADR)
 │   └── official-sources.md         # MVP 採用的政府文件清單
@@ -252,11 +253,14 @@ AI 與確定性程式各自負責什麼；不以使用最多 AWS 服務為目標
 - Client 在傳輸前提示、偵測並遮罩明顯 PII，只送 sanitized text 與 allowlisted eligibility attributes。
 - Backend 使用不含個資的 random `session_id`，並擁有 authoritative workflow state。
 - Backend 只保存人生事件、資格所需的去識別化屬性、缺漏欄位、candidate benefit IDs 與判斷結果。
-- Backend 仍執行輸入驗證與 defense-in-depth redaction，避免 PII 進入 logs、model prompts 或 traces。
+- Backend 完成屬性萃取後即丟棄原始自由文字，不寫入 session、儲存或回應。
+- Logs、traces 與 metrics 只記錄結構化欄位；使用者輸入的文字永遠不作為 log 欄位。
+- Frontend 不載入 analytics、error reporting 等第三方 runtime 依賴。
 - Client 傳入的 workflow state 不視為可信，狀態轉換由 backend 驗證。
 
 Session persistence 技術、精確欄位、保存期限與刪除政策仍待決定。詳見
-[ADR-0005](docs/decisions/0005-split-client-server-session-state.md)。
+[ADR-0005](docs/decisions/0005-split-client-server-session-state.md) 與
+[ADR-0007](docs/decisions/0007-limit-data-retention-and-egress.md)。
 
 ## 專案狀態
 
