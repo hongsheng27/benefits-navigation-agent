@@ -171,6 +171,87 @@ Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修�
 和處理產物原則上放 S3 或本機 `tmp/`，Git 只保存來源 metadata、可審查的規則與小型
 evaluation fixtures。
 
+## 本機政府機關 OID registry
+
+數位發展部的政府機關 OID 官方 CSV 可匯入為本機 SQLite reference database：
+
+```bash
+python3 scripts/import_government_oid.py
+```
+
+預設輸出為 `data/local/government_oid.db`。`data/local/` 與 `*.db` 已被 Git
+忽略；repository 保存可重建的 importer、schema、測試與官方來源 metadata，不保存
+產生後的 database。
+
+Importer 會先讀取 OID 官方下載網址；若該主機暫時關閉連線，會自動改用政府資料開放
+平臺提供的官方 quality snapshot，並在執行結果顯示實際 retrieval URL。
+
+本機 schema 將官方機關資料、project-owned tags、機關與標籤關聯、同步紀錄分開。
+官方資料更新只更新官方欄位；既有標籤不會被覆寫。OID 消失時先標記為 inactive，
+不直接刪除相關資料。
+
+若官方網站暫時無法下載，也可以先取得官方 `GDS.csv`，再執行：
+
+```bash
+python3 scripts/import_government_oid.py --source-file /path/to/GDS.csv
+```
+
+SQLite 只作為可重新產生的本機與 demo reference store，不存放使用者 session、直接
+識別資料或 credentials，也不代表已選定正式 AWS database。未來若部署需要 shared
+writes 或 horizontal scaling，應讓 DynamoDB 或其他已同意的 adapter 使用相同的
+normalized OID record contract。詳見
+[ADR-0009](docs/decisions/0009-use-generated-sqlite-for-government-oid.md)。
+
+## 本機補助來源與方案 catalog
+
+在 OID registry 匯入完成後，可初始化同一個本機 SQLite 檔案中的來源與方案 catalog：
+
+```bash
+python3 scripts/init_benefit_catalog.py
+```
+
+初始化程式會建立來源登記、來源同步、官方文件、補助方案、方案證據與機關角色等
+資料表，並輸出目前已登記來源、連線狀態、候選方案及已確認方案數量。初始來源 metadata
+保存在 `data/source_registry/initial_sources.v0.1.json`，重跑指令不會覆寫之後由同步流程
+更新的連線狀態。
+
+初始登記不等於已完成對接。只有存在成功 OID import 紀錄時，OID 來源才會標為
+`active`。目前可用下列指令同步「我的 E 政府」與「臺北市殯葬管理處」已審核的入口
+頁面：
+
+```bash
+python3 scripts/sync_benefit_sources.py
+```
+
+這個指令目前只下載這兩個指定頁面並記錄網址、標題、抓取時間、內容雜湊與同步結果；
+不會展開子連結、爬完整網站、呼叫 AI 或建立正式補助方案。
+
+完成入口頁同步後，可從已下載的 HTML 主要內容區列出子連結候選：
+
+```bash
+python3 scripts/discover_benefit_links.py
+```
+
+候選清單預設輸出到 `data/local/discovered_links/first_round.json`。這一步只解析已下載的
+入口頁，不下載候選子頁；關鍵字只用來排序，沒有命中關鍵字的主要內容連結仍會保留給
+人工檢查。
+
+人工核准第一批候選後，可執行：
+
+```bash
+python3 scripts/fetch_reviewed_benefit_pages.py
+```
+
+這個指令只處理
+`data/benefit_discovery/death_benefit_first_batch.v0.1.json` 中標示為
+`approved_for_fetch` 的 HTTPS 臺灣政府網址，不接受任意網址、不展開下一層連結，也
+不呼叫 AI。完成下載仍不代表方案已通過正式審查。
+
+Catalog 與原本 OID 專用的 `sync_runs` 分開，使用 `source_sync_runs` 保存福利來源的同步
+狀態。方案只有在分類、驗證時間及官方證據齊全後才能標為 `verified`；機關角色也必須
+附來源文件，不能把資料發布機關直接視為補助主管機關。詳見
+[ADR-0010](docs/decisions/0010-use-local-provenance-first-benefit-catalog.md)。
+
 ## Agent Orchestration：已定案
 
 採用 **policy-governed hybrid**：整體是可預測的 workflow，只有需要語意彈性的

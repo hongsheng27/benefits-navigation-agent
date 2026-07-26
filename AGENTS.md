@@ -24,6 +24,37 @@ including Codex and Kiro.
 - Preserve unrelated changes and do not stage, revert, or delete them.
 - Keep each change focused on the requested task.
 
+## Owner Visibility and Approval Gates
+
+For any change beyond straightforward documentation or boilerplate, remain
+read-only until the owner approves an implementation plan.
+
+Before the first file write:
+
+1. Explain the goal and intended outcome in plain language.
+2. List the files expected to be added, changed, or deleted and explain why.
+3. Describe any effect on architecture, APIs, schemas, workflow, privacy,
+   eligibility rules, retrieval grounding, evaluation logic, or deployment.
+4. Identify unresolved decisions, assumptions, risks, and likely conflicts with
+   other contributors' work.
+5. State the narrowest relevant verification commands that will be run.
+6. Wait for explicit owner approval before editing.
+
+If the approved scope changes during implementation, stop before making the
+out-of-scope change, explain the new impact, and obtain approval again. Keep
+implementation batches small enough for the owner to review and understand.
+
+After implementation:
+
+1. Do not stage, commit, push, or open a pull request unless explicitly
+   requested.
+2. Show the resulting `git status` and summarize `git diff --stat`.
+3. Explain every changed file and its purpose in beginner-friendly language.
+4. Report the exact tests, linters, formatters, or validations that were run
+   and their results.
+5. Report any remaining risks, unresolved decisions, possible team conflicts,
+   and uncommitted changes.
+
 ## Verification
 
 - Run the narrowest relevant tests, linters, formatters, or validation commands
