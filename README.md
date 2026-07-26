@@ -86,7 +86,7 @@ UNDERSTAND_EVENT
 | Backend                   | Python、Pydantic、boto3                                                 | 暫定；API、結構化資料與 AWS 整合                        |
 | Backend topology          | Modular monolith                                                        | **已決定**；模組分離，單一 deployment unit              |
 | API framework             | FastAPI                                                                 | **已決定**；核心 application logic 不依賴 framework     |
-| LLM                       | Amazon Bedrock 上的模型                                                 | **後續決定**；chat 與 embedding model 待實測            |
+| LLM                       | Amazon Bedrock 上的模型                                                 | **規則要求**；比賽限用 AWS 基礎模型，model 待實測       |
 | Agent orchestration       | Policy-governed hybrid                                                  | **已決定**；state machine 控制，Agent 僅限指定節點      |
 | Agent SDK                 | Strands Agents + Amazon Bedrock                                         | **Trial / 可逆**；包在自有 `AgentRunner` interface 後方 |
 | Agent hosting             | Amazon Bedrock AgentCore Runtime                                        | **後續決定**；先確認比賽帳號權限與現場可用性            |
@@ -94,10 +94,10 @@ UNDERSTAND_EVENT
 | Document storage          | Amazon S3                                                               | 暫定；存放官方文件與處理後資料                          |
 | RAG                       | Amazon Bedrock Knowledge Bases 或自製 retrieval                         | **後續決定**；先固定 `Retriever` interface              |
 | Vector store / embeddings | 由 Bedrock Knowledge Bases 管理或自選方案                               | **後續決定**                                            |
-| Entitlement graph         | JSON / Python mapping 或 DynamoDB                                       | **開賽前決定**；MVP 不使用完整 GraphRAG / Neptune       |
-| Eligibility rules         | Python / JSON 規則 + Pydantic validation                                | 暫定；規則判斷必須是 deterministic                      |
+| Entitlement graph         | JSON 檔                                                                 | **已決定**；見 ADR-0008，不使用 GraphRAG / Neptune      |
+| Eligibility rules         | 宣告式 JSON 規則 + Pydantic validation                                  | **已決定**；規則是資料而非程式碼，見 ADR-0008           |
 | Session state boundary    | Client / server split                                                   | **已決定**；direct identifiers 留在 client              |
-| Session persistence       | Memory、DynamoDB 或 AgentCore Memory                                    | **後續決定**；只保存去識別化 backend state              |
+| Session persistence       | 記憶體，不持久化                                                        | **MVP 已定**；結束即消失，保存政策見 ADR-0007           |
 | Safety                    | Dynamic tool allowlist、輸入驗證、human-in-the-loop                     | 暫定核心機制                                            |
 | Guardrails                | Amazon Bedrock Guardrails / AgentCore Policy                            | **後續決定**；依時間與帳號權限選用                      |
 | Observability             | Amazon CloudWatch                                                       | 暫定；記錄狀態轉換、tool call、延遲與錯誤               |
@@ -159,6 +159,8 @@ Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修�
 ├── docs/
 │   ├── team-guide.md               # 開工、檢查、commit 與隱私紅線
 │   ├── positioning.md              # 產品定位與差異化判準
+│   ├── hackathon-plan.md           # 比賽條件、MVP 範圍與交付分工
+│   ├── data-model.md               # data/ 各層的欄位與填寫格式
 │   ├── architecture.md             # 完整架構與資料流程
 │   ├── decisions/                  # Architecture Decision Records (ADR)
 │   └── official-sources.md         # MVP 採用的政府文件清單
@@ -265,4 +267,7 @@ Session persistence 技術、精確欄位、保存期限與刪除政策仍待決
 
 ## 專案狀態
 
-Planning and architecture phase。尚未開始鎖定最終技術選型。
+決賽為 **8/1–8/2 現場 30 小時開發**。架構方向與隱私邊界已定案,目前重心在
+補齊 `data/` 內容、驗證 Bedrock 權限與賽前整合演練。
+
+比賽條件、MVP 範圍與交付分工見 [hackathon-plan.md](docs/hackathon-plan.md)。
