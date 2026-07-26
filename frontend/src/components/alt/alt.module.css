@@ -1,0 +1,37 @@
+/*
+ * Typography primitives for the alternate intake screen.
+ *
+ * Only things Tailwind utilities cannot express cleanly live here:
+ * font stacks (no webfont may be loaded — ADR-0007) and CJK line-breaking.
+ */
+
+.page {
+  font-family:
+    system-ui,
+    -apple-system,
+    "PingFang TC",
+    "Noto Sans TC",
+    "Microsoft JhengHei",
+    "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-wrap: pretty;
+  /* Warm paper, not white: a printed page rather than an app surface. */
+  background-image: linear-gradient(180deg, #faf8f4 0%, #f4f0e8 100%);
+}
+
+/*
+ * 明體 / Songti is the face used by official documents and condolence
+ * notices in Taiwan. It carries formality without sounding bureaucratic.
+ */
+.serif {
+  font-family:
+    "Songti TC",
+    "Source Han Serif TC",
+    "Noto Serif TC",
+    "Noto Serif CJK TC",
+    "PMingLiU",
+    Georgia,
+    serif;
+  text-wrap: balance;
+}
