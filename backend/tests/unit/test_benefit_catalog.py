@@ -4,6 +4,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from backend.app.services.benefit_catalog import (
@@ -71,7 +72,7 @@ class BenefitCatalogTests(unittest.TestCase):
         self.assertEqual(second_summary.source_count, 1)
         self.assertEqual(second_summary.source_status_counts["pending"], 1)
 
-        with sqlite3.connect(self.database_path) as connection:
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             tables = {
                 row[0]
                 for row in connection.execute(
@@ -152,7 +153,7 @@ class BenefitCatalogTests(unittest.TestCase):
             source_seed_path=seed_path,
         )
 
-        with sqlite3.connect(self.database_path) as connection:
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             connection.execute(
                 """
                 INSERT INTO sync_runs (
@@ -188,7 +189,7 @@ class BenefitCatalogTests(unittest.TestCase):
     ) -> None:
         initialize_database(self.database_path, source_seed_path=None)
 
-        with sqlite3.connect(self.database_path) as connection:
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             connection.execute("PRAGMA foreign_keys = ON")
             with self.assertRaises(sqlite3.IntegrityError):
                 connection.execute(
@@ -219,7 +220,7 @@ class BenefitCatalogTests(unittest.TestCase):
             source_seed_path=seed_path,
         )
 
-        with sqlite3.connect(self.database_path) as connection:
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             connection.execute("PRAGMA foreign_keys = ON")
             now = "2026-07-26T00:00:00+00:00"
             connection.execute(

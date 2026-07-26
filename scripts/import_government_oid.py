@@ -13,12 +13,12 @@ import hashlib
 import io
 import json
 import re
-import ssl
 import sqlite3
+import ssl
 import sys
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -70,7 +70,7 @@ class ImportSummary:
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def normalize_text(value: str | None) -> str:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -90,7 +90,7 @@ class RegisteredSourceStatus:
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _sql_values(values: tuple[str, ...]) -> str:
@@ -449,6 +449,42 @@ def initialize_catalog_schema(connection: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_program_organization_roles_oid
             ON program_organization_roles (oid);
+
+        CREATE TABLE IF NOT EXISTS program_rule_fields (
+            program_id TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            field_type TEXT NOT NULL DEFAULT 'text'
+                CHECK (
+                    field_type IN (
+                        'text',
+                        'integer',
+                        'number',
+                        'boolean',
+                        'json',
+                        'date'
+                    )
+                ),
+            field_value TEXT NOT NULL DEFAULT '',
+            source_excerpt TEXT NOT NULL DEFAULT '',
+            review_status TEXT NOT NULL DEFAULT 'pending'
+                CHECK (
+                    review_status IN (
+                        'pending',
+                        'verified',
+                        'rejected'
+                    )
+                ),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (program_id, field_name),
+            FOREIGN KEY (program_id)
+                REFERENCES benefit_programs (program_id)
+                ON UPDATE CASCADE
+                ON DELETE RESTRICT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_program_rule_fields_field_name
+            ON program_rule_fields (field_name);
         """
     )
     connection.execute(

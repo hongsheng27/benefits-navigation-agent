@@ -25,7 +25,29 @@
 
 ## Benefit and administrative sources
 
-尚待整理。每筆福利或行政事項來源至少記錄：
+### 我的 E 政府：綠色殯葬主題頁
+
+- Purpose: 第一輪親人過世主題的地方政府服務與環保葬候選入口
+- Publisher: 我的 E 政府
+- Entry page: <https://www.gov.tw/News_Content_26_666371>
+- Access method: Reviewed index page
+- Local source ID: `my_egov`
+- Reviewed date: 2026-07-26
+
+### 臺北市殯葬管理處：參加聯合奠祭
+
+- Purpose: 第一輪政府負擔或減免喪葬服務的正式頁面
+- Publisher: 臺北市殯葬管理處
+- Entry page: <https://mso.gov.taipei/cp.aspx?n=485C4E58C9A2DD7B>
+- Access method: Reviewed agency page
+- Local source ID: `taipei_funeral_services`
+- Reviewed date: 2026-07-26
+
+第一批經人工核准下載的 5 筆頁面記錄在
+`data/benefit_discovery/death_benefit_first_batch.v0.1.json`。其中「批准下載」只表示
+允許 connector 取得頁面，不表示已確認方案有效或完成資格審查。
+
+後續每筆正式福利或行政事項來源至少記錄：
 
 - 福利或行政事項名稱
 - 發布機關

@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from backend.app.services.benefit_catalog import (
+from backend.app.services.benefit_catalog import (  # noqa: E402, I001
     CATALOG_SCHEMA_VERSION,
     CatalogSummary,
     get_catalog_summary,
@@ -21,7 +21,7 @@ from backend.app.services.benefit_catalog import (
     mark_oid_source_active_when_imported,
     seed_source_registry,
 )
-from scripts.import_government_oid import (
+from scripts.import_government_oid import (  # noqa: E402
     DEFAULT_DATABASE_PATH,
     initialize_schema as initialize_oid_schema,
 )
@@ -39,7 +39,8 @@ def initialize_database(
     """Create catalog tables, add missing seeds, and report current counts."""
 
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(database_path) as connection:
+    connection = sqlite3.connect(database_path)
+    try:
         connection.execute("PRAGMA foreign_keys = ON")
         initialize_oid_schema(connection)
         initialize_catalog_schema(connection)
@@ -52,6 +53,8 @@ def initialize_database(
             )
         oid_source_activated = mark_oid_source_active_when_imported(connection)
         summary = get_catalog_summary(connection)
+    finally:
+        connection.close()
     return inserted_source_count, oid_source_activated, summary
 
 
@@ -107,8 +110,11 @@ def main() -> int:
     print(f"Candidate programs: {summary.candidate_program_count}")
     print(f"Verified programs: {summary.verified_program_count}")
     print(f"Pending evidence links: {summary.pending_evidence_count}")
-    with sqlite3.connect(args.database) as connection:
+    connection = sqlite3.connect(args.database)
+    try:
         source_statuses = get_registered_source_statuses(connection)
+    finally:
+        connection.close()
     print("Source coverage:")
     for source in source_statuses:
         print(
