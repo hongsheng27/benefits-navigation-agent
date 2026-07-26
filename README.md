@@ -233,6 +233,17 @@ python3 scripts/discover_benefit_links.py
 入口頁，不下載候選子頁；關鍵字只用來排序，沒有命中關鍵字的主要內容連結仍會保留給
 人工檢查。
 
+人工核准第一批候選後，可執行：
+
+```bash
+python3 scripts/fetch_reviewed_benefit_pages.py
+```
+
+這個指令只處理
+`data/benefit_discovery/death_benefit_first_batch.v0.1.json` 中標示為
+`approved_for_fetch` 的 HTTPS 臺灣政府網址，不接受任意網址、不展開下一層連結，也
+不呼叫 AI。完成下載仍不代表方案已通過正式審查。
+
 Catalog 與原本 OID 專用的 `sync_runs` 分開，使用 `source_sync_runs` 保存福利來源的同步
 狀態。方案只有在分類、驗證時間及官方證據齊全後才能標為 `verified`；機關角色也必須
 附來源文件，不能把資料發布機關直接視為補助主管機關。詳見

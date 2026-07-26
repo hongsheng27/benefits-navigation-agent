@@ -7,19 +7,20 @@ import json
 import sqlite3
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from backend.app.services.link_discovery import (
+from backend.app.services.link_discovery import (  # noqa: E402
     LinkCandidate,
     discover_links,
     load_discovery_terms,
 )
-from scripts.import_government_oid import DEFAULT_DATABASE_PATH
+from scripts.import_government_oid import DEFAULT_DATABASE_PATH  # noqa: E402
 
 DEFAULT_SOURCE_IDS = ("my_egov", "taipei_funeral_services")
 DEFAULT_DICTIONARY_PATH = (
@@ -65,7 +66,7 @@ def discover_registered_source_links(
 ) -> list[LinkCandidate]:
     discovery_terms = load_discovery_terms(dictionary_path)
     candidates: list[LinkCandidate] = []
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         for source_id in source_ids:
             source_page_url, storage_path = _load_entry_document(
                 connection,
@@ -90,7 +91,7 @@ def write_candidate_report(
     source_counts = Counter(candidate.source_id for candidate in candidates)
     priority_counts = Counter(candidate.priority for candidate in candidates)
     report = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "scope": {
             "method": "main_content_links_only",
             "content_element_id": "CCMS_Content",

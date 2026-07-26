@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "death_benefit_first_batch_v0_1",
+  "topic": "親人過世",
+  "reviewed_at": "2026-07-26",
+  "reviewed_by": "project_owner",
+  "scope_note": "Approve only these five pages for the first child-page fetch test. Approval to fetch is not verification that a benefit program exists.",
+  "items": [
+    {
+      "candidate_id": "taipei_green_funeral_incentive",
+      "label": "臺北市多元環保葬鼓勵金",
+      "source_id": "my_egov",
+      "candidate_url": "https://memories.mso.gov.taipei/eco-burial/include/index.php?Page=7-3",
+      "fetch_url": "https://memories.mso.gov.taipei/eco-burial/new-reward.php",
+      "review_decision": "approved_for_fetch",
+      "fetch_action": "fetch",
+      "review_note": "The discovered URL returned 404 on 2026-07-26. Use the current official Taipei government replacement page found on the same agency host."
+    },
+    {
+      "candidate_id": "new_taipei_green_funeral_incentive",
+      "label": "新北市環保葬鼓勵金",
+      "source_id": "my_egov",
+      "candidate_url": "https://www.mso.ntpc.gov.tw/home.jsp?id=ffb7a5546a4ef474",
+      "fetch_url": "https://www.mso.ntpc.gov.tw/home.jsp?id=ffb7a5546a4ef474",
+      "review_decision": "approved_for_fetch",
+      "fetch_action": "fetch",
+      "review_note": "Official New Taipei government page whose title indicates an environmental-burial incentive."
+    },
+    {
+      "candidate_id": "taoyuan_green_funeral_incentive",
+      "label": "桃園市環保葬鼓勵金",
+      "source_id": "my_egov",
+      "candidate_url": "https://cab.tycg.gov.tw/News_Content.aspx?n=7802&s=1601908",
+      "fetch_url": "https://cab.tycg.gov.tw/News_Content.aspx?n=7802&s=1601908",
+      "review_decision": "approved_for_fetch",
+      "fetch_action": "fetch",
+      "review_note": "Official Taoyuan government page whose title indicates an environmental-burial incentive."
+    },
+    {
+      "candidate_id": "penghu_green_funeral_subsidy",
+      "label": "澎湖縣多元環保葬補助",
+      "source_id": "my_egov",
+      "candidate_url": "https://www.penghu.gov.tw/civil/home.jsp?id=461&act=view&dataserno=201908060001",
+      "fetch_url": "https://www.penghu.gov.tw/civil/home.jsp?id=461&act=view&dataserno=201908060001",
+      "review_decision": "approved_for_fetch",
+      "fetch_action": "fetch",
+      "review_note": "Official Penghu government page whose title indicates an environmental-burial subsidy."
+    },
+    {
+      "candidate_id": "taipei_joint_funeral_service",
+      "label": "臺北市參加聯合奠祭",
+      "source_id": "taipei_funeral_services",
+      "candidate_url": "https://mso.gov.taipei/Content_List.aspx?n=D6C1E78FE6B36161",
+      "fetch_url": "https://mso.gov.taipei/cp.aspx?n=485C4E58C9A2DD7B",
+      "review_decision": "approved_for_fetch",
+      "fetch_action": "reuse_existing",
+      "review_note": "The candidate is an index. Reuse the exact official detail page already registered and downloaded."
+    }
+  ]
+}

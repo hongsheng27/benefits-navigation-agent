@@ -5,15 +5,18 @@ from __future__ import annotations
 import argparse
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from backend.app.services.source_connector import sync_registered_source
-from scripts.import_government_oid import DEFAULT_DATABASE_PATH
-from scripts.init_benefit_catalog import initialize_database
+from backend.app.services.source_connector import (  # noqa: E402
+    sync_registered_source,
+)
+from scripts.import_government_oid import DEFAULT_DATABASE_PATH  # noqa: E402
+from scripts.init_benefit_catalog import initialize_database  # noqa: E402
 
 DEFAULT_SOURCE_IDS = ("my_egov", "taipei_funeral_services")
 DEFAULT_RAW_DIRECTORY = REPO_ROOT / "data" / "local" / "source_documents"
@@ -28,7 +31,7 @@ def sync_sources(
 ) -> list[object]:
     initialize_database(database_path)
     summaries: list[object] = []
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         for source_id in source_ids:
             summaries.append(

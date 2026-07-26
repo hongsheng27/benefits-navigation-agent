@@ -4,6 +4,7 @@ import hashlib
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -86,7 +87,7 @@ class GovernmentOidImportTests(unittest.TestCase):
             self.assertEqual(first_summary.inserted_count, 2)
             self.assertEqual(first_summary.active_count, 2)
 
-            with sqlite3.connect(database_path) as connection:
+            with closing(sqlite3.connect(database_path)) as connection, connection:
                 connection.execute("PRAGMA foreign_keys = ON")
                 connection.execute(
                     """
@@ -141,7 +142,7 @@ class GovernmentOidImportTests(unittest.TestCase):
             self.assertEqual(second_summary.active_count, 2)
             self.assertEqual(second_summary.database_total_count, 3)
 
-            with sqlite3.connect(database_path) as connection:
+            with closing(sqlite3.connect(database_path)) as connection, connection:
                 first_organization = connection.execute(
                     """
                     SELECT org_name, active

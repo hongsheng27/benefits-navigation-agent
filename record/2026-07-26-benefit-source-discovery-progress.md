@@ -3,7 +3,7 @@
 - 紀錄日期：2026-07-26
 - 功能分支：`feat/benefit-source-discovery`
 - 目前主題：親人過世後可使用的政府補助、費用減免與政府服務
-- 目前狀態：已完成本機 OID 資料庫、來源登記、兩個入口頁同步，以及第一輪子連結候選清單
+- 目前狀態：已完成本機 OID 資料庫、來源登記、入口頁同步、候選清單及第一批 5 筆頁面下載
 
 ## 一、這次要解決的問題
 
@@ -165,13 +165,26 @@ data/local/government_oid.db
 - 提供金錢、免費服務、費用減免或可請領的給付。
 - 頁面可能包含資格、金額、期限或辦理方式。
 
-第一批建議檢查：
+第一批已核准下載：
 
 1. 臺北市多元環保葬鼓勵金。
 2. 新北市環保葬鼓勵金。
 3. 桃園市環保葬鼓勵金。
 4. 澎湖縣多元環保葬補助。
 5. 臺北市參加聯合奠祭。
+
+實際下載結果：
+
+| 項目 | 結果 |
+| --- | --- |
+| 臺北市多元環保葬鼓勵金 | 已下載；原候選網址回傳 404，改用同機關目前有效的官方頁面 |
+| 新北市環保葬鼓勵金 | 已下載 |
+| 桃園市環保葬鼓勵金 | 已下載 |
+| 澎湖縣多元環保葬補助 | 已下載 |
+| 臺北市參加聯合奠祭 | 沿用先前已下載的正式頁面 |
+
+第一批清單只代表專案負責人批准下載，尚未代表這 5 筆都已完成方案、金額、資格與期限
+的正式審查。資料庫目前共有 6 份來源文件，正式方案仍為 0 筆。
 
 ### 暫時保留
 
@@ -229,17 +242,30 @@ python3 scripts/discover_benefit_links.py
 data/local/discovered_links/first_round.json
 ```
 
-### 5. 執行目前相關測試
+### 5. 下載人工核准的第一批頁面
+
+```bash
+python3 scripts/fetch_reviewed_benefit_pages.py
+```
+
+核准清單：
+
+```text
+data/benefit_discovery/death_benefit_first_batch.v0.1.json
+```
+
+### 6. 執行目前相關測試
 
 ```bash
 python3 -m unittest \
   backend.tests.unit.test_import_government_oid \
   backend.tests.unit.test_benefit_catalog \
   backend.tests.unit.test_source_connector \
-  backend.tests.unit.test_link_discovery
+  backend.tests.unit.test_link_discovery \
+  backend.tests.unit.test_reviewed_page_batch
 ```
 
-### 6. 檢查 SQLite
+### 7. 檢查 SQLite
 
 ```bash
 sqlite3 data/local/government_oid.db
@@ -266,6 +292,8 @@ SELECT COUNT(*) FROM source_documents;
 | `scripts/sync_benefit_sources.py` | 執行兩個入口頁同步 |
 | `backend/app/services/link_discovery.py` | 主要內容連結抽取、去重與排序 |
 | `scripts/discover_benefit_links.py` | 產生第一輪候選連結報告 |
+| `data/benefit_discovery/death_benefit_first_batch.v0.1.json` | 第一批人工核准下載清單 |
+| `scripts/fetch_reviewed_benefit_pages.py` | 只下載核准清單中的政府頁面 |
 | `data/source_registry/initial_sources.v0.1.json` | 可審查的初始來源設定 |
 | `data/benefit_discovery/death_benefit_keywords.v0.2.json` | 親人過世候選發現詞 |
 | `data/evaluations/death_benefit_discovery.v0.2.json` | 固定測試案例 |
@@ -287,7 +315,7 @@ SELECT COUNT(*) FROM source_documents;
 
 ## 八、目前還沒完成
 
-- 尚未下載 71 個候選子頁。
+- 71 個候選中只處理第一批 5 筆，其餘候選尚未審查或下載。
 - 尚未把任何候選標記成正式補助方案。
 - 尚未抽取金額、資格、期限、應備文件或申請方式。
 - 尚未建立人工審查前端。

@@ -3,10 +3,14 @@ from __future__ import annotations
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.app.services.source_connector import sync_registered_source
+from backend.app.services.source_connector import (
+    sync_registered_source,
+    sync_reviewed_source_page,
+)
 from scripts.init_benefit_catalog import initialize_database
 
 
@@ -48,11 +52,17 @@ class SourceConnectorTests(unittest.TestCase):
     ) -> None:
         first_body = (
             b"<html><head><title>Official Benefit Page</title></head>"
-            b"<body><input type='hidden' value='dynamic-1'>content</body></html>"
+            b"<body><input type='hidden' value='dynamic-1'>content"
+            b"<p>Browse count: placeholder</p>"
+            b"<p>\xe7\x80\x8f\xe8\xa6\xbd\xe4\xba\xba\xe6\xac\xa1\xef\xbc\x9a"
+            b"100 \xe4\xba\xba</p></body></html>"
         )
         second_body = (
             b"<html><head><title>Official Benefit Page</title></head>"
-            b"<body><input type='hidden' value='dynamic-2'>content</body></html>"
+            b"<body><input type='hidden' value='dynamic-2'>content"
+            b"<p>Browse count: placeholder</p>"
+            b"<p>\xe7\x80\x8f\xe8\xa6\xbd\xe4\xba\xba\xe6\xac\xa1\xef\xbc\x9a"
+            b"101 \xe4\xba\xba</p></body></html>"
         )
         final_url = "https://www.gov.tw/News_Content_26_666371"
         mocked_urlopen.side_effect = [
@@ -60,7 +70,7 @@ class SourceConnectorTests(unittest.TestCase):
             FakeHtmlResponse(second_body, final_url),
         ]
 
-        with sqlite3.connect(self.database_path) as connection:
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             connection.execute("PRAGMA foreign_keys = ON")
             first_summary = sync_registered_source(
                 connection,
@@ -107,7 +117,7 @@ class SourceConnectorTests(unittest.TestCase):
     ) -> None:
         mocked_urlopen.side_effect = OSError("network unavailable")
 
-        with sqlite3.connect(self.database_path) as connection:
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
             connection.execute("PRAGMA foreign_keys = ON")
             with self.assertRaisesRegex(OSError, "network unavailable"):
                 sync_registered_source(
@@ -137,6 +147,73 @@ class SourceConnectorTests(unittest.TestCase):
         self.assertEqual(source_status, ("failed",))
         self.assertEqual(failed_runs, 1)
         self.assertEqual(document_count, 0)
+
+    @patch("backend.app.services.source_connector.urlopen")
+    def test_reviewed_child_page_preserves_source_health(
+        self,
+        mocked_urlopen: object,
+    ) -> None:
+        child_url = "https://cab.tycg.gov.tw/News_Content.aspx?n=1&s=2"
+        mocked_urlopen.return_value = FakeHtmlResponse(
+            b"<html><head><title>Benefit Child</title></head>"
+            b"<body>approved content</body></html>",
+            child_url,
+        )
+
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
+            summary = sync_reviewed_source_page(
+                connection,
+                "my_egov",
+                child_url,
+                self.raw_directory,
+            )
+            source_status = connection.execute(
+                """
+                SELECT connection_status
+                FROM source_registry
+                WHERE source_id = 'my_egov'
+                """
+            ).fetchone()
+            discovery = connection.execute(
+                """
+                SELECT discovery_method
+                FROM document_discoveries
+                WHERE document_id = ?
+                  AND source_id = 'my_egov'
+                """,
+                (summary.document_id,),
+            ).fetchone()
+            publisher = connection.execute(
+                """
+                SELECT publisher_name, jurisdiction_code
+                FROM source_documents
+                WHERE document_id = ?
+                """,
+                (summary.document_id,),
+            ).fetchone()
+
+        self.assertEqual(source_status, ("pending",))
+        self.assertEqual(discovery, ("reviewed_candidate",))
+        self.assertEqual(publisher, ("", ""))
+
+    @patch("backend.app.services.source_connector.urlopen")
+    def test_reviewed_child_page_rejects_non_government_url(
+        self,
+        mocked_urlopen: object,
+    ) -> None:
+        with closing(sqlite3.connect(self.database_path)) as connection, connection:
+            with self.assertRaisesRegex(
+                ValueError,
+                "HTTPS Taiwan government URL",
+            ):
+                sync_reviewed_source_page(
+                    connection,
+                    "my_egov",
+                    "https://example.com/benefit",
+                    self.raw_directory,
+                )
+
+        mocked_urlopen.assert_not_called()
 
 
 if __name__ == "__main__":
