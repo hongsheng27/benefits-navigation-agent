@@ -1,9 +1,15 @@
 # Architecture Decision Records
 
-每項已定案的關鍵技術選擇新增一份 ADR，例如：
+每項已定案的關鍵技術選擇新增一份 ADR。
 
-- `0001-agent-orchestration.md`
-- `0002-rag-storage.md`
-- `0003-deployment-target.md`
+## Current decisions
 
-ADR 至少記錄背景、候選方案、決定、理由與後果。
+- [ADR-0001: Use a Modular Monolith for the Backend](0001-backend-modular-monolith.md)
+- [ADR-0002: Use FastAPI for the HTTP API](0002-use-fastapi-for-http-api.md)
+- [ADR-0003: Use Policy-Governed Hybrid Orchestration](0003-policy-governed-hybrid-orchestration.md)
+- [ADR-0004: Trial Strands for the Bounded Agent Runner](0004-trial-strands-agent-runner.md)
+- [ADR-0005: Split Client and Server Session State](0005-split-client-server-session-state.md)
+- [ADR-0006: Use React, Vite, TypeScript, and Tailwind CSS](0006-use-react-vite-typescript-tailwind.md)
+- [ADR-0007: Limit Data Retention and Egress](0007-limit-data-retention-and-egress.md)
+
+新 ADR 至少記錄背景、候選方案、決定、理由與後果。
