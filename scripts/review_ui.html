@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>補助方案審查介面</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+h1 { margin-bottom: 20px; font-size: 1.5rem; }
+.summary { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.summary .counts { display: flex; gap: 20px; flex-wrap: wrap; }
+.summary .count-item { padding: 8px 16px; border-radius: 4px; font-weight: 600; }
+.count-item.candidate { background: #fff3cd; color: #856404; }
+.count-item.verified { background: #d4edda; color: #155724; }
+.count-item.total { background: #d1ecf1; color: #0c5460; }
+.program-list { display: flex; flex-direction: column; gap: 16px; }
+.program-card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid #ffc107; }
+.program-card.verified { border-left-color: #28a745; }
+.program-card h2 { font-size: 1.2rem; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; text-transform: uppercase; }
+.badge.candidate { background: #fff3cd; color: #856404; }
+.badge.verified { background: #d4edda; color: #155724; }
+.field-grid { display: grid; grid-template-columns: 160px 1fr; gap: 8px 12px; margin: 12px 0; font-size: 0.9rem; }
+.field-label { font-weight: 600; color: #555; }
+.field-value { word-break: break-word; }
+.field-value.empty { color: #dc3545; font-style: italic; }
+.evidence-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee; }
+.evidence-item { background: #f8f9fa; padding: 8px 12px; border-radius: 4px; margin-top: 6px; font-size: 0.85rem; }
+.evidence-item a { color: #007bff; text-decoration: none; }
+.btn-group { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: 500; }
+.btn-edit { background: #007bff; color: #fff; }
+.btn-verify { background: #28a745; color: #fff; }
+.btn-unverify { background: #dc3545; color: #fff; }
+.btn-cancel { background: #6c757d; color: #fff; }
+.btn-save { background: #28a745; color: #fff; }
+.edit-form { margin-top: 12px; display: none; }
+.edit-form.active { display: block; }
+.edit-form label { display: block; font-weight: 600; font-size: 0.85rem; margin-top: 8px; color: #555; }
+.edit-form input, .edit-form textarea, .edit-form select {
+  width: 100%; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px;
+  font-size: 0.9rem; margin-top: 2px; font-family: inherit;
+}
+.edit-form textarea { min-height: 60px; resize: vertical; }
+.toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 6px; color: #fff; font-weight: 500; z-index: 9999; display: none; }
+.toast.success { background: #28a745; }
+.toast.error { background: #dc3545; }
+</style>
+</head>
+<body>
+<h1>補助方案審查介面</h1>
+<div class="summary" id="summary"></div>
+<div class="program-list" id="program-list"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+
+async function fetchPrograms() {
+  const res = await fetch(`${API}/api/programs`);
+  return res.json();
+}
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type}`;
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 3000);
+}
+
+function renderSummary(data) {
+  const total = data.length;
+  const verified = data.filter(d => d.program.program_status === 'verified').length;
+  const candidate = total - verified;
+  document.getElementById('summary').innerHTML = `
+    <div class="counts">
+      <span class="count-item total">總計：${total} 筆</span>
+      <span class="count-item candidate">待審查：${candidate} 筆</span>
+      <span class="count-item verified">已確認：${verified} 筆</span>
+    </div>
+  `;
+}
+
+const FIELD_LABELS = {
+  canonical_name: '方案名稱',
+  summary: '簡介',
+  jurisdiction_code: '適用縣市',
+  support_purpose: '方案用途',
+  program_basis: '方案依據',
+  delivery_form: '給付形式',
+  claimant_rule_text: '申請人規則',
+  deadline_rule_text: '申請期限',
+  mutual_exclusion_text: '互斥條件',
+  status_note: '備註',
+};
+
+const EDITABLE_FIELDS = Object.keys(FIELD_LABELS);
+
+const PURPOSE_OPTIONS = ['funeral_cost', 'one_time_death_support', 'survivor_livelihood'];
+const BASIS_OPTIONS = ['government_subsidy_or_relief', 'social_assistance', 'social_insurance', 'survivor_pension_or_pension', 'legal_compensation', 'employer_statutory_payment', 'other_or_unknown'];
+const DELIVERY_OPTIONS = ['cash_once', 'cash_recurring', 'reimbursement', 'fee_waiver', 'service_or_in_kind', 'unknown'];
+
+function fieldInput(key, value) {
+  if (key === 'support_purpose') return `<select name="${key}">${PURPOSE_OPTIONS.map(o => `<option value="${o}" ${o===value?'selected':''}>${o}</option>`).join('')}<option value="" ${!value?'selected':''}>（未填）</option></select>`;
+  if (key === 'program_basis') return `<select name="${key}">${BASIS_OPTIONS.map(o => `<option value="${o}" ${o===value?'selected':''}>${o}</option>`).join('')}<option value="" ${!value?'selected':''}>（未填）</option></select>`;
+  if (key === 'delivery_form') return `<select name="${key}">${DELIVERY_OPTIONS.map(o => `<option value="${o}" ${o===value?'selected':''}>${o}</option>`).join('')}<option value="" ${!value?'selected':''}>（未填）</option></select>`;
+  if (['summary', 'claimant_rule_text', 'deadline_rule_text', 'mutual_exclusion_text', 'status_note'].includes(key))
+    return `<textarea name="${key}">${value || ''}</textarea>`;
+  return `<input type="text" name="${key}" value="${value || ''}">`;
+}
+
+// Fields where empty is normal (not a problem)
+const OPTIONAL_FIELDS = ['mutual_exclusion_text', 'status_note'];
+
+function renderCard(item) {
+  const p = item.program;
+  const isVerified = p.program_status === 'verified';
+  const fields = EDITABLE_FIELDS.map(k => {
+    const val = p[k] || '';
+    const isOptional = OPTIONAL_FIELDS.includes(k);
+    const cls = val ? '' : (isOptional ? '' : 'empty');
+    const display = val || (isOptional ? '（無）' : '（缺少）');
+    return `<div class="field-label">${FIELD_LABELS[k]}</div><div class="field-value ${cls}">${display}</div>`;
+  }).join('');
+
+  const sources = item.sources.map(s => `
+    <div class="evidence-item">
+      <strong>${s.evidence_role}</strong> (${s.review_status})
+      — <a href="${s.canonical_url}" target="_blank">${s.doc_title || s.canonical_url}</a>
+      ${s.source_updated_at ? `<br><small>頁面更新日期：${s.source_updated_at}</small>` : ''}
+      ${s.source_excerpt ? `<br><small>${s.source_excerpt.substring(0, 120)}...</small>` : ''}
+    </div>
+  `).join('');
+
+  const roles = item.roles.map(r => `
+    <div class="evidence-item">
+      <strong>${r.organization_role}</strong>: ${r.organization_name} (${r.review_status})
+    </div>
+  `).join('');
+
+  const ruleFields = (item.rule_fields || []).map(rf => `
+    <div class="evidence-item" id="rf-${p.program_id}-${rf.field_name}">
+      <strong>${rf.field_name}</strong> <small>(${rf.field_type})</small>:
+      <code>${rf.field_value.length > 80 ? rf.field_value.substring(0, 80) + '...' : rf.field_value}</code>
+      ${rf.source_excerpt ? `<br><small class="field-label">證據: ${rf.source_excerpt.substring(0, 60)}</small>` : ''}
+      <button style="margin-left:8px;font-size:0.7rem;padding:2px 6px;" onclick="deleteRuleField('${p.program_id}','${rf.field_name}')">刪除</button>
+    </div>
+  `).join('');
+
+  const editFields = EDITABLE_FIELDS.map(k => `
+    <label>${FIELD_LABELS[k]}${fieldInput(k, p[k])}</label>
+  `).join('');
+
+  return `
+    <div class="program-card ${isVerified ? 'verified' : ''}" id="card-${p.program_id}">
+      <h2>${p.canonical_name} <span class="badge ${p.program_status}">${p.program_status}</span></h2>
+      <div class="field-grid">${fields}</div>
+      <div class="evidence-section">
+        <strong>證據來源 (${item.sources.length})</strong>${sources}
+      </div>
+      <div class="evidence-section">
+        <strong>機關角色 (${item.roles.length})</strong>${roles}
+      </div>
+      <div class="evidence-section">
+        <strong>結構化規則欄位 (${(item.rule_fields||[]).length})</strong>
+        ${ruleFields}
+        <div style="margin-top:8px;">
+          <button class="btn-edit" style="font-size:0.75rem;" onclick="showAddField('${p.program_id}')">+ 新增欄位</button>
+        </div>
+        <div id="add-field-${p.program_id}" style="display:none;margin-top:8px;padding:8px;background:#f8f9fa;border-radius:4px;">
+          <label style="font-size:0.8rem;">欄位名稱 <input type="text" id="new-fn-${p.program_id}" placeholder="e.g. min_amount" style="width:200px;"></label>
+          <label style="font-size:0.8rem;">類型
+            <select id="new-ft-${p.program_id}" style="width:120px;">
+              <option value="text">text</option><option value="integer">integer</option>
+              <option value="number">number</option><option value="boolean">boolean</option>
+              <option value="json">json</option><option value="date">date</option>
+            </select>
+          </label>
+          <label style="font-size:0.8rem;">值 <input type="text" id="new-fv-${p.program_id}" style="width:300px;"></label>
+          <label style="font-size:0.8rem;">來源原文 <input type="text" id="new-fs-${p.program_id}" style="width:300px;"></label>
+          <button class="btn-save" style="font-size:0.75rem;margin-top:4px;" onclick="addRuleField('${p.program_id}')">儲存欄位</button>
+          <button class="btn-cancel" style="font-size:0.75rem;margin-top:4px;" onclick="hideAddField('${p.program_id}')">取消</button>
+        </div>
+      </div>
+      <div class="btn-group">
+        <button class="btn-edit" onclick="toggleEdit('${p.program_id}')">編輯</button>
+        ${!isVerified ? `<button class="btn-verify" onclick="verifyProgram('${p.program_id}')">確認 (Verify)</button>` : ''}
+        ${isVerified ? `<button class="btn-unverify" onclick="unverifyProgram('${p.program_id}')">退回 Candidate</button>` : ''}
+      </div>
+      <div class="edit-form" id="edit-${p.program_id}">
+        <form onsubmit="saveProgram(event, '${p.program_id}')">
+          ${editFields}
+          <div class="btn-group">
+            <button type="submit" class="btn-save">儲存</button>
+            <button type="button" class="btn-cancel" onclick="toggleEdit('${p.program_id}')">取消</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function toggleEdit(id) {
+  const el = document.getElementById(`edit-${id}`);
+  el.classList.toggle('active');
+}
+
+async function saveProgram(e, id) {
+  e.preventDefault();
+  const form = e.target;
+  const data = {};
+  EDITABLE_FIELDS.forEach(k => {
+    const el = form.querySelector(`[name="${k}"]`);
+    if (el && el.value) data[k] = el.value;
+  });
+  try {
+    const res = await fetch(`${API}/api/programs/${id}`, {
+      method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+    });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed'); }
+    showToast('已儲存');
+    loadAll();
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+async function verifyProgram(id) {
+  if (!confirm('確定要將此方案標記為 verified？')) return;
+  try {
+    const res = await fetch(`${API}/api/programs/${id}/verify`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({confirm: true})
+    });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed'); }
+    showToast('已確認 (verified)');
+    loadAll();
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+async function unverifyProgram(id) {
+  if (!confirm('確定要退回 candidate 狀態？')) return;
+  try {
+    const res = await fetch(`${API}/api/programs/${id}/unverify`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed');
+    showToast('已退回 candidate');
+    loadAll();
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+async function loadAll() {
+  const data = await fetchPrograms();
+  renderSummary(data);
+  document.getElementById('program-list').innerHTML = data.map(renderCard).join('');
+}
+
+function showAddField(pid) { document.getElementById(`add-field-${pid}`).style.display = 'block'; }
+function hideAddField(pid) { document.getElementById(`add-field-${pid}`).style.display = 'none'; }
+
+async function addRuleField(pid) {
+  const name = document.getElementById(`new-fn-${pid}`).value.trim();
+  const type = document.getElementById(`new-ft-${pid}`).value;
+  const value = document.getElementById(`new-fv-${pid}`).value;
+  const excerpt = document.getElementById(`new-fs-${pid}`).value;
+  if (!name) { showToast('請輸入欄位名稱', 'error'); return; }
+  try {
+    const res = await fetch(`${API}/api/programs/${pid}/rule-fields/${encodeURIComponent(name)}`, {
+      method: 'PUT', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({field_type: type, field_value: value, source_excerpt: excerpt})
+    });
+    if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Failed'); }
+    showToast(`欄位 ${name} 已儲存`);
+    hideAddField(pid);
+    loadAll();
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+async function deleteRuleField(pid, fieldName) {
+  if (!confirm(`確定要刪除欄位 "${fieldName}"？`)) return;
+  try {
+    const res = await fetch(`${API}/api/programs/${pid}/rule-fields/${encodeURIComponent(fieldName)}`, {method: 'DELETE'});
+    if (!res.ok) throw new Error('Failed');
+    showToast(`已刪除 ${fieldName}`);
+    loadAll();
+  } catch(err) { showToast(err.message, 'error'); }
+}
+
+loadAll();
+</script>
+</body>
+</html>
