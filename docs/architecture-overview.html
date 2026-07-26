@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>接住 — 專案架構與資料庫說明</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fafafa; color: #333; line-height: 1.7; padding: 40px 20px; max-width: 960px; margin: 0 auto; }
+h1 { font-size: 1.8rem; margin-bottom: 8px; }
+h2 { font-size: 1.4rem; margin-top: 40px; margin-bottom: 12px; border-bottom: 2px solid #e0e0e0; padding-bottom: 6px; }
+h3 { font-size: 1.1rem; margin-top: 24px; margin-bottom: 8px; color: #444; }
+p { margin-bottom: 12px; }
+.subtitle { color: #666; margin-bottom: 30px; }
+.card { background: #fff; border-radius: 8px; padding: 20px; margin: 16px 0; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.card h3 { margin-top: 0; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; }
+th { background: #f5f5f5; font-weight: 600; }
+tr:hover { background: #f9f9f9; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.85rem; }
+.flow-diagram { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px; margin: 20px 0; font-family: monospace; font-size: 0.85rem; line-height: 1.9; white-space: pre; overflow-x: auto; }
+.highlight { background: #fff3cd; padding: 12px 16px; border-radius: 6px; border-left: 4px solid #ffc107; margin: 16px 0; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600; margin-right: 4px; }
+.tag-green { background: #d4edda; color: #155724; }
+.tag-yellow { background: #fff3cd; color: #856404; }
+.tag-blue { background: #d1ecf1; color: #0c5460; }
+.tag-gray { background: #e9ecef; color: #495057; }
+ul { margin: 8px 0 12px 20px; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>接住 — 專案架構與資料庫說明</h1>
+<p class="subtitle">最後更新：2026-07-26 ｜ 分支：feat/benefit-source-discovery</p>
+
+<!-- ==================== 一句話說明 ==================== -->
+
+<h2>這個專案在做什麼？</h2>
+<p>
+  「接住」是一個<strong>福利導航 Agent</strong>。當使用者描述自己遇到的人生事件（例如：親人過世），
+  系統會自動找出可能適用的政府補助、告訴使用者符不符合資格、需要準備什麼文件、去哪裡辦。
+</p>
+<div class="highlight">
+  關鍵原則：AI 不能自己決定你符不符合資格。AI 負責理解你的話、找資料；<strong>規則引擎</strong>負責用確定的邏輯判斷資格。
+</div>
+
+<!-- ==================== 整體流程 ==================== -->
+
+<h2>整體運作流程</h2>
+<div class="flow-diagram">
+┌─────────────────────────────────────────────────────────────────┐
+│                      資料準備階段（離線）                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. 匯入政府機關 OID（7,988 個機關基本資料）                        │
+│          ↓                                                      │
+│  2. 登記允許抓取的官方來源（目前 3 個）                              │
+│          ↓                                                      │
+│  3. 同步入口頁（下載 HTML、記錄雜湊）                               │
+│          ↓                                                      │
+│  4. 從入口頁找出候選連結（71 個）                                   │
+│          ↓                                                      │
+│  5. 人工核准要下載的頁面（第一批 5 個）                              │
+│          ↓                                                      │
+│  6. 下載核准頁面                                                  │
+│          ↓                                                      │
+│  7. 解析 HTML → 產生候選方案                                      │
+│          ↓                                                      │
+│  8. AI 搜尋補齊缺少的欄位                                         │
+│          ↓                                                      │
+│  9. 人工在 Review UI 確認 → 標為 verified                         │
+│          ↓                                                      │
+│  10. 填入結構化規則欄位（金額條件、期限、資格等）                     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                      使用者查詢階段（線上）                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  使用者：「我爸在台北過世，骨灰從靈骨塔遷出做樹葬」                   │
+│          ↓                                                      │
+│  LLM 理解事件 → 抽出屬性（縣市、骨灰/骨骸、天數...）                │
+│          ↓                                                      │
+│  SQL 篩選（縣市 + 方案用途）→ 縮小到幾筆                           │
+│          ↓                                                      │
+│  Rule Engine 逐筆判斷 → eligible / ineligible / needs_info       │
+│          ↓                                                      │
+│  LLM 組成白話回答 + 附官方來源網址                                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘</div>
+
+<!-- ==================== 資料庫 ==================== -->
+
+<h2>資料庫在哪裡？</h2>
+<div class="card">
+  <h3>只有一個 SQLite 檔案</h3>
+  <p><code>data/local/government_oid.db</code></p>
+  <p>這個檔案：</p>
+  <ul>
+    <li>不進 Git（被 .gitignore 排除）</li>
+    <li>可以用指令從頭重建</li>
+    <li>只存在你的電腦上，用來開發和 demo</li>
+    <li>不存使用者個資、不存密碼</li>
+  </ul>
+</div>
+
+<!-- ==================== 資料表 ==================== -->
+
+<h2>資料表一覽（共 13 張表）</h2>
+<p>分成四個群組：</p>
+
+<h3><span class="tag tag-blue">群組 A</span> 政府機關基本資料</h3>
+<p>來源：數位發展部政府機關 OID 資料集</p>
+<table>
+  <tr><th>資料表</th><th>白話說明</th><th>目前筆數</th></tr>
+  <tr><td><code>government_organizations</code></td><td>全臺灣政府機關的名稱、地址、電話、OID 代碼</td><td>7,988</td></tr>
+  <tr><td><code>tags</code></td><td>我們自己加的標籤（例如「殯葬」「社福」）</td><td>0</td></tr>
+  <tr><td><code>organization_tags</code></td><td>哪個機關有哪個標籤</td><td>0</td></tr>
+  <tr><td><code>sync_runs</code></td><td>每次匯入 OID 的紀錄（什麼時候跑的、匯了幾筆）</td><td>1+</td></tr>
+  <tr><td><code>schema_metadata</code></td><td>記錄資料庫版本號碼</td><td>2</td></tr>
+</table>
+
+<h3><span class="tag tag-green">群組 B</span> 資料來源管理</h3>
+<p>追蹤「我們從哪裡抓資料」和「抓到了什麼」</p>
+<table>
+  <tr><th>資料表</th><th>白話說明</th><th>目前筆數</th></tr>
+  <tr><td><code>source_registry</code></td><td>允許連線的官方網站白名單（例如「我的 E 政府」）</td><td>3</td></tr>
+  <tr><td><code>source_sync_runs</code></td><td>每次抓網站的紀錄（成功/失敗、抓了幾頁）</td><td>多筆</td></tr>
+  <tr><td><code>source_documents</code></td><td>實際下載的每一個網頁（網址、標題、雜湊、本機檔案位置）</td><td>6</td></tr>
+  <tr><td><code>document_discoveries</code></td><td>記錄「這個網頁是從哪個來源的哪次同步發現的」</td><td>6</td></tr>
+</table>
+
+<h3><span class="tag tag-yellow">群組 C</span> 補助方案</h3>
+<p>核心業務資料：找到的補助方案和它的證據</p>
+<table>
+  <tr><th>資料表</th><th>白話說明</th><th>目前筆數</th></tr>
+  <tr><td><code>benefit_programs</code></td><td>每一筆補助方案（名稱、簡介、狀態、適用縣市）</td><td>5</td></tr>
+  <tr><td><code>program_sources</code></td><td>方案的證據：這個資訊是從哪份官方文件來的，原文片段是什麼</td><td>7</td></tr>
+  <tr><td><code>program_organization_roles</code></td><td>方案相關的機關角色（誰受理、誰主管、誰發布）</td><td>5</td></tr>
+</table>
+
+<h3><span class="tag tag-gray">群組 D</span> 結構化規則</h3>
+<p>讓 Rule Engine 做自動判斷用的欄位</p>
+<table>
+  <tr><th>資料表</th><th>白話說明</th><th>目前筆數</th></tr>
+  <tr><td><code>program_rule_fields</code></td><td>每筆方案的結構化資料（金額、條件、期限等），key-value 格式</td><td>46</td></tr>
+</table>
+
+<!-- ==================== 關聯圖 ==================== -->
+
+<h2>資料表之間的關係</h2>
+<div class="flow-diagram">
+government_organizations (7,988 筆政府機關)
+    │
+    ├── source_registry.publisher_oid → 「這個來源屬於哪個機關」
+    ├── source_documents.publisher_oid → 「這份文件是哪個機關發布的」
+    └── program_organization_roles.oid → 「這個方案跟哪個機關有關」
+
+source_registry (3 個允許的來源)
+    │
+    ├──→ source_sync_runs → 「每次同步的歷史紀錄」
+    └──→ document_discoveries → 「從這個來源發現了哪些文件」
+
+source_documents (6 份已下載的官方頁面)
+    │
+    ├──← program_sources.document_id → 「方案的證據來自這份文件」
+    └──← program_organization_roles.evidence_document_id → 「機關角色的依據」
+
+benefit_programs (5 筆補助方案)
+    │
+    ├──→ program_sources → 「這個方案有哪些證據」
+    ├──→ program_organization_roles → 「這個方案跟哪些機關有關」
+    └──→ program_rule_fields → 「這個方案的結構化判斷條件」</div>
+
+<!-- ==================== Rule Engine ==================== -->
+
+<h2>Rule Engine 怎麼運作？</h2>
+
+<div class="card">
+  <h3>概念</h3>
+  <p>Rule Engine 是一段<strong>固定的程式碼</strong>，不管有 5 筆或 10 萬筆方案，都用同一套邏輯。</p>
+  <p>它做的事就是：讀取 <code>program_rule_fields</code> 裡的值，跟使用者提供的屬性比對。</p>
+</div>
+
+<div class="card">
+  <h3>例子</h3>
+  <p>使用者說：「骨灰從臺北靈骨塔遷出，已完成樹葬，30 天前領回」</p>
+  <p>系統抽出屬性：</p>
+  <table>
+    <tr><th>屬性</th><th>值</th></tr>
+    <tr><td>remains_type</td><td>ash（骨灰）</td></tr>
+    <tr><td>eco_burial_completed</td><td>true</td></tr>
+    <tr><td>days_since_remains_pickup</td><td>30</td></tr>
+    <tr><td>jurisdiction</td><td>TPE（臺北市）</td></tr>
+  </table>
+  <p>Rule Engine 拿這些屬性去比對臺北市鼓勵金的規則欄位：</p>
+  <ul>
+    <li><code>eligible_remains_types</code> = ["ash", "bone"] → ash 有在裡面 ✓</li>
+    <li><code>eco_burial_required</code> = true → 使用者已完成 ✓</li>
+    <li><code>application_deadline_days</code> = 60 → 30 天 < 60 天 ✓</li>
+    <li><code>amount_conditions</code>: remains_type=ash → 10,000 元</li>
+  </ul>
+  <p>結果：<strong>eligible，金額 10,000 元</strong></p>
+</div>
+
+<div class="card">
+  <h3>目前有的結構化欄位種類</h3>
+  <table>
+    <tr><th>欄位名稱</th><th>類型</th><th>說明</th></tr>
+    <tr><td>min_amount</td><td>integer</td><td>最低金額</td></tr>
+    <tr><td>max_amount</td><td>integer</td><td>最高金額</td></tr>
+    <tr><td>amount_conditions</td><td>json</td><td>金額分級條件（例如骨灰1萬、骨骸2萬）</td></tr>
+    <tr><td>application_deadline_days</td><td>integer</td><td>申請期限（天數）</td></tr>
+    <tr><td>post_completion_deadline_days</td><td>integer</td><td>完成後幾天內要送件</td></tr>
+    <tr><td>deadline_starts_from</td><td>text</td><td>期限從什麼事件開始算</td></tr>
+    <tr><td>requires_city_registration</td><td>boolean</td><td>是否限設籍該縣市</td></tr>
+    <tr><td>eligible_remains_types</td><td>json</td><td>適用的骨灰骸類型</td></tr>
+    <tr><td>eligible_deceased_statuses</td><td>json</td><td>亡者需符合的身分（低收等）</td></tr>
+    <tr><td>eco_burial_required</td><td>boolean</td><td>是否需完成環保葬</td></tr>
+    <tr><td>eco_burial_location_restricted</td><td>boolean</td><td>環保葬地點是否限本市</td></tr>
+    <tr><td>source_facility_required</td><td>json</td><td>骨灰骸必須從哪些設施遷出</td></tr>
+    <tr><td>application_period_start</td><td>date</td><td>受理開始日期</td></tr>
+    <tr><td>application_period_end</td><td>date</td><td>受理截止日期</td></tr>
+    <tr><td>application_start_date</td><td>date</td><td>方案實施日期</td></tr>
+    <tr><td>budget_limited</td><td>boolean</td><td>是否預算用罄即停止</td></tr>
+    <tr><td>service_items_count</td><td>integer</td><td>免費服務項目數量</td></tr>
+    <tr><td>fee_reduction_for_unqualified</td><td>boolean</td><td>不符資格者是否可減半收費</td></tr>
+  </table>
+  <p>這些欄位不是固定的。你可以在 Review UI 上隨時新增新的欄位種類。</p>
+</div>
+
+<!-- ==================== 檔案結構 ==================== -->
+
+<h2>重要檔案在哪裡？</h2>
+<table>
+  <tr><th>檔案</th><th>做什麼的</th></tr>
+  <tr><td><code>scripts/import_government_oid.py</code></td><td>下載並匯入政府機關 OID</td></tr>
+  <tr><td><code>scripts/init_benefit_catalog.py</code></td><td>建立所有資料表</td></tr>
+  <tr><td><code>scripts/sync_benefit_sources.py</code></td><td>同步入口頁（下載 HTML）</td></tr>
+  <tr><td><code>scripts/discover_benefit_links.py</code></td><td>從入口頁找子連結</td></tr>
+  <tr><td><code>scripts/fetch_reviewed_benefit_pages.py</code></td><td>下載人工核准的頁面</td></tr>
+  <tr><td><code>scripts/extract_benefit_candidates.py</code></td><td>從 HTML 解析出候選方案</td></tr>
+  <tr><td><code>scripts/load_candidates_to_db.py</code></td><td>把候選寫入 DB</td></tr>
+  <tr><td><code>scripts/review_server.py</code></td><td>啟動審查網頁介面</td></tr>
+  <tr><td><code>scripts/review_ui.html</code></td><td>審查介面的前端頁面</td></tr>
+  <tr><td><code>backend/app/rules/engine.py</code></td><td>通用規則引擎</td></tr>
+  <tr><td><code>backend/app/services/benefit_catalog.py</code></td><td>資料庫 schema 定義</td></tr>
+  <tr><td><code>backend/app/services/source_connector.py</code></td><td>網頁下載與同步紀錄</td></tr>
+  <tr><td><code>backend/app/services/link_discovery.py</code></td><td>從 HTML 找出子連結</td></tr>
+</table>
+
+<!-- ==================== 方案生命週期 ==================== -->
+
+<h2>一筆補助方案的生命週期</h2>
+<div class="flow-diagram">
+  發現候選連結
+      ↓
+  人工核准下載 (death_benefit_first_batch.v0.1.json)
+      ↓
+  下載官方頁面 → 存入 source_documents
+      ↓
+  解析 HTML → 產生候選 JSON (extracted_candidates.v0.1.json)
+      ↓
+  載入 DB → benefit_programs (status = candidate)
+      ↓
+  AI 補齊缺少欄位（從已接來源搜尋）
+      ↓
+  人工在 Review UI 檢查
+      ├── 資料正確 → 填入結構化規則欄位 → 標為 verified
+      └── 資料不足 → 標記需人工查 or 繼續搜尋
+      ↓
+  verified 的方案 → Rule Engine 可以用來判斷使用者資格</div>
+
+<!-- ==================== 如何重建 ==================== -->
+
+<h2>如何從零重建整個資料庫</h2>
+<div class="card">
+  <p>Clone 專案後，在 repository 根目錄依序執行：</p>
+  <ol style="margin-left: 20px;">
+    <li><code>python3 scripts/import_government_oid.py</code> — 匯入 OID</li>
+    <li><code>python3 scripts/init_benefit_catalog.py</code> — 建 catalog 表</li>
+    <li><code>python3 scripts/sync_benefit_sources.py</code> — 同步入口頁</li>
+    <li><code>python3 scripts/fetch_reviewed_benefit_pages.py</code> — 下載核准頁面</li>
+    <li><code>python3 scripts/extract_benefit_candidates.py</code> — 解析候選</li>
+    <li><code>python3 scripts/load_candidates_to_db.py</code> — 寫入 DB</li>
+  </ol>
+  <p style="margin-top:12px;">啟動審查介面：</p>
+  <p><code>backend/.venv/bin/python3 scripts/review_server.py</code></p>
+  <p>然後開 <a href="http://localhost:8100">http://localhost:8100</a></p>
+</div>
+
+</body>
+</html>
