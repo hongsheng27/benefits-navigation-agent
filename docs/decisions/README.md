@@ -13,5 +13,6 @@
 - [ADR-0007: Limit Data Retention and Egress](0007-limit-data-retention-and-egress.md)
 - [ADR-0008: Use Generated SQLite for the Local Government OID Registry](0008-use-generated-sqlite-for-government-oid.md)
 - [ADR-0009: Use a Provenance-First Local Benefit Catalog](0009-use-local-provenance-first-benefit-catalog.md)
+- [ADR-0010: Use Frozen Pydantic Models for Session Workflow State](0010-frozen-pydantic-session-workflow-state.md)
 
 新 ADR 至少記錄背景、候選方案、決定、理由與後果。
