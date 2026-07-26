@@ -1,0 +1,436 @@
+{
+  "schema_version": "2.0",
+  "dictionary_id": "death_benefit_discovery",
+  "dictionary_version": "0.2",
+  "locale": "zh-TW",
+  "user_facing_topic": "親人過世",
+  "internal_topic": "死亡、喪葬與遺族",
+  "purpose": "Discover and route candidate public resources for later official-evidence review.",
+  "scope": {
+    "geographies": [
+      "central_government",
+      "taipei_city"
+    ],
+    "primary": [
+      "政府提供的死亡或喪葬補助與救助",
+      "直接降低喪葬支出的費用減免或政府服務",
+      "重要的社會保險死亡或喪葬給付",
+      "因死亡事實發給的一次性支持"
+    ],
+    "secondary": [
+      "遺屬年金、遺屬津貼及其他持續生活支持",
+      "撫卹、犯罪被害補償及其他特殊制度資源"
+    ],
+    "excluded": [
+      "只有死亡登記、除戶或證件註銷的行政資訊",
+      "遺產稅喪葬費扣除額及一般繼承或稅務資訊",
+      "私人殯葬商品、業者、廣告或民間募款",
+      "鄉鎮市區自行加碼",
+      "以動物、家畜、家禽或寵物為資源主體的補助"
+    ]
+  },
+  "classification": {
+    "support_purpose": [
+      "funeral_cost",
+      "one_time_death_support",
+      "survivor_livelihood"
+    ],
+    "program_basis": [
+      "government_subsidy_or_relief",
+      "social_assistance",
+      "social_insurance",
+      "survivor_pension_or_pension",
+      "legal_compensation",
+      "employer_statutory_payment",
+      "other_or_unknown"
+    ],
+    "delivery_form": [
+      "cash_once",
+      "cash_recurring",
+      "reimbursement",
+      "fee_waiver",
+      "service_or_in_kind",
+      "unknown"
+    ],
+    "display_section_derivation": {
+      "funeral_cost": "immediate_actions",
+      "one_time_death_support": "immediate_actions",
+      "survivor_livelihood": "ongoing_survivor_support"
+    }
+  },
+  "discovery_terms": {
+    "death_event_low_precision": [
+      "死亡",
+      "身故",
+      "過世",
+      "亡故",
+      "往生",
+      "歿",
+      "喪偶",
+      "遺族",
+      "遺屬",
+      "遺眷"
+    ],
+    "funeral_service_terms": [
+      "喪葬",
+      "殯葬",
+      "殮葬",
+      "治喪",
+      "安葬",
+      "埋葬",
+      "安厝",
+      "火化",
+      "納骨",
+      "骨灰",
+      "骨骸",
+      "骨灰（骸）存放設施",
+      "納骨堂",
+      "納骨塔",
+      "納骨牆",
+      "靈骨塔",
+      "殯儀館",
+      "火化場",
+      "禮廳及靈堂",
+      "公墓",
+      "環保葬",
+      "樹葬",
+      "花葬",
+      "海葬",
+      "植存",
+      "聯合奠祭"
+    ],
+    "economic_assistance_terms": [
+      "補助",
+      "補貼",
+      "津貼",
+      "救助",
+      "扶助",
+      "慰問金",
+      "慰助金",
+      "救助金",
+      "補助費",
+      "補助款",
+      "急難救助",
+      "獎勵金",
+      "費用補助",
+      "費用減免",
+      "規費減免",
+      "免收",
+      "不予收費",
+      "減半",
+      "減徵",
+      "優待",
+      "免費"
+    ],
+    "high_precision_subsidy_phrases": [
+      "喪葬補助",
+      "喪葬費補助",
+      "喪葬費用補助",
+      "喪葬救助",
+      "喪葬扶助",
+      "喪葬補助費",
+      "殯葬補助",
+      "殮葬補助",
+      "殮葬費補助",
+      "安葬補助",
+      "埋葬補助",
+      "火化費補助",
+      "火化費減免",
+      "納骨費補助",
+      "納骨塔費用減免",
+      "殯葬設施使用費減免",
+      "殯葬設施使用費免收",
+      "火化場使用費減免",
+      "骨灰（骸）存放設施使用費減免",
+      "無力殮葬",
+      "死亡救助",
+      "死亡慰問金",
+      "喪葬慰問金",
+      "遺族慰問金",
+      "遺屬慰問金",
+      "遺眷補助",
+      "環保葬獎勵金"
+    ],
+    "government_service_phrases": [
+      "聯合奠祭"
+    ],
+    "related_financial_phrases": [
+      "死亡給付",
+      "本人死亡給付",
+      "家屬死亡給付",
+      "喪葬給付",
+      "喪葬津貼",
+      "眷屬喪葬津貼",
+      "遺屬年金",
+      "遺族年金",
+      "遺屬津貼",
+      "遺族津貼",
+      "遺屬一次金",
+      "一次撫慰金",
+      "月撫慰金",
+      "撫慰金",
+      "遺族撫卹",
+      "遺屬撫卹",
+      "遺眷撫卹",
+      "一次撫卹金",
+      "年撫卹金",
+      "撫卹令",
+      "死亡補償",
+      "死亡賠償",
+      "遺屬補償金",
+      "犯罪被害補償金",
+      "職災死亡給付",
+      "因公死亡撫卹"
+    ],
+    "fee_schedule_terms": [
+      "收費標準",
+      "收費基準",
+      "使用管理費",
+      "使用費"
+    ],
+    "fee_relief_terms": [
+      "免費",
+      "免收",
+      "不予收費",
+      "減半",
+      "減徵",
+      "優待",
+      "費用減免",
+      "規費減免"
+    ]
+  },
+  "extraction_terms": {
+    "relationship_terms": [
+      "配偶",
+      "父母",
+      "子女",
+      "家屬",
+      "親屬",
+      "遺族",
+      "遺屬",
+      "遺眷",
+      "受扶養人",
+      "受益人",
+      "法定繼承人"
+    ],
+    "eligibility_context_terms": [
+      "低收入戶",
+      "中低收入戶",
+      "原住民",
+      "身心障礙",
+      "榮民",
+      "軍人",
+      "公教人員",
+      "勞工",
+      "農民",
+      "漁民",
+      "被保險人",
+      "職業災害",
+      "因公死亡",
+      "天然災害",
+      "犯罪被害",
+      "交通事故",
+      "急難",
+      "殉職",
+      "因公殉職",
+      "義警",
+      "義消",
+      "民防人員"
+    ],
+    "application_evidence_terms": [
+      "申請",
+      "申辦",
+      "請領",
+      "申請資格",
+      "申請條件",
+      "應備文件",
+      "受理機關",
+      "申請期限",
+      "補助金額",
+      "補助標準",
+      "線上申辦",
+      "作業要點",
+      "死亡證明書",
+      "除戶戶籍謄本",
+      "相驗屍體證明書"
+    ],
+    "claimant_evidence_terms": [
+      "支出殯葬費之人",
+      "支付殯葬費之人",
+      "負擔殯葬費用之人"
+    ],
+    "mutual_exclusion_terms": [
+      "不得重複請領",
+      "不得重複申領",
+      "未申領政府機關",
+      "擇一請領",
+      "不得同時請領"
+    ]
+  },
+  "signals": {
+    "soft_downrank_terms": [
+      "死亡統計",
+      "死亡人數",
+      "新聞稿",
+      "研究報告",
+      "成果報告",
+      "預算書",
+      "決算書",
+      "採購公告",
+      "招標公告",
+      "決標公告",
+      "得標公告",
+      "殯葬業者名冊",
+      "殯葬設施統計",
+      "訃聞",
+      "生前契約",
+      "塔位",
+      "禮儀公司",
+      "葬儀社",
+      "生命禮儀"
+    ],
+    "non_human_subject_terms": [
+      "家畜",
+      "家禽",
+      "畜禽",
+      "畜產",
+      "寵物",
+      "動物",
+      "犬",
+      "貓"
+    ],
+    "source_review_terms": [
+      "殡葬",
+      "殡仪馆",
+      "中華人民共和國民政部"
+    ]
+  },
+  "normalization": {
+    "preserve_original_text": true,
+    "collapse_whitespace_for_matching": true,
+    "normalize_fullwidth_parentheses_for_matching": true,
+    "character_variants_for_matching": [
+      [
+        "臺",
+        "台"
+      ]
+    ],
+    "canonical_term_aliases": {
+      "撫卹": [
+        "撫恤"
+      ]
+    },
+    "rewrite_original_text": false,
+    "convert_simplified_to_traditional": false,
+    "simplified_script_action": "block_auto_approval_and_request_source_review",
+    "match_high_precision_phrases_before_tokenization": true
+  },
+  "discovery_rules": [
+    {
+      "id": "R1_high_precision_subsidy",
+      "when": "A content block matches high_precision_subsidy_phrases.",
+      "result": "primary_support_candidate",
+      "priority": "high"
+    },
+    {
+      "id": "R2_government_service",
+      "when": "A content block matches government_service_phrases.",
+      "result": "government_service_candidate",
+      "priority": "high"
+    },
+    {
+      "id": "R3_funeral_service_and_assistance",
+      "when": "The same content block matches funeral_service_terms and economic_assistance_terms.",
+      "result": "primary_support_candidate",
+      "priority": "normal"
+    },
+    {
+      "id": "R4_death_event_and_assistance",
+      "when": "The same content block matches death_event_low_precision and economic_assistance_terms.",
+      "result": "weak_support_candidate",
+      "priority": "low"
+    },
+    {
+      "id": "R5_related_financial_phrase",
+      "when": "A content block matches related_financial_phrases.",
+      "result": "related_financial_candidate",
+      "priority": "separate_review"
+    },
+    {
+      "id": "R6_fee_schedule_discovery",
+      "when": "The same content block matches funeral_service_terms and fee_schedule_terms.",
+      "result": "fee_schedule_candidate",
+      "priority": "normal",
+      "note": "Do not classify as a fee waiver until a fee_relief_terms match is found."
+    },
+    {
+      "id": "R7_fee_relief_confirmation",
+      "when": "A fee_schedule_candidate block also matches fee_relief_terms.",
+      "result": "fee_waiver_candidate",
+      "priority": "high"
+    },
+    {
+      "id": "R8_listing_expansion",
+      "when": "A reviewed source is a benefit listing, service index, or fee schedule.",
+      "result": "expand_child_links_or_content_blocks",
+      "priority": "normal"
+    }
+  ],
+  "routing_precedence": [
+    "hard_exclusion",
+    "government_service_candidate",
+    "related_financial_candidate",
+    "fee_waiver_candidate",
+    "primary_support_candidate",
+    "fee_schedule_candidate",
+    "weak_support_candidate"
+  ],
+  "candidate_controls": {
+    "hard_exclusion_rules": [
+      "source_registry confirms a non-Taiwan government source",
+      "source_registry confirms a commercial source",
+      "source_registry classifies the source as procurement-only",
+      "the candidate content block clearly identifies a non-human subject"
+    ],
+    "hard_exclusion_audit_fields": [
+      "rule_id",
+      "candidate_block",
+      "matched_span",
+      "source_registry_id",
+      "decided_at"
+    ],
+    "soft_only_signals": [
+      "news, statistics, research, budget, or final-account language",
+      "simplified-script detection without confirmed jurisdiction",
+      "application document terms that may also appear on real program pages"
+    ],
+    "deduplication_key": "canonical_url_and_content_identity"
+  },
+  "required_review_fields": {
+    "expense_proof_requirement": [
+      "required",
+      "not_required",
+      "conditional",
+      "unknown"
+    ],
+    "text_with_evidence": [
+      "claimant_rule_text",
+      "deadline_rule_text",
+      "mutual_exclusion_text"
+    ],
+    "evidence_metadata": [
+      "source_url",
+      "source_excerpt",
+      "retrieved_at",
+      "review_status"
+    ]
+  },
+  "review_constraints": [
+    "Keyword matches create candidates only.",
+    "Do not infer current availability, user eligibility, or organization responsibility from keywords.",
+    "A law or news page can provide evidence but does not become a benefit program by itself.",
+    "Require official-source and human evidence review before publishing a program.",
+    "Keep uncertain candidates instead of treating missing evidence as proof that no support exists.",
+    "Connect organization roles to OIDs only after role evidence is reviewed."
+  ]
+}

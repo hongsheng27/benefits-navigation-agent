@@ -1,0 +1,247 @@
+{
+  "schema_version": "1.0",
+  "evaluation_id": "death_benefit_discovery_golden_set",
+  "evaluation_version": "0.2",
+  "locale": "zh-TW",
+  "fixture_type": "synthetic_discovery_cases",
+  "notes": [
+    "These cases test discovery and routing behavior, not real-world eligibility.",
+    "Program classifications remain subject to official evidence review.",
+    "No case may be used to claim that a current program is available."
+  ],
+  "cases": [
+    {
+      "id": "death-001",
+      "title": "臺北市低收入戶及受保護安置市民喪葬補助",
+      "content_block": "符合規定者得申請喪葬費補助，請檢附應備文件。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R1_high_precision_subsidy",
+        "R3_funeral_service_and_assistance"
+      ],
+      "expected_route": "primary_support_candidate",
+      "expected_classification": {
+        "support_purpose": "funeral_cost",
+        "program_basis": "other_or_unknown",
+        "delivery_form": "cash_once"
+      },
+      "review_note": "The exact legal basis remains evidence-dependent."
+    },
+    {
+      "id": "death-002",
+      "title": "勞工保險喪葬津貼請領資格",
+      "content_block": "被保險人之家屬死亡時，符合規定者得請領喪葬津貼。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R3_funeral_service_and_assistance",
+        "R4_death_event_and_assistance",
+        "R5_related_financial_phrase"
+      ],
+      "expected_route": "related_financial_candidate",
+      "expected_classification": {
+        "support_purpose": "funeral_cost",
+        "program_basis": "social_insurance",
+        "delivery_form": "cash_once"
+      }
+    },
+    {
+      "id": "death-003",
+      "title": "國民年金保險喪葬給付請領資格及給付金額",
+      "content_block": "被保險人死亡時，由支出殯葬費之人請領喪葬給付。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R5_related_financial_phrase"
+      ],
+      "expected_route": "related_financial_candidate",
+      "expected_classification": {
+        "support_purpose": "funeral_cost",
+        "program_basis": "social_insurance",
+        "delivery_form": "cash_once"
+      },
+      "expected_extraction_terms": [
+        "支出殯葬費之人"
+      ]
+    },
+    {
+      "id": "death-004",
+      "title": "某市急難救助",
+      "content_block": "戶內人口死亡無力殮葬者，得向主管機關申請急難救助。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R1_high_precision_subsidy",
+        "R3_funeral_service_and_assistance",
+        "R4_death_event_and_assistance"
+      ],
+      "expected_route": "primary_support_candidate",
+      "expected_classification": {
+        "support_purpose": "funeral_cost",
+        "program_basis": "social_assistance",
+        "delivery_form": "cash_once"
+      }
+    },
+    {
+      "id": "death-005",
+      "title": "災害救助種類及標準",
+      "content_block": "因災致死者之遺屬得申請死亡救助。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R1_high_precision_subsidy",
+        "R4_death_event_and_assistance"
+      ],
+      "expected_route": "primary_support_candidate",
+      "expected_classification": {
+        "support_purpose": "one_time_death_support",
+        "program_basis": "government_subsidy_or_relief",
+        "delivery_form": "cash_once"
+      }
+    },
+    {
+      "id": "death-006",
+      "title": "臺北市殯葬管理處聯合奠祭",
+      "content_block": "申請參加聯合奠祭者，依身分提供免費服務項目或規費減免。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R2_government_service",
+        "R3_funeral_service_and_assistance"
+      ],
+      "expected_route": "government_service_candidate",
+      "expected_classification": {
+        "support_purpose": "funeral_cost",
+        "program_basis": "government_subsidy_or_relief",
+        "delivery_form": "service_or_in_kind"
+      },
+      "review_note": "Deadline, eligible identities, and current service items require current official evidence."
+    },
+    {
+      "id": "death-007",
+      "title": "公務人員遺屬一次金與遺屬年金發給事項",
+      "content_block": "本頁同時說明遺屬一次金及遺屬年金。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R5_related_financial_phrase"
+      ],
+      "expected_route": "related_financial_candidate",
+      "expected_split_count": 2,
+      "expected_split_classifications": [
+        {
+          "support_purpose": "one_time_death_support",
+          "program_basis": "survivor_pension_or_pension",
+          "delivery_form": "cash_once"
+        },
+        {
+          "support_purpose": "survivor_livelihood",
+          "program_basis": "survivor_pension_or_pension",
+          "delivery_form": "cash_recurring"
+        }
+      ]
+    },
+    {
+      "id": "death-008",
+      "title": "犯罪被害人遺屬補償金申請須知",
+      "content_block": "因犯罪行為致死亡者之遺屬，得依規定申請遺屬補償金。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R5_related_financial_phrase"
+      ],
+      "expected_route": "related_financial_candidate",
+      "expected_classification": {
+        "support_purpose": "one_time_death_support",
+        "program_basis": "legal_compensation",
+        "delivery_form": "cash_once"
+      }
+    },
+    {
+      "id": "death-009",
+      "title": "死亡證明書申請及除戶登記須知",
+      "content_block": "說明死亡證明書、除戶登記及應備文件。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [],
+      "expected_route": "excluded_by_scope",
+      "expected_reason": "administrative_only"
+    },
+    {
+      "id": "death-010",
+      "title": "遺產稅喪葬費扣除額規定",
+      "content_block": "說明申報遺產稅時之喪葬費扣除額。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [],
+      "expected_route": "excluded_by_policy",
+      "expected_reason": "tax_information_out_of_mvp_scope"
+    },
+    {
+      "id": "death-011",
+      "title": "生前契約消費爭議申訴管道",
+      "content_block": "消費者購買殯葬生前契約後發生退費爭議，可提出申訴。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [],
+      "expected_route": "not_a_support_program",
+      "expected_signals": [
+        "soft_downrank"
+      ]
+    },
+    {
+      "id": "death-012",
+      "title": "寵物火化服務收費標準",
+      "content_block": "本動物保護處提供犬貓及寵物火化服務並收取使用費。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R6_fee_schedule_discovery"
+      ],
+      "expected_route": "hard_excluded_candidate_block",
+      "expected_reason": "non_human_subject"
+    },
+    {
+      "id": "death-013",
+      "title": "殡葬管理条例",
+      "content_block": "中華人民共和國民政部發布殡葬管理相關規定。",
+      "source_context": "confirmed_non_taiwan_government",
+      "expected_rule_ids": [],
+      "expected_route": "hard_excluded_source",
+      "expected_reason": "confirmed_non_taiwan_government"
+    },
+    {
+      "id": "death-014",
+      "title": "113年度殯葬設施管理費決算表",
+      "content_block": "本表彙整年度殯葬設施管理費收入與決算數。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [],
+      "expected_route": "soft_downranked_candidate",
+      "expected_signals": [
+        "soft_downrank"
+      ]
+    },
+    {
+      "id": "death-015",
+      "title": "榮民喪葬補助與喪葬慰問金",
+      "content_block": "符合條件者得申請喪葬補助或慰問金，但不得重複請領其他政府喪葬補助。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R1_high_precision_subsidy",
+        "R3_funeral_service_and_assistance"
+      ],
+      "expected_route": "primary_support_candidate",
+      "expected_classification": {
+        "support_purpose": "funeral_cost",
+        "program_basis": "government_subsidy_or_relief",
+        "delivery_form": "cash_once"
+      },
+      "expected_extraction_terms": [
+        "不得重複請領"
+      ],
+      "required_review_fields": [
+        "mutual_exclusion_text"
+      ]
+    },
+    {
+      "id": "death-016",
+      "title": "農業天然災害畜禽死亡現金救助",
+      "content_block": "家畜及家禽因天然災害死亡時，農民可申請畜禽現金救助。",
+      "source_context": "reviewed_taiwan_government",
+      "expected_rule_ids": [
+        "R4_death_event_and_assistance"
+      ],
+      "expected_route": "hard_excluded_candidate_block",
+      "expected_reason": "non_human_subject"
+    }
+  ]
+}

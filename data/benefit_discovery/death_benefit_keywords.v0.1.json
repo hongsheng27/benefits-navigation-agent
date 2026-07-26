@@ -1,0 +1,201 @@
+{
+  "schema_version": "1.0",
+  "dictionary_id": "death_benefit_discovery",
+  "dictionary_version": "0.1",
+  "locale": "zh-TW",
+  "user_facing_topic": "親人過世",
+  "internal_topic": "死亡、喪葬與遺族",
+  "purpose": "Discover and rank candidate government subsidy resources for later evidence review.",
+  "scope": {
+    "primary_resource_type": "subsidy",
+    "include": [
+      "政府提供的現金補助、津貼、慰問金或急難救助",
+      "喪葬、安葬、火化或納骨相關費用補助",
+      "與喪葬服務直接相關的費用或規費減免",
+      "由政府補助或負擔、可降低家屬支出的實物或服務"
+    ],
+    "adjacent_review": [
+      "社會保險死亡或喪葬給付",
+      "遺屬年金或遺屬津貼",
+      "撫卹、死亡補償或事故賠償"
+    ],
+    "exclude": [
+      "沒有實質補助的死亡登記、除戶或證件註銷",
+      "沒有本主題補助的遺產、繼承或稅務說明",
+      "私人殯葬業者、商品、廣告或商業服務",
+      "沒有申請資源的新聞、統計、研究或成果報告",
+      "預算、決算、採購、招標或得標資料",
+      "無法辨認具體資源或申請方式的單獨法規全文",
+      "尚未另訂來源規則的民間募款或慈善資源"
+    ]
+  },
+  "keyword_groups": {
+    "event_terms": [
+      "親人過世",
+      "死亡",
+      "身故",
+      "過世",
+      "亡故",
+      "喪葬",
+      "殯葬",
+      "安葬",
+      "埋葬",
+      "火化",
+      "納骨",
+      "喪偶",
+      "遺族",
+      "遺屬",
+      "遺眷"
+    ],
+    "subsidy_terms": [
+      "補助",
+      "補貼",
+      "津貼",
+      "救助",
+      "扶助",
+      "慰問金",
+      "急難救助",
+      "費用補助",
+      "費用減免",
+      "規費減免",
+      "公費"
+    ],
+    "high_precision_phrases": [
+      "喪葬補助",
+      "喪葬費補助",
+      "喪葬費用補助",
+      "喪葬津貼",
+      "喪葬救助",
+      "喪葬扶助",
+      "殯葬補助",
+      "安葬補助",
+      "埋葬補助",
+      "火化費補助",
+      "火化費減免",
+      "納骨費補助",
+      "納骨塔費用減免",
+      "殯葬設施使用費減免",
+      "死亡慰問金",
+      "喪葬慰問金",
+      "遺族慰問金",
+      "遺屬慰問金",
+      "遺眷補助"
+    ],
+    "adjacent_financial_phrases": [
+      "死亡給付",
+      "喪葬給付",
+      "遺屬年金",
+      "遺族年金",
+      "遺屬津貼",
+      "遺族津貼",
+      "遺族撫卹",
+      "遺屬撫卹",
+      "遺眷撫卹",
+      "死亡補償",
+      "死亡賠償",
+      "職災死亡給付",
+      "因公死亡撫卹"
+    ],
+    "relationship_terms": [
+      "配偶",
+      "父母",
+      "子女",
+      "家屬",
+      "親屬",
+      "遺族",
+      "遺屬",
+      "遺眷",
+      "受扶養人",
+      "受益人",
+      "法定繼承人"
+    ],
+    "eligibility_context_terms": [
+      "低收入戶",
+      "中低收入戶",
+      "原住民",
+      "身心障礙",
+      "榮民",
+      "軍人",
+      "公教人員",
+      "勞工",
+      "農民",
+      "漁民",
+      "被保險人",
+      "職業災害",
+      "因公死亡",
+      "天然災害",
+      "犯罪被害",
+      "交通事故",
+      "急難",
+      "無力殮葬"
+    ],
+    "application_evidence_terms": [
+      "申請",
+      "申辦",
+      "請領",
+      "申請資格",
+      "申請條件",
+      "應備文件",
+      "受理機關",
+      "申請期限",
+      "補助金額",
+      "補助標準",
+      "線上申辦",
+      "作業要點"
+    ],
+    "noise_terms": [
+      "死亡統計",
+      "死亡人數",
+      "新聞稿",
+      "研究報告",
+      "成果報告",
+      "預算書",
+      "決算書",
+      "採購公告",
+      "招標公告",
+      "得標公告",
+      "殯葬業者名冊",
+      "殯葬設施統計",
+      "訃聞"
+    ]
+  },
+  "discovery_rules": [
+    {
+      "id": "high_precision_phrase",
+      "when": "Matches a high_precision_phrases term.",
+      "result": "primary_subsidy_candidate",
+      "priority": "high"
+    },
+    {
+      "id": "event_and_subsidy",
+      "when": "Matches at least one event_terms term and one subsidy_terms term.",
+      "result": "primary_subsidy_candidate",
+      "priority": "normal"
+    },
+    {
+      "id": "adjacent_financial_phrase",
+      "when": "Matches an adjacent_financial_phrases term.",
+      "result": "adjacent_financial_resource",
+      "priority": "separate_review"
+    },
+    {
+      "id": "single_broad_term",
+      "when": "Matches only one broad event_terms or subsidy_terms term.",
+      "result": "insufficient_signal",
+      "priority": "none"
+    },
+    {
+      "id": "noise_signal",
+      "when": "Matches a noise_terms term.",
+      "result": "lower_review_priority",
+      "priority": "lower",
+      "note": "A noise term alone must not automatically reject a page."
+    }
+  ],
+  "review_constraints": [
+    "Keyword matches create candidates only.",
+    "Do not infer current availability, eligibility, or organization responsibility from keywords.",
+    "Require official-source and evidence review before publishing a program.",
+    "Keep uncertain candidates instead of treating missing evidence as proof that no subsidy exists."
+  ]
+}

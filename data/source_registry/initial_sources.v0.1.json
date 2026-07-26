@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "sources": [
+    {
+      "source_id": "government_oid_dataset",
+      "name": "政府機關唯一識別代碼（OID）資料集",
+      "source_type": "reference_dataset",
+      "jurisdiction_code": "TW",
+      "organization_name": "數位發展部",
+      "publisher_oid": null,
+      "base_url": "https://data.gov.tw/",
+      "entry_url": "https://data.gov.tw/dataset/7081",
+      "canonical_host": "data.gov.tw",
+      "official_status": "verified_official",
+      "access_method": "download_file",
+      "connection_status": "pending",
+      "enabled": true,
+      "reviewed_at": "2026-07-25",
+      "review_note": "Reference registry only. The initializer marks it active after detecting a completed OID import."
+    },
+    {
+      "source_id": "my_egov",
+      "name": "我的 E 政府",
+      "source_type": "benefit_index",
+      "jurisdiction_code": "TW",
+      "organization_name": "我的 E 政府",
+      "publisher_oid": null,
+      "base_url": "https://www.gov.tw/",
+      "entry_url": "https://www.gov.tw/News_Content_26_666371",
+      "canonical_host": "www.gov.tw",
+      "official_status": "verified_official",
+      "access_method": "index_page",
+      "connection_status": "pending",
+      "enabled": true,
+      "reviewed_at": "2026-07-26",
+      "review_note": "First-round connector fetches only the reviewed green-funeral index page and does not expand child links."
+    },
+    {
+      "source_id": "taipei_funeral_services",
+      "name": "臺北市殯葬管理處",
+      "source_type": "agency_site",
+      "jurisdiction_code": "TW-TPE",
+      "organization_name": "臺北市殯葬管理處",
+      "publisher_oid": null,
+      "base_url": "https://mso.gov.taipei/",
+      "entry_url": "https://mso.gov.taipei/cp.aspx?n=485C4E58C9A2DD7B",
+      "canonical_host": "mso.gov.taipei",
+      "official_status": "verified_official",
+      "access_method": "index_page",
+      "connection_status": "pending",
+      "enabled": true,
+      "reviewed_at": "2026-07-26",
+      "review_note": "First-round connector fetches only the reviewed joint-funeral page and does not crawl the site."
+    }
+  ]
+}
