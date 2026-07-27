@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>feat/frontend-backend-contracts — 這個分支做了什麼</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif; background: #fafafa; color: #2b2b2b; line-height: 1.85; padding: 40px 20px 100px; max-width: 900px; margin: 0 auto; }
+h1 { font-size: 1.85rem; margin-bottom: 6px; letter-spacing: -0.01em; }
+h2 { font-size: 1.35rem; margin-top: 56px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #e0e0e0; }
+h3 { font-size: 1.08rem; margin-top: 30px; margin-bottom: 8px; color: #1a1a1a; }
+h4 { font-size: 0.97rem; margin-top: 20px; margin-bottom: 6px; color: #444; }
+p { margin-bottom: 14px; }
+.subtitle { color: #666; margin-bottom: 8px; font-size: 0.92rem; }
+.lead { font-size: 1.05rem; color: #444; margin-bottom: 24px; }
+.card { background: #fff; border: 1px solid #eaeaea; border-radius: 10px; padding: 20px 24px; margin: 18px 0; }
+.card h3, .card h4 { margin-top: 0; }
+table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.9rem; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #eee; vertical-align: top; }
+th { background: #f4f4f4; font-weight: 600; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; font-family: ui-monospace, Consolas, monospace; }
+pre { background: #fbfbfb; border: 1px solid #e8e8e8; border-radius: 8px; padding: 16px 18px; overflow-x: auto; margin: 14px 0; font-size: 0.85rem; line-height: 1.75; }
+pre code { background: none; padding: 0; }
+.note { background: #fff8e6; border-left: 4px solid #f0b429; border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 18px 0; }
+.warn { background: #fdecea; border-left: 4px solid #e05a4f; border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 18px 0; }
+.ok { background: #eaf6ec; border-left: 4px solid #4caf7d; border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 18px 0; }
+ul, ol { margin: 10px 0 16px 24px; }
+li { margin-bottom: 7px; }
+.tag { display: inline-block; padding: 2px 9px; border-radius: 11px; font-size: 0.73rem; font-weight: 600; margin-right: 4px; white-space: nowrap; }
+.t-done { background: #d6efdd; color: #1c6b3f; }
+.t-part { background: #fdf0cd; color: #7d5a10; }
+.t-none { background: #ececec; color: #555; }
+.t-mock { background: #e4e0f7; color: #4a3b8f; }
+.toc { background: #fff; border: 1px solid #eaeaea; border-radius: 10px; padding: 18px 24px; margin: 26px 0 40px; }
+.toc ol { margin: 8px 0 0 22px; }
+.toc li { margin-bottom: 5px; }
+.toc a { color: #2c6e8f; text-decoration: none; }
+.toc a:hover { text-decoration: underline; }
+.flow { background: #fbfbfb; border: 1px solid #e8e8e8; border-radius: 8px; padding: 20px; font-family: ui-monospace, Consolas, monospace; font-size: 0.83rem; line-height: 1.95; white-space: pre; overflow-x: auto; margin: 16px 0; }
+.kv { display: grid; grid-template-columns: 150px 1fr; gap: 6px 16px; font-size: 0.9rem; margin: 12px 0; }
+.kv dt { color: #777; }
+.kv dd { margin: 0; }
+footer { margin-top: 70px; padding-top: 20px; border-top: 1px solid #e0e0e0; font-size: 0.85rem; color: #888; }
+</style>
+</head>
+<body>
+
+<h1>feat/frontend-backend-contracts</h1>
+<p class="subtitle">分支說明文件 ｜ 撰寫日期 2026-07-28</p>
+<p class="lead">
+  這份文件從最上層的架構講到具體的程式檔案，再講這一層跟其他模組怎麼互通。
+  由淺入深，看到哪裡覺得夠了就可以停。
+</p>
+
+<div class="toc">
+  <strong>目錄</strong>
+  <ol>
+    <li><a href="#a">這個分支解決了什麼問題</a></li>
+    <li><a href="#b">整個系統的架構</a></li>
+    <li><a href="#c">技術棧：用了什麼、為什麼</a></li>
+    <li><a href="#d">這個分支實際新增的東西</a></li>
+    <li><a href="#arch">後端架構攤開看</a>
+      <ul style="margin:4px 0 4px 18px; font-size:0.9em;">
+        <li>完整目錄 ／ 每一層的責任與禁止事項</li>
+        <li>誰可以 import 誰 ／ 一次請求從頭到尾</li>
+        <li>應用程式怎麼組起來 ／ 三個貫穿全域的機制</li>
+      </ul>
+    </li>
+    <li><a href="#e">四個核心概念</a></li>
+    <li><a href="#f">跟前端怎麼互通</a></li>
+    <li><a href="#g">跟資料層怎麼互通</a></li>
+    <li><a href="#h">隱私是怎麼用程式強制的</a></li>
+    <li><a href="#i">怎麼跑起來、怎麼驗證</a></li>
+    <li><a href="#j">你必須知道的坑</a></li>
+    <li><a href="#k">下一步該做什麼</a></li>
+  </ol>
+</div>
+
+<!-- ================================================= -->
+<h2 id="a">1. 這個分支解決了什麼問題</h2>
+
+<p>
+  在這個分支之前，前端和後端沒有辦法一起開發。原因是<strong>兩邊沒有講好要傳什麼資料</strong>。
+</p>
+<p>
+  前端工程師不知道後端會回什麼欄位，只能自己寫死假資料；後端工程師不知道前端需要什麼，
+  只能猜。兩邊各做各的，最後接起來一定會壞。
+</p>
+<p>這個分支做了三件事：</p>
+
+<table>
+  <tr><th>做了什麼</th><th>解決什麼</th></tr>
+  <tr>
+    <td>定義後端內部的狀態形狀</td>
+    <td>後端自己知道「一次諮詢」要記住哪些東西</td>
+  </tr>
+  <tr>
+    <td>定義前後端之間的資料契約</td>
+    <td>兩邊可以同時開發，而且改壞了會被測試抓到</td>
+  </tr>
+  <tr>
+    <td>做出可以真的呼叫的 API 端點</td>
+    <td>前端可以開始接，拿到的是真實形狀的回應</td>
+  </tr>
+</table>
+
+<div class="note">
+  <strong>但功能還沒有。</strong>
+  端點回的資料是寫死的：不管使用者輸入什麼，事件都判定成「配偶過世」，
+  候選項目固定四個，沒有任何資格判定。這是刻意的 —— 目標是「形狀對了」，不是「功能好了」。
+</div>
+
+<!-- ================================================= -->
+<h2 id="b">2. 整個系統的架構</h2>
+
+<p>先看全貌，這樣才知道這個分支在哪個位置。</p>
+
+<div class="flow">┌─────────────────────────────────────────────────────────┐
+│  瀏覽器（React）                                          │
+│  使用者打字、選答案、看結果                                  │
+│  姓名、身分證等個資只留在這裡，不往後送                        │
+└─────────────────────────────────────────────────────────┘
+                    ↕  HTTP，JSON
+┌─────────────────────────────────────────────────────────┐
+│  API 層（FastAPI）           ← 這個分支做的               │
+│  只做收發與驗證，不放商業邏輯                                │
+└─────────────────────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────────────────────┐
+│  流程控制層（state machine）  ← 這個分支只做了臨時替代品     │
+│  決定現在該問什麼、能不能往下一步、什麼時候該找人             │
+└─────────────────────────────────────────────────────────┘
+         ↓              ↓              ↓            ↓
+    ┌─────────┐  ┌───────────┐  ┌──────────┐  ┌────────┐
+    │ LLM     │  │ 規則引擎    │  │ 官方文件  │  │ 隱私   │
+    │ 聽懂人話 │  │ 判斷資格    │  │ 檢索      │  │ 閘門   │
+    │ 講白話  │  │（不用 AI）  │  │           │  │        │
+    └─────────┘  └───────────┘  └──────────┘  └────────┘
+                       ↓
+              ┌──────────────────┐
+              │ 本機 SQLite       │
+              │ 補助方案、官方依據  │
+              └──────────────────┘</div>
+
+<h3>最重要的一條原則</h3>
+
+<div class="card">
+  <p>
+    <strong>AI 不決定資格。</strong>
+    LLM 只做兩件事：把使用者的話變成一個分類代號，以及把已經決定好的結果翻成白話。
+  </p>
+  <p>
+    「符不符合資格」由<strong>規則引擎</strong>決定 —— 那是寫死的判斷邏輯，
+    同樣的輸入永遠給同樣的答案。這種特性叫 <strong>deterministic（確定性）</strong>，
+    意思是可驗證、可解釋、不會亂。
+  </p>
+  <p>
+    這條原則是整個專案的核心主張，也寫進了架構決策紀錄（ADR-0003）。
+    把 LLM 整個拿掉，系統仍然能判斷資格，只是使用者要改用選單輸入。
+  </p>
+</div>
+
+<h3>八個流程步驟</h3>
+
+<p>一次諮詢固定走這八步。每一步的名稱在程式裡是 <code>WorkflowState</code> 這個列舉。</p>
+
+<table>
+  <tr><th>步驟</th><th>做什麼</th><th>誰在決定</th></tr>
+  <tr><td><code>understand_event</code></td><td>聽懂發生了什麼事，等使用者確認</td><td>LLM 提議，使用者拍板</td></tr>
+  <tr><td><code>resolve_entitlements</code></td><td>展開可能相關的項目</td><td>資料查表</td></tr>
+  <tr><td><code>collect_missing_fields</code></td><td>按主題逐組追問</td><td>規則算出缺什麼</td></tr>
+  <tr><td><code>retrieve_rules</code></td><td>檢索官方依據</td><td>檢索模組</td></tr>
+  <tr><td><code>evaluate_eligibility</code></td><td>判定資格</td><td>規則引擎</td></tr>
+  <tr><td><code>explain_result</code></td><td>補上白話說明</td><td>LLM</td></tr>
+  <tr><td><code>confirm</code></td><td>複查答案、詢問轉介</td><td>使用者</td></tr>
+  <tr><td><code>complete</code></td><td>產生有順序的辦理清單</td><td>資料查表</td></tr>
+</table>
+
+<p>
+  中間第 3、4、5 步會<strong>形成一個迴圈</strong>：使用者答完一組問題，
+  後端就檢查有沒有項目湊齊條件、湊齊的當場判定，還缺的繼續問。
+  這樣結果會一項一項出現，而不是全部等到最後。
+</p>
+<p>
+  迴圈需要護欄，否則可能轉不出來。目前規劃了四道：檢索先行、最多繞 6 圈、
+  每圈必須有進展、已定案的項目不重跑。<strong>這些還沒實作。</strong>
+</p>
+
+<!-- ================================================= -->
+<h2 id="c">3. 技術棧：用了什麼、為什麼</h2>
+
+<h3>後端</h3>
+
+<table>
+  <tr><th>技術</th><th>是什麼</th><th>為什麼選它</th></tr>
+  <tr>
+    <td><strong>Python 3.13</strong></td>
+    <td>程式語言</td>
+    <td>AWS SDK、Bedrock、資料處理生態成熟</td>
+  </tr>
+  <tr>
+    <td><strong>FastAPI</strong></td>
+    <td>建立 HTTP API 的框架</td>
+    <td>自動產生 API 文件頁；型別註記可以直接當驗證規則用</td>
+  </tr>
+  <tr>
+    <td><strong>Pydantic</strong></td>
+    <td>資料驗證套件</td>
+    <td>宣告欄位型別，收到不符合的資料會自動擋掉；也負責物件與 JSON 的互轉</td>
+  </tr>
+  <tr>
+    <td><strong>uvicorn</strong></td>
+    <td>執行 FastAPI 的伺服器程式</td>
+    <td>FastAPI 官方搭配</td>
+  </tr>
+  <tr>
+    <td><strong>uv</strong></td>
+    <td>套件與虛擬環境管理工具</td>
+    <td>比 pip 快很多，指令統一（<code>uv run</code> 會自動用對的環境）</td>
+  </tr>
+  <tr>
+    <td><strong>pytest</strong></td>
+    <td>測試框架</td>
+    <td>Python 的事實標準</td>
+  </tr>
+  <tr>
+    <td><strong>ruff</strong></td>
+    <td>程式碼檢查與排版工具</td>
+    <td>一個工具同時做 lint 和 format，速度極快</td>
+  </tr>
+</table>
+
+<div class="note">
+  <strong>目前後端沒有安裝 <code>boto3</code>，也沒有裝任何 AWS 套件。</strong>
+  這是刻意的 —— 專案規則要求 8 月 1 日前只能用本機模擬，不准建立實際的 AWS 連線。
+  所以現在這套程式在完全沒有網路、沒有雲端帳號的情況下也能跑。
+</div>
+
+<h3>前端</h3>
+
+<table>
+  <tr><th>技術</th><th>是什麼</th></tr>
+  <tr><td><strong>React 19</strong></td><td>建立網頁介面的函式庫</td></tr>
+  <tr><td><strong>TypeScript</strong></td><td>加上型別檢查的 JavaScript。打錯欄位名編輯器會立刻標紅線</td></tr>
+  <tr><td><strong>Vite</strong></td><td>開發伺服器與打包工具，改檔案後畫面即時更新</td></tr>
+  <tr><td><strong>Tailwind CSS</strong></td><td>用預設好的類別名稱寫樣式，不用另外寫 CSS 檔</td></tr>
+  <tr><td><strong>vitest</strong></td><td>測試框架，設定與 Vite 共用</td></tr>
+</table>
+
+<h3>資料層（別的成員負責）</h3>
+
+<table>
+  <tr><th>技術</th><th>用途</th></tr>
+  <tr><td><strong>SQLite</strong></td><td>本機資料庫，一個檔案就是整個資料庫，不需要安裝伺服器</td></tr>
+  <tr><td><strong>標準庫的 urllib</strong></td><td>下載官方網頁。刻意不引入額外套件</td></tr>
+</table>
+
+<!-- ================================================= -->
+<h2 id="d">4. 這個分支實際新增的東西</h2>
+
+<p>七個新檔案、六個修改。以下按「先看哪個」的順序排。</p>
+
+<h3>核心檔案</h3>
+
+<table>
+  <tr><th>檔案</th><th>做什麼</th><th>狀態</th></tr>
+  <tr>
+    <td><code>backend/app/orchestration/state.py</code></td>
+    <td>定義「一次諮詢」的資料形狀。後端內部用，前端看不到</td>
+    <td><span class="tag t-done">正式</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/schemas/session.py</code></td>
+    <td>前後端之間傳遞的資料形狀。這是對外的承諾</td>
+    <td><span class="tag t-done">正式</span></td>
+  </tr>
+  <tr>
+    <td><code>frontend/src/types/session.ts</code></td>
+    <td>同一份契約的 TypeScript 版本</td>
+    <td><span class="tag t-done">正式</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/orchestration/session_store.py</code></td>
+    <td>把諮詢狀態存在記憶體裡，2 小時後自動消失</td>
+    <td><span class="tag t-done">正式</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/api/sessions.py</code></td>
+    <td>四個 HTTP 端點</td>
+    <td><span class="tag t-done">正式</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/api/errors.py</code></td>
+    <td>把錯誤轉成約定的形狀，並確保不外洩使用者輸入</td>
+    <td><span class="tag t-done">正式</span></td>
+  </tr>
+  <tr>
+    <td><code>backend/app/orchestration/mock_advance.py</code></td>
+    <td>流程推進的<strong>臨時替代品</strong>。之後整個刪除</td>
+    <td><span class="tag t-mock">佔位</span></td>
+  </tr>
+</table>
+
+<h3>測試</h3>
+
+<table>
+  <tr><th>檔案</th><th>測什麼</th><th>數量</th></tr>
+  <tr><td><code>tests/unit/test_workflow_state.py</code></td><td>狀態形狀、隱私約束</td><td>17</td></tr>
+  <tr><td><code>tests/unit/test_session_schemas.py</code></td><td>契約形狀、前後端是否走鐘</td><td>34</td></tr>
+  <tr><td><code>tests/unit/test_session_store.py</code></td><td>過期、刪除、id 隨機性</td><td>10</td></tr>
+  <tr><td><code>tests/unit/test_mock_advance.py</code></td><td>佔位推進的行為</td><td>16</td></tr>
+  <tr><td><code>tests/integration/test_sessions_api.py</code></td><td>端點、錯誤碼、原文不外洩</td><td>14</td></tr>
+</table>
+
+<h3>文件</h3>
+
+<table>
+  <tr><th>檔案</th><th>內容</th></tr>
+  <tr><td><code>docs/decisions/0011-...md</code></td><td>架構決策紀錄：為什麼用 frozen Pydantic。中英對照</td></tr>
+  <tr><td><code>docs/backend/backend-overview.html</code></td><td>後端這一層的完整說明</td></tr>
+  <tr><td><code>docs/front_back_doc/README.md</code></td><td>前後端溝通紀錄：已定案的約定與待確認事項</td></tr>
+  <tr><td><code>docs/back_database_doc/README.md</code></td><td>後端與資料層的溝通紀錄：五個形狀落差</td></tr>
+  <tr><td><code>docs/aws_migration_guide.md</code></td><td>補上了 session 儲存的遷移說明（規則要求）</td></tr>
+</table>
+
+<!-- ================================================= -->
+<h2 id="arch">5. 後端架構攤開看</h2>
+
+<p>
+  這一節把後端每個資料夾、每個檔案、以及它們之間的依賴關係全部列出來。
+  看完應該能回答「我要改某件事，該動哪個檔案」。
+</p>
+
+<h3>5.1 完整目錄</h3>
+
+<div class="flow">backend/
+├── pyproject.toml           相依套件、ruff 與 pytest 設定
+├── .python-version          釘住 Python 3.13
+├── uv.lock                  鎖定套件版本，確保每個人裝到一樣的東西
+│
+└── app/
+    ├── main.py              建立應用程式、掛 router、建 session store
+    ├── config.py            讀環境變數
+    │
+    ├── api/                 ← HTTP 傳輸層。只收發，不放商業邏輯
+    │   ├── health.py            GET /health
+    │   ├── sessions.py          四個 session 端點
+    │   └── errors.py            錯誤轉成契約形狀，不外洩原值
+    │
+    ├── schemas/             ← 對外契約。前端看得到的形狀
+    │   └── session.py           七種輸入、回應快照、錯誤形狀
+    │
+    ├── orchestration/       ← 流程控制。後端的骨幹
+    │   ├── state.py             一次諮詢的資料形狀（已完成）
+    │   ├── session_store.py     存哪裡、活多久（已完成）
+    │   ├── mock_advance.py      推進邏輯的臨時替代品（佔位）
+    │   └── state_machine.py     真正的轉換規則（尚未實作）
+    │
+    ├── rules/               ← 資格判定。唯一有權下結論的地方
+    │   └── engine.py            通用規則引擎與相關性評分（資料層負責）
+    │
+    ├── retrieval/           ← 官方文件檢索（空的）
+    ├── privacy/             ← PII 偵測與屬性 allowlist（空的）
+    ├── tools/               ← 三個 Agent tool（只有說明文字）
+    │   ├── resolve_life_event.py
+    │   ├── retrieve_official_rules.py
+    │   └── evaluate_eligibility.py
+    │
+    ├── services/            ← 外部資料來源的接口（資料層負責）
+    │   ├── benefit_catalog.py   SQLite schema 與查詢輔助
+    │   ├── source_connector.py  下載官方頁面並記錄
+    │   └── link_discovery.py    從 HTML 找子連結
+    │
+    └── observability/       ← 記錄與監看
+        └── logging.py           結構化 JSON logging 與欄位 allowlist
+
+    tests/
+    ├── unit/                單一模組的測試
+    └── integration/         端點與跨模組的測試</div>
+
+<div class="note">
+  <strong>資料夾的分法不是隨意的。</strong>
+  每一個資料夾對應一種<strong>責任</strong>，而不是一種技術。
+  例如「所有跟資料庫有關的東西」不會被放在一起 ——
+  規則判定放 <code>rules/</code>、文件檢索放 <code>retrieval/</code>，
+  即使兩者最後都會讀同一個 SQLite 檔案。
+</div>
+
+<h3>5.2 每一層的責任與禁止事項</h3>
+
+<p>
+  「禁止事項」那一欄比「責任」那一欄更重要 ——
+  它是這個架構能不能撐住的關鍵。
+</p>
+
+<table>
+  <tr><th>層</th><th>責任</th><th>禁止</th></tr>
+  <tr>
+    <td><code>api/</code></td>
+    <td>讀 header、驗證請求格式、呼叫下一層、把結果轉成回應、把錯誤轉成狀態碼</td>
+    <td><strong>不做任何流程判斷</strong>。不能出現「如果現在是第三步就…」這種程式</td>
+  </tr>
+  <tr>
+    <td><code>schemas/</code></td>
+    <td>定義前端看得到的形狀；驗證外部輸入</td>
+    <td>不含邏輯。不直接建立內部狀態物件</td>
+  </tr>
+  <tr>
+    <td><code>orchestration/</code></td>
+    <td>擁有狀態、決定能不能往下一步、管迴圈與重試、決定哪些工具現在可以用</td>
+    <td><strong>不判斷資格</strong>。不直接讀資料庫、不直接呼叫模型</td>
+  </tr>
+  <tr>
+    <td><code>rules/</code></td>
+    <td>吃屬性吐四種結論，並指出決定性條件</td>
+    <td><strong>不呼叫 LLM</strong>。不知道流程走到哪一步。不決定要問什麼問題</td>
+  </tr>
+  <tr>
+    <td><code>retrieval/</code></td>
+    <td>找出官方依據，組出引用</td>
+    <td>不判斷資格。不改寫文件內容</td>
+  </tr>
+  <tr>
+    <td><code>privacy/</code></td>
+    <td>擋掉不該進來的欄位、丟棄原文</td>
+    <td>不做業務判斷</td>
+  </tr>
+  <tr>
+    <td><code>services/</code></td>
+    <td>跟外部世界（資料庫、網頁、未來的 AWS）打交道</td>
+    <td>不含業務規則</td>
+  </tr>
+  <tr>
+    <td><code>observability/</code></td>
+    <td>記錄發生了什麼</td>
+    <td><strong>不接受使用者輸入的值</strong>，程式層強制</td>
+  </tr>
+</table>
+
+<div class="card">
+  <h4>三條禁止事項是整個專案的主張，不是風格偏好</h4>
+  <ul>
+    <li><strong><code>api/</code> 不做流程判斷</strong> —— 否則流程規則會散在路由裡，
+      無法單獨測試，也無法回答「這個狀態轉換合法嗎」</li>
+    <li><strong><code>orchestration/</code> 不判斷資格</strong> —— 這是 ADR-0003 的核心。
+      資格判定必須集中在一個確定性的地方，才能對評審和使用者解釋</li>
+    <li><strong><code>rules/</code> 不呼叫 LLM</strong> —— 這是「AI 不決定你符不符合資格」
+      這句話的實際落實方式</li>
+  </ul>
+</div>
+
+<h3>5.3 誰可以 import 誰</h3>
+
+<p>
+  依賴方向決定了改一個檔案會影響多少東西。箭頭代表「可以 import」。
+</p>
+
+<div class="flow">        api/  ────────────────┐
+         │                    │
+         ↓                    ↓
+     schemas/  ────────→  orchestration/
+                              │
+                              ↓
+                      rules/  retrieval/  services/
+                              │
+                              ↓
+                        observability/   ← 任何一層都可以用</div>
+
+<p><strong>規則是：箭頭只能往下，不能往上。</strong></p>
+
+<ul>
+  <li><code>api/</code> 可以用 <code>schemas/</code> 和 <code>orchestration/</code></li>
+  <li><code>orchestration/</code> <strong>不能</strong> import <code>api/</code>
+    —— 否則流程邏輯就跟 HTTP 綁在一起，換掉 web 框架就要重寫</li>
+  <li><code>rules/</code> <strong>不能</strong> import <code>orchestration/</code>
+    —— 規則不該知道現在走到第幾步</li>
+  <li><code>observability/</code> 是例外，任何一層都可以用它記錄</li>
+</ul>
+
+<div class="warn">
+  <h4>目前有一個違反這個規則的地方，要誠實說明</h4>
+  <p>
+    <code>orchestration/mock_advance.py</code> <strong>import 了
+    <code>schemas/session.py</code></strong>，也就是流程層依賴了傳輸層。
+    按上面的規則，箭頭方向錯了。
+  </p>
+  <p>
+    原因是七種輸入形狀（<code>LifeEventTextInput</code> 等）定義在
+    <code>schemas/</code> 裡，而推進邏輯需要判斷「這次送來的是哪一種輸入」。
+  </p>
+  <p>
+    <strong>正確的做法</strong>是把「輸入的種類」定義在 <code>orchestration/</code>，
+    讓 <code>schemas/</code> 去投影它 —— 跟回應那一側的做法一致
+    （<code>SessionSnapshot</code> 是 <code>SessionState</code> 的投影）。
+  </p>
+  <p>
+    這件事留到實作真正的 state machine 時一起處理，因為那時
+    <code>mock_advance.py</code> 會整個刪除。<strong>但不要在新程式裡沿用這個寫法。</strong>
+  </p>
+</div>
+
+<h3>5.4 一次請求從頭到尾發生什麼</h3>
+
+<p>
+  以 <code>POST /sessions/advance</code> 為例，這是最完整的一條路徑。
+  下面每一步都對得上實際的程式。
+</p>
+
+<div class="flow">1. 前端發出請求
+   POST /sessions/advance
+   Header: X-Session-Id: <隨機字串>
+   Body:   {"input": {"kind": "attribute_answers", "answers": {...}}}
+                    ↓
+2. FastAPI 驗證請求本體                      schemas/session.py
+   看 kind 的值決定要用哪一種形狀來驗
+   格式不符 → 跳到步驟 9（錯誤處理）
+                    ↓
+3. 取出 session                              api/sessions.py
+   從 header 讀 X-Session-Id
+   沒帶      → 401 session_not_found
+   找不到    → 404 session_not_found
+   已過期    → 410 session_expired，並刪除該筆
+                    ↓
+4. 推進一步                                  orchestration/mock_advance.py
+   （未來會是 state_machine.py）
+   不合法的動作 → 409 invalid_transition
+   項目代號不存在 → 422 unknown_item
+   → 產生一個「新的」狀態物件，不修改舊的
+                    ↓
+5. 寫回                                      orchestration/session_store.py
+   替換儲存的狀態、蓋上 updated_at
+   注意：不延長 expires_at
+                    ↓
+6. 記錄                                      observability/logging.py
+   只記狀態名稱、事件代號、項目數量
+   使用者提供的值傳不進去，會直接報錯
+                    ↓
+7. 組出回應                                  schemas/session.py
+   從內部狀態投影出對外快照
+   丟掉 loop_iterations、rule_id 等內部欄位
+   附上「哪些能力還沒實作」的說明
+                    ↓
+8. 輸出 JSON
+   欄位名轉成 camelCase
+   回 200
+                    ↓
+9. 若中途出錯                                api/errors.py
+   轉成 {errorCode, fieldIds, currentState}
+   驗證錯誤只留欄位路徑，訊息與原值一律丟棄</div>
+
+<div class="card">
+  <h4>三個值得注意的設計</h4>
+  <p>
+    <strong>步驟 4 產生新物件而不是修改舊的。</strong>
+    因為狀態物件設成 frozen，改欄位會直接報錯。所以「誰改了狀態」永遠追得到 ——
+    只有這一步會產生新狀態。
+  </p>
+  <p>
+    <strong>步驟 5 不延長過期時間。</strong>
+    使用者一直在操作也不會延長那 2 小時。保存上限從建立時算起，
+    這是對使用者的承諾，不是閒置逾時。
+  </p>
+  <p>
+    <strong>步驟 7 是投影而不是照搬。</strong>
+    內部有 13 個欄位，對外只露出前端需要的。這樣之後想改內部欄位名稱或移除某個計數，
+    不會變成改 API。
+  </p>
+</div>
+
+<h3>5.5 應用程式怎麼組起來</h3>
+
+<p><code>main.py</code> 只做四件事，每一件都刻意做得很薄：</p>
+
+<pre><code>def create_app() -> FastAPI:
+    configure_logging()                              # 1 裝上 JSON 格式的記錄器
+    settings = get_settings()                        # 2 讀環境變數
+    app = FastAPI(...)
+    app.add_middleware(CORSMiddleware, ...)          #   允許前端跨來源呼叫
+    app.state.session_store = InMemorySessionStore() # 3 建立 session 儲存
+    install_error_handlers(app)                      # 4 裝上錯誤轉換
+    app.include_router(health_router)
+    app.include_router(sessions_router)
+    return app
+
+app = create_app()</code></pre>
+
+<table>
+  <tr><th>設計</th><th>為什麼</th></tr>
+  <tr>
+    <td>用一個函式建立應用程式（factory）</td>
+    <td>測試可以建出互相隔離的實例。14 個端點測試各自有自己的 session 儲存，
+      不會互相污染</td>
+  </tr>
+  <tr>
+    <td>session 儲存掛在 <code>app.state</code></td>
+    <td>不用模組層級的全域變數。要換成 DynamoDB 時<strong>只改這一行</strong></td>
+  </tr>
+  <tr>
+    <td>CORS 沒有開 <code>allow_credentials</code></td>
+    <td>因為 session id 不用 cookie，走 header。不開等於少一條被攻擊的路徑</td>
+  </tr>
+  <tr>
+    <td>加端點只要多一行 <code>include_router</code></td>
+    <td>新增功能不需要改這個檔案的其他部分</td>
+  </tr>
+</table>
+
+<h3>5.6 三個貫穿全域的機制</h3>
+
+<div class="card">
+  <h4>一、記錄的欄位允許清單</h4>
+  <p>
+    <code>observability/logging.py</code> 的 <code>log_event</code>
+    <strong>只接受清單上的欄位名稱</strong>，其他直接丟出錯誤。
+  </p>
+  <p>清單裡的欄位分成八組，全部是代號、名稱、計數、結果：</p>
+  <div class="kv">
+    <dt>關聯</dt><dd><code>session_id</code>、<code>request_id</code></dd>
+    <dt>流程</dt><dd><code>state</code>、<code>next_state</code>、<code>transition</code>、<code>guard</code></dd>
+    <dt>Agent</dt><dd><code>tool</code>、<code>tool_allowed</code>、<code>agent_iterations</code>、<code>model_id</code></dd>
+    <dt>項目</dt><dd><code>candidate_count</code></dd>
+    <dt>規則</dt><dd><code>rule_id</code>、<code>rule_version</code>、<code>eligibility_status</code>…</dd>
+    <dt>檢索</dt><dd><code>document_id</code>、<code>source_count</code></dd>
+    <dt>欄位名稱</dt><dd><code>missing_field_names</code>、<code>extracted_field_names</code>、<code>life_event</code></dd>
+    <dt>結果</dt><dd><code>outcome</code>、<code>status_code</code>、<code>duration_ms</code>、<code>error_type</code></dd>
+  </div>
+  <p>
+    <strong>沒有任何欄位可以放「使用者填的值」。</strong>
+    所以寫 <code>log_event("x", text=使用者的話)</code> 會立刻報錯，
+    而不是默默記進去。
+  </p>
+</div>
+
+<div class="card">
+  <h4>二、狀態不可修改</h4>
+  <p>
+    所有狀態物件都設 <code>frozen=True</code>，改欄位會報錯。要改就用
+    <code>model_copy(update={...})</code> 產生新物件。
+  </p>
+  <p>
+    再加上 <code>extra="forbid"</code>：出現沒定義的欄位也報錯，所以打錯欄位名會被抓到。
+  </p>
+  <p>
+    <strong>一個要誠實說明的限制</strong>：frozen 只擋「換掉整個欄位」，
+    不擋「修改欄位指向的那個物件」。<code>attributes</code> 是一個 dict，
+    所以 <code>state.attributes["x"] = 1</code> 在執行時仍然會成功。
+    序列型的欄位都改用不可變的 tuple，但那個 dict 保留了 —— 請當成唯讀。
+  </p>
+</div>
+
+<div class="card">
+  <h4>三、錯誤一律轉換過才對外</h4>
+  <p>
+    <code>api/errors.py</code> 攔下兩種東西：我們自己拋出的
+    <code>ApiError</code>，以及 FastAPI 的驗證錯誤。
+  </p>
+  <p>
+    第二種是重點。Pydantic 驗證失敗時，錯誤訊息<strong>會把不合法的值原文引用進去</strong>。
+    直接回傳等於把使用者打的字送回去，而且任何記錄這個回應的地方都會留下它。
+  </p>
+  <p>
+    處理方式是只取出<strong>欄位路徑</strong>（例如
+    <code>input.life_event_text.text</code>），訊息與原值一律丟棄。
+  </p>
+</div>
+
+<h3>5.7 目前安裝了什麼</h3>
+
+<table>
+  <tr><th>類別</th><th>套件</th></tr>
+  <tr><td>正式依賴</td><td><code>fastapi</code>、<code>pydantic-settings</code>、<code>uvicorn[standard]</code></td></tr>
+  <tr><td>開發依賴</td><td><code>pytest</code>、<code>ruff</code>、<code>httpx2</code>（測試時打自己的 API 用）</td></tr>
+  <tr><td>隨 FastAPI 進來</td><td><code>pydantic</code>（可直接使用）</td></tr>
+  <tr><td>標準庫，不用安裝</td><td><code>sqlite3</code>、<code>secrets</code>、<code>json</code>、<code>urllib</code></td></tr>
+</table>
+
+<div class="note">
+  <strong>沒有安裝 <code>boto3</code>，也沒有任何 AWS 套件。</strong>
+  這符合「8 月 1 日前只用本機模擬」的規則，也代表這套程式在沒有網路、
+  沒有雲端帳號的環境下能完整運作。要動 Bedrock 之前必須先加依賴。
+</div>
+
+<h3>5.8 資料夾是空的，不代表沒事要做</h3>
+
+<p>
+  <code>retrieval/</code>、<code>privacy/</code> 是空的，
+  <code>tools/</code> 三個檔案只有說明文字。這些不是漏掉，是刻意保留的。
+</p>
+<p>
+  專案規則（<code>AGENTS.md</code> 的 learn-by-building boundary）要求
+  <strong>schemas、prompts、工具契約、流程轉換、資格規則、PII 處理、檢索依據、
+  評測邏輯必須由負責人實作或密切審查</strong>，AI 只能直接做樣板、資料夾結構、
+  設定與明確的文件。
+</p>
+<p>
+  所以那些空資料夾標示的是「這裡有一件需要人來決定的事」，而不是「這裡忘了寫」。
+</p>
+
+<!-- ================================================= -->
+<h2 id="e">6. 四個核心概念</h2>
+
+<p>這四個名詞在程式和文件裡到處出現，先弄懂會省很多時間。</p>
+
+<div class="card">
+  <h3>概念一：SessionState（諮詢狀態）</h3>
+  <p>一次諮詢的完整紀錄，13 個欄位。放在 <code>state.py</code>。</p>
+  <table>
+    <tr><td><code>session_id</code></td><td>隨機編號，跟身分無關</td></tr>
+    <tr><td><code>workflow_state</code></td><td>目前走到八步中的哪一步</td></tr>
+    <tr><td><code>life_event</code></td><td>事件代號，例如 <code>spouse_death</code></td></tr>
+    <tr><td><code>attributes</code></td><td>使用者答過的條件</td></tr>
+    <tr><td><code>items</code></td><td>候選項目與各自的結果</td></tr>
+    <tr><td><code>loop_iterations</code></td><td>迴圈繞了幾圈（護欄用）</td></tr>
+    <tr><td><code>event_retry_count</code></td><td>使用者說「不是這樣」幾次</td></tr>
+    <tr><td><code>exit_reason</code></td><td>提前結束的原因</td></tr>
+    <tr><td><code>referral_requested</code></td><td>是否要求轉介</td></tr>
+    <tr><td><code>is_processing</code></td><td>是否還在處理中（給前端輪詢判斷）</td></tr>
+    <tr><td><code>created_at</code> / <code>updated_at</code> / <code>expires_at</code></td><td>三個時間</td></tr>
+  </table>
+  <h4>它有兩個特殊設定</h4>
+  <p>
+    <strong><code>frozen=True</code></strong>：建立之後不能改欄位。要改就產生一個新物件。
+    這樣做的好處是「誰改了狀態」永遠追得到 —— 所有變化都必須經過流程控制那個檔案，
+    程式其他地方改不了。
+  </p>
+  <p>
+    <strong><code>extra="forbid"</code></strong>：出現沒定義的欄位就直接報錯。
+    這樣手滑打錯欄位名會立刻被發現，而不是默默被忽略。
+  </p>
+</div>
+
+<div class="card">
+  <h3>概念二：CandidateItem（候選項目）</h3>
+  <p>
+    第 3 步展開的每一件事就是一個候選項目。目前 MVP 情境有四個：死亡登記、喪葬給付、
+    遺屬年金、健保身分變更。
+  </p>
+  <p><strong>每個項目各自帶一個狀態</strong>，所以同時有好幾項符合是正常情況。</p>
+  <table>
+    <tr><th>狀態</th><th>意思</th><th>誰能設定</th></tr>
+    <tr><td><code>pending</code></td><td>待確認，還在等欄位</td><td>初始值</td></tr>
+    <tr><td><code>eligible</code></td><td>符合</td><td>規則引擎</td></tr>
+    <tr><td><code>ineligible</code></td><td>不符合，<strong>必須指出差在哪個條件</strong></td><td>規則引擎</td></tr>
+    <tr><td><code>needs_information</code></td><td>資訊不足</td><td>規則引擎</td></tr>
+    <tr><td><code>needs_human_review</code></td><td>需人工協助</td><td>規則引擎</td></tr>
+    <tr><td><code>declined_by_user</code></td><td>使用者說不想辦</td><td>使用者</td></tr>
+  </table>
+  <p>
+    程式裡有一個常數 <code>RULE_ENGINE_STATUSES</code> 列出中間那四個。
+    規則引擎回傳 <code>pending</code> 或 <code>declined_by_user</code> 一定是 bug，
+    呼叫端應該拒絕 —— 因為規則引擎擁有「判定」，但不擁有「項目的生命週期」。
+  </p>
+  <p>
+    項目還帶四個金額欄位（最低、最高、發放性質、幣別）。
+    <strong>刻意不放已排版的文字</strong>，例如「10,000 元」——
+    那屬於前端，見下一個概念。
+  </p>
+</div>
+
+<div class="card">
+  <h3>概念三：後端給代號，前端給文字</h3>
+  <p>這是貫穿整個契約的一條分界線。</p>
+  <p>
+    後端回傳的是<strong>代號</strong>：<code>spouse_death</code>、<code>funeral_benefit</code>、
+    <code>eligible</code>、<code>session_expired</code>。
+  </p>
+  <p>
+    畫面上給人看的<strong>文字</strong>全部由前端提供：「配偶過世」、「喪葬給付」、
+    「你符合」、「進度已過期」。
+  </p>
+  <h4>為什麼這樣分</h4>
+  <ul>
+    <li>加一個新的資格欄位時，只要前端補一段文案，不用改後端邏輯</li>
+    <li>這個產品的使用者正在人生低谷，用字很重要，那是負責使用體驗的人的專業</li>
+    <li>後端專注在「該說什麼」，前端專注在「怎麼說」</li>
+  </ul>
+  <div class="note">
+    <strong>目前有一個刻意的例外。</strong>
+    回應裡有一個 <code>placeholderNotice</code> 欄位，內容是中文的
+    「（此為後端傳來的暫時資料…）」。這違反上面的分界，但它的讀者是開發者和 demo 觀眾，
+    不是真正的使用者。<strong>佔位資料移除時它會一起刪除。</strong>
+  </div>
+</div>
+
+<div class="card">
+  <h3>概念四：決定性條件（decisive condition）</h3>
+  <p>這是整個專案最重要的差異點，值得單獨講。</p>
+  <p>
+    一般的系統告訴你「不符合資格」。這個專案要求說得出<strong>是哪一個條件造成的</strong>：
+  </p>
+  <pre><code>差在這個條件：投保年資
+你的情況：5 到 15 年   ／   需要：15 年以上</code></pre>
+  <p>所以每個判定結果都帶一個結構，三個部分：</p>
+  <div class="kv">
+    <dt>field_id</dt><dd>是哪個條件</dd>
+    <dt>expected</dt><dd>規則要求什麼</dd>
+    <dt>actual</dt><dd>使用者的情況是什麼</dd>
+  </div>
+  <p>
+    <strong>而且是強制的</strong>：如果規則說不出「不符合」是差在哪，
+    就不准輸出「不符合」，要降級成「需人工協助」。
+    說不出原因的拒絕，比不回答更傷人。
+  </p>
+  <div class="warn">
+    <strong>這一項目前接不起來。</strong>
+    資料層的規則引擎回的是一串中文句子（例如「需設籍該縣市」），不是三段結構。
+    我們的形狀準備好了，但需要規則引擎那側配合輸出。詳見第 7 節。
+  </div>
+</div>
+
+<!-- ================================================= -->
+<h2 id="f">7. 跟前端怎麼互通</h2>
+
+<h3>四個端點</h3>
+
+<table>
+  <tr><th>方法</th><th>路徑</th><th>用途</th><th>成功碼</th></tr>
+  <tr><td>POST</td><td><code>/sessions</code></td><td>建立諮詢，回應含 <code>sessionId</code></td><td>201</td></tr>
+  <tr><td>POST</td><td><code>/sessions/advance</code></td><td>送一筆輸入，推進一步</td><td>200</td></tr>
+  <tr><td>GET</td><td><code>/sessions/current</code></td><td>查目前狀態（輪詢用）</td><td>200</td></tr>
+  <tr><td>DELETE</td><td><code>/sessions/current</code></td><td>立刻清除</td><td>204</td></tr>
+</table>
+
+<div class="card">
+  <h4>為什麼 id 走 header 而不是網址</h4>
+  <p>
+    除了建立之外，每次呼叫都要帶 <code>X-Session-Id</code> 這個 header。
+  </p>
+  <p>
+    原因是 <code>session_id</code> 同時扮演「是誰」和「證明是本人」兩個角色 ——
+    沒有帳號密碼再驗一次，<strong>誰拿到就能讀到那份狀態</strong>。
+    這種憑證在安全上叫 <strong>bearer token（持有即通行）</strong>。
+  </p>
+  <p>如果放在網址裡，它會出現在這些地方：瀏覽器的瀏覽記錄、伺服器的存取日誌、
+    使用者點外部連結時傳給對方的 referrer、使用者複製網址貼給別人時。</p>
+  <p>走 header 就不會經過這些路徑。代價是用瀏覽器直接貼網址測試比較麻煩。</p>
+</div>
+
+<h3>七種輸入</h3>
+
+<p>
+  推進的請求本體是 <code>{"input": {"kind": ..., ...}}</code>。
+  <code>kind</code> 決定其餘欄位長什麼樣。這種設計叫
+  <strong>discriminated union（可辨識聯集）</strong>。
+</p>
+
+<table>
+  <tr><th>kind</th><th>對應畫面</th><th>其餘欄位</th></tr>
+  <tr><td><code>life_event_text</code></td><td>描述事件</td><td><code>text</code></td></tr>
+  <tr><td><code>event_confirmation</code></td><td>確認理解</td><td><code>confirmed</code></td></tr>
+  <tr><td><code>attribute_answers</code></td><td>送一組答案 / 修正</td><td><code>answers</code></td></tr>
+  <tr><td><code>item_decline</code></td><td>「這一項我不想辦」</td><td><code>itemId</code></td></tr>
+  <tr><td><code>review_confirmation</code></td><td>確認產生清單</td><td><code>confirmed</code></td></tr>
+  <tr><td><code>referral_choice</code></td><td>要不要轉介</td><td><code>requested</code></td></tr>
+  <tr><td><code>help_request</code></td><td>要求人工協助</td><td>無</td></tr>
+</table>
+
+<div class="ok">
+  <strong><code>life_event_text</code> 是唯一帶文字的形狀。</strong>
+  其他六種在型別上就沒有文字欄位，所以自由文字<strong>不可能</strong>出現在後面的步驟。
+  這不是靠檢查擋，是結構上不存在。
+</div>
+
+<h3>回應的形狀</h3>
+
+<p>三個端點都回同一個 <code>SessionSnapshot</code>。它是內部狀態的<strong>投影</strong>——
+  只挑出前端需要的部分，不照搬全部。</p>
+
+<table>
+  <tr><th>不露出的內部欄位</th><th>為什麼</th></tr>
+  <tr><td><code>loop_iterations</code>、<code>event_retry_count</code></td><td>護欄用的計數，露出去會被誤用</td></tr>
+  <tr><td><code>updated_at</code></td><td>畫面上沒用到</td></tr>
+  <tr><td><code>rule_id</code>、<code>rule_version</code></td><td>給我們追查用的，露出等於把規則編號變成對外承諾</td></tr>
+</table>
+
+<h4>兩個現在一定是固定值的欄位</h4>
+<ul>
+  <li><code>questionGroups</code> <strong>一定是空陣列</strong>，因為問題卡需要欄位登記表，那還不存在</li>
+  <li><code>isProcessing</code> <strong>永遠是 false</strong>，因為目前是同步處理，一次呼叫做完才回</li>
+</ul>
+
+<h3>欄位命名：線上是 camelCase</h3>
+
+<p>
+  Python 的慣例是 <code>item_id</code>，TypeScript 的慣例是 <code>itemId</code>。
+  我們讓<strong>網路上傳的 JSON 用 camelCase</strong>，Python 程式內部維持 snake_case。
+  兩種語言各自維持慣例，前端不用自己轉換。
+</p>
+<p>
+  但<strong>列舉的值不變</strong>：<code>needs_information</code> 還是
+  <code>needs_information</code>，因為那是資料內容不是欄位名稱。
+</p>
+
+<h3>錯誤的形狀</h3>
+
+<pre><code>{ "errorCode": "session_expired", "fieldIds": [], "currentState": "collect_missing_fields" }</code></pre>
+
+<table>
+  <tr><th>errorCode</th><th>HTTP</th><th>什麼情況</th></tr>
+  <tr><td><code>session_not_found</code></td><td>404 / 401</td><td>找不到，或沒帶 header</td></tr>
+  <tr><td><code>session_expired</code></td><td>410</td><td>超過 2 小時</td></tr>
+  <tr><td><code>unknown_field</code></td><td>422</td><td>欄位不在登記表上</td></tr>
+  <tr><td><code>invalid_field_value</code></td><td>422</td><td>值不符合型別</td></tr>
+  <tr><td><code>unknown_item</code></td><td>422</td><td>項目代號不存在</td></tr>
+  <tr><td><code>invalid_transition</code></td><td>409</td><td>目前狀態不允許這個動作</td></tr>
+  <tr><td><code>internal_error</code></td><td>500</td><td>後端自身錯誤</td></tr>
+</table>
+
+<p>
+  三個欄位<strong>都不能放值</strong> —— 代號、欄位名稱、狀態名稱。
+  所以這個形狀在結構上不可能洩漏使用者輸入。理由見第 8 節。
+</p>
+
+<h3>兩份契約怎麼保持同步</h3>
+
+<p>
+  契約兩邊手寫（Python 和 TypeScript），最大的風險是改了一邊忘了另一邊。
+</p>
+<p>
+  所以有一個測試會<strong>直接讀取前端的 <code>session.ts</code> 這個檔案</strong>，
+  用文字比對欄位名稱、列舉的值、以及文字長度上限。不一致就讓測試失敗，並指出是哪個形狀。
+</p>
+
+<!-- ================================================= -->
+<h2 id="g">8. 跟資料層怎麼互通</h2>
+
+<p>
+  資料層負責回答「世界上有哪些補助、條件是什麼、依據在哪」。
+  它已經做了不少東西：政府機關資料、官方頁面下載、補助方案 catalog、
+  一個通用規則引擎，還有相關性評分。
+</p>
+
+<h3>目前還沒有接起來</h3>
+
+<p>
+  這個分支<strong>完全沒有呼叫資料層</strong>。端點回的是寫死的資料。
+  接上是後續任務。
+</p>
+
+<h3>接上的方式：三個介面，不直接寫 SQL</h3>
+
+<table>
+  <tr><th>介面</th><th>問什麼</th></tr>
+  <tr><td>Entitlement graph</td><td>這個事件牽動哪些項目？順序與依賴是什麼？</td></tr>
+  <tr><td>規則來源</td><td>這個項目的判斷條件是什麼？</td></tr>
+  <tr><td>官方依據檢索</td><td>這個項目的依據是哪些文件、哪一段？</td></tr>
+</table>
+
+<p>
+  分成三個而不是一個的理由：如果只有一個「資料層」介面，
+  規則判定就有機會直接去撈文件內容，兩者糾纏之後就沒辦法單獨測試規則了。
+</p>
+
+<h3>五個形狀落差</h3>
+
+<p>兩邊的資料形狀還沒對齊。完整內容維護在
+  <code>docs/back_database_doc/README.md</code>，這裡只列摘要。</p>
+
+<table>
+  <tr><th>落差</th><th>狀況</th></tr>
+  <tr>
+    <td><strong>金額</strong>：規則引擎回單一數字，我們需要上下界與發放性質</td>
+    <td><span class="tag t-part">形狀已補，轉接未做</span></td>
+  </tr>
+  <tr>
+    <td><strong>決定性條件</strong>：規則引擎回中文句子，我們需要三段結構</td>
+    <td><span class="tag t-none">需資料層配合</span></td>
+  </tr>
+  <tr>
+    <td><strong>相關性評分</strong>：規則引擎會算分排序，我們沒有欄位接</td>
+    <td><span class="tag t-none">待決定</span></td>
+  </tr>
+  <tr>
+    <td><strong>命名</strong>：<code>program_id</code> 對 <code>item_id</code> 等</td>
+    <td><span class="tag t-part">後端寫轉接</span></td>
+  </tr>
+  <tr>
+    <td><strong>隱私</strong>：規則引擎的說明字串裡混入了使用者提供的值</td>
+    <td><span class="tag t-none">需資料層配合</span></td>
+  </tr>
+</table>
+
+<div class="warn">
+  <strong>第五項要特別注意。</strong>
+  規則引擎有這樣的寫法：<code>f"不適用此骨灰骸類型: {user_type}"</code>。
+  那個 <code>user_type</code> 是使用者提供的值，混進了一個字串裡。
+  目前不會漏（那個欄位不在紀錄檔的允許清單裡），
+  但如果未來有人為了除錯把它加進清單，就沒有人會記得裡面混著使用者的值。
+</div>
+
+<h3>屬性名稱的詞彙已經存在了</h3>
+
+<p>
+  規則引擎已經在讀這些屬性名稱：<code>registered_in_city</code>、
+  <code>remains_type</code>、<code>deceased_status</code>、
+  <code>eco_burial_completed</code>。
+</p>
+<p>
+  所以之後做欄位登記表時，<strong>應該沿用這些名稱</strong>，
+  不要另外發明一套再寫轉換。
+</p>
+
+<!-- ================================================= -->
+<h2 id="h">9. 隱私是怎麼用程式強制的</h2>
+
+<p>
+  這個專案把隱私當成主要主張，所以不能只寫在文件裡。以下五道防線裡，
+  <strong>這個分支負責的是第三、四、五道</strong>。
+</p>
+
+<table>
+  <tr><th>防線</th><th>做法</th><th>狀態</th></tr>
+  <tr><td>1. 不需要身分資料</td><td>產品只做導航不做代辦，本來就不需要姓名身分證</td><td><span class="tag t-done">達成</span></td></tr>
+  <tr><td>2. 送出前在瀏覽器遮罩</td><td>偵測身分證、電話、email 格式</td><td><span class="tag t-none">未做</span></td></tr>
+  <tr><td>3. 後端不保留原文</td><td>抽取完屬性後丟棄</td><td><span class="tag t-part">結構已擋</span></td></tr>
+  <tr><td>4. 屬性要在允許清單上</td><td>不在清單的欄位整筆拒絕</td><td><span class="tag t-none">未做</span></td></tr>
+  <tr><td>5. 紀錄檔連寫的機會都沒有</td><td>只接受允許清單上的欄位名稱</td><td><span class="tag t-done">完成</span></td></tr>
+</table>
+
+<div class="card">
+  <h3>為什麼要五道</h3>
+  <p>
+    因為第二道<strong>必然會漏</strong>。身分證、電話、email 有固定格式可以偵測，
+    但<strong>中文姓名沒有格式特徵</strong> —— 「陳小明」和任何三個字在程式看起來一樣，
+    「王先生」「我家老李」更抓不到。
+  </p>
+  <p>
+    這不是實作品質問題，是原理上做不到。所以真正撐住主張的是第一道和第三道 ——
+    那兩道是<strong>結構性</strong>的（資料不存在／欄位不存在），
+    而第二、四道是<strong>偵測性</strong>的（要判斷、會判斷錯）。
+  </p>
+</div>
+
+<h3>這個分支做到的三件具體事情</h3>
+
+<h4>一、狀態裡沒有任何欄位可以放文字</h4>
+<p>
+  <code>SessionState</code> 沒有 <code>text</code>、<code>description</code>、
+  <code>raw_input</code>、<code>note</code>，也沒有姓名、電話、email 的欄位。
+</p>
+<p>
+  而且有一個測試會<strong>掃過所有欄位名稱</strong>，出現這類字眼就失敗。
+  正當的例外（例如 <code>Citation.publisher_name</code> 是機關名稱，不是個人）
+  在測試裡逐一列名並附理由，所以放寬檢查必須是一次明確的修改。
+</p>
+
+<h4>二、自由文字在型別上只存在第一步</h4>
+<p>
+  七種輸入形狀裡只有 <code>life_event_text</code> 有文字欄位。
+  在第五步想塞文字進去，Pydantic 會直接拒絕。
+</p>
+
+<h4>三、錯誤訊息不外洩原值</h4>
+<div class="card">
+  <p>這一點值得詳細說明，因為它是一個很容易踩到的坑。</p>
+  <p>
+    <strong>Pydantic 驗證失敗時，錯誤訊息會把不合法的值原文引用進去。</strong>
+    例如使用者打了一段 3000 字的話（超過 2000 字上限），預設的錯誤回應就會把那整段送回去。
+  </p>
+  <p>
+    更糟的是，任何記錄這個回應的地方都會留下它 —— 而那正是我們說「抽取後就丟棄」的東西。
+  </p>
+  <p>所以有一個檔案 <code>app/api/errors.py</code> 專門處理這件事：</p>
+  <ul>
+    <li>攔下所有驗證錯誤，只取出<strong>欄位路徑</strong>，例如 <code>input.life_event_text.text</code></li>
+    <li>訊息和原值一律丟棄</li>
+    <li>回應的形狀裡沒有任何欄位可以放值</li>
+  </ul>
+  <p>
+    有一個測試專門驗證這件事：送一段超長的中文進去，然後檢查回應裡查不到那些字。
+  </p>
+  <p>
+    <strong>同樣的原則早就寫進紀錄檔模組了。</strong>
+    <code>app/observability/logging.py</code> 只允許清單上的欄位名稱，
+    傳別的直接報錯。它甚至刻意只記錄例外的<strong>類別名稱</strong>而不記錄訊息，
+    並且用 <code>format_tb</code> 而不是 <code>format_exception</code> 來輸出堆疊 ——
+    因為後者會把訊息一起印出來。
+  </p>
+</div>
+
+<!-- ================================================= -->
+<h2 id="i">10. 怎麼跑起來、怎麼驗證</h2>
+
+<h3>啟動後端</h3>
+
+<pre><code>cd d:\Desktop\git\hackthon\Project\backend
+uv run uvicorn app.main:app --port 8000</code></pre>
+
+<p>這個視窗要一直開著。看到 <code>Application startup complete.</code> 就成功。</p>
+
+<h3>確認端點都在</h3>
+
+<p>瀏覽器打開 <code>http://127.0.0.1:8000/docs</code>，應該看到五個端點（一個 health、四個 sessions）。</p>
+
+<p>或者在另一個 PowerShell 視窗：</p>
+
+<pre><code>(Invoke-RestMethod http://127.0.0.1:8000/openapi.json).paths.PSObject.Properties.Name</code></pre>
+
+<h3>走一遍完整流程</h3>
+
+<pre><code>[Console]::OutputEncoding = [Text.Encoding]::UTF8
+
+$s = Invoke-RestMethod -Method Post http://127.0.0.1:8000/sessions
+$h = @{ 'X-Session-Id' = $s.sessionId }
+
+$a = Invoke-RestMethod -Method Post http://127.0.0.1:8000/sessions/advance -Headers $h `
+  -ContentType 'application/json' `
+  -Body '{"input":{"kind":"life_event_text","text":"我先生上週過世了"}}'
+$a.lifeEvent          # 預期 spouse_death
+
+$a | ConvertTo-Json -Depth 5 | Select-String "我先生"    # 預期沒有輸出
+
+$b = Invoke-RestMethod -Method Post http://127.0.0.1:8000/sessions/advance -Headers $h `
+  -ContentType 'application/json' `
+  -Body '{"input":{"kind":"event_confirmation","confirmed":true}}'
+$b.items | Select-Object itemId, kind, status    # 預期四筆 pending</code></pre>
+
+<div class="ok">
+  中間那一行<strong>搜尋不到「我先生」</strong>是最重要的檢查 ——
+  它證明使用者輸入的文字沒有被保存也沒有回傳。
+</div>
+
+<h3>啟動前端</h3>
+
+<pre><code>cd d:\Desktop\git\hackthon\Project\frontend
+npm run dev</code></pre>
+
+<p>打開 <code>http://localhost:5173</code>。</p>
+
+<div class="note">
+  <strong>前端目前只會顯示「後端已連線」。</strong>
+  送出表單後畫面顯示的還是寫死的示意結果，因為 <code>client.ts</code> 只有健康檢查函式，
+  還沒接上那四個端點。<strong>這是正常的</strong>，接上是下一階段的工作。
+</div>
+
+<h3>跑測試</h3>
+
+<pre><code># 後端（在 backend/ 目錄）
+uv run pytest tests/unit/test_session_store.py tests/unit/test_mock_advance.py `
+  tests/unit/test_session_schemas.py tests/unit/test_workflow_state.py `
+  tests/unit/test_logging.py tests/integration
+
+# 前端（在 frontend/ 目錄）
+npm run typecheck
+npm run lint
+npm run test</code></pre>
+
+<p>目前結果：後端 95 個通過，前端全部通過。</p>
+
+<!-- ================================================= -->
+<h2 id="j">11. 你必須知道的坑</h2>
+
+<div class="warn">
+  <h4>坑一：完整測試套件在 backend/ 目錄下跑不起來</h4>
+  <p>
+    <code>backend/README.md</code> 寫的 <code>uv run pytest</code>（不指定檔案）
+    會在收集階段失敗，四個模組報 <code>ModuleNotFoundError: No module named 'backend'</code>。
+  </p>
+  <p>
+    原因是資料層的測試用的 import 路徑是<strong>從 repository 根目錄</strong>算起的
+    （<code>from backend.app.services...</code>），
+    而 <code>backend/pyproject.toml</code> 設定以 <code>backend/</code> 為根，兩者對不上。
+  </p>
+  <p><strong>暫時做法</strong>：明確指定要跑的測試檔案，像上面那樣。</p>
+</div>
+
+<div class="warn">
+  <h4>坑二：Windows 上有 7 個資料層測試會失敗</h4>
+  <p>
+    從根目錄執行
+    <code>backend/.venv/Scripts/python.exe -m pytest backend/tests</code>
+    可以繞過坑一，但會有 7 個失敗，錯誤是
+    <code>PermissionError: The process cannot access the file</code>。
+  </p>
+  <p>
+    原因是資料層到處用 <code>with sqlite3.connect(...) as connection:</code>。
+    <strong>Python 的 sqlite3 用 <code>with</code> 包起來只會提交交易，不會關閉連線。</strong>
+    macOS 和 Linux 允許刪除還開著的檔案，Windows 不允許，所以測試的暫存目錄清不掉。
+  </p>
+  <p>
+    這不只是測試問題 —— 長時間執行的伺服器沿用同樣寫法會累積不釋放的連線。
+  </p>
+</div>
+
+<div class="warn">
+  <h4>坑三：舊的 uvicorn 行程會佔著埠，讓你以為程式壞了</h4>
+  <p>
+    這個坑實際踩到過，浪費了不少時間。症狀是：新的端點沒有出現在
+    <code>/docs</code>，看起來像 router 沒掛上。
+  </p>
+  <p>
+    實際原因是<strong>有一個舊的 uvicorn 行程還在跑</strong>，載入的是還沒有那些端點的程式，
+    並且佔著 8000 埠。而它的父行程已經死了，子行程繼承了監聽權，
+    所以查詢 owner 會看到一個「找不到的 PID」。
+  </p>
+  <p><strong><code>--reload</code> 不會救你</strong>，因為問題不是「檔案沒重載」而是「舊行程還活著」。</p>
+  <p>診斷方式：</p>
+  <pre><code>Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+  Select-Object ProcessId, CreationDate, CommandLine | Format-List</code></pre>
+  <p>
+    看 <code>CreationDate</code>。如果比你今天開始寫程式的時間還早，就是它。
+    用 <code>Stop-Process -Id &lt;PID&gt; -Force</code> 殺掉。
+  </p>
+</div>
+
+<div class="note">
+  <h4>坑四：PowerShell 的紅字不一定代表程式壞了</h4>
+  <p>
+    <code>Invoke-RestMethod</code> 遇到 4xx 或 5xx 會拋出例外，用紅字印一大段。
+    要看裡面那個 JSON —— 例如
+    <code>{"errorCode":"invalid_transition","currentState":"resolve_entitlements"}</code>
+    表示後端<strong>正確地</strong>拒絕了一個不該接受的請求。
+  </p>
+  <p>另外，貼指令時<strong>不要連 <code>PS D:\...&gt;</code> 一起複製</strong>，
+    PowerShell 會把它當指令解析，噴出一堆 parse error。</p>
+</div>
+
+<div class="note">
+  <h4>坑五：ADR 編號會撞</h4>
+  <p>
+    不同分支各自新增架構決策紀錄時，很容易撞到同一個編號。
+    這個專案已經發生過一次：兩個分支各自寫了 ADR-0008，合併時才發現。
+  </p>
+  <p>
+    合併前先看 <code>docs/decisions/</code> 目前最大的編號，並檢查其他未合併分支。
+  </p>
+</div>
+
+<div class="note">
+  <h4>坑六：對外欄位是 camelCase，但列舉的值不是</h4>
+  <p>
+    <code>itemId</code> 是 camelCase，但 <code>needs_information</code> 保持 snake_case。
+    前者是欄位名稱，後者是資料內容。改的時候不要一起換。
+  </p>
+</div>
+
+<h3>還有兩個規則層面的注意事項</h3>
+
+<table>
+  <tr><th>規則</th><th>怎麼影響你</th></tr>
+  <tr>
+    <td>8 月 1 日前不准連 AWS</td>
+    <td>只能用本機模擬。目前後端連 <code>boto3</code> 都沒裝，符合規則</td>
+  </tr>
+  <tr>
+    <td>所有 AWS 遷移說明集中在 <code>docs/aws_migration_guide.md</code></td>
+    <td>新增會用到 AWS 的功能時，<strong>同一個任務內</strong>就要更新那份指南</td>
+  </tr>
+  <tr>
+    <td>這個 repository 是公開的</td>
+    <td>push 之前要做 secrets 掃描。<code>AGENTS.md</code> 有指令，但是 bash 語法，
+      在 PowerShell 上不能直接跑</td>
+  </tr>
+</table>
+
+<!-- ================================================= -->
+<h2 id="k">12. 下一步該做什麼</h2>
+
+<h3>已完成</h3>
+<ul>
+  <li><span class="tag t-done">完成</span> 內部狀態形狀</li>
+  <li><span class="tag t-done">完成</span> 前後端資料契約（含走鐘檢查）</li>
+  <li><span class="tag t-done">完成</span> Session 儲存（記憶體、2 小時）</li>
+  <li><span class="tag t-done">完成</span> 四個端點（回佔位資料）</li>
+</ul>
+
+<h3>接下來，按建議順序</h3>
+
+<table>
+  <tr><th>順序</th><th>要做什麼</th><th>為什麼排這裡</th></tr>
+  <tr>
+    <td>1</td>
+    <td>前端接上那四個端點</td>
+    <td>目前後端做好了但沒人用。接上之後才驗證得出契約真的可用</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>真正的 state machine（取代 <code>mock_advance.py</code>）</td>
+    <td>後端的骨幹。八個狀態的轉換、守門條件、迴圈四道護欄</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>欄位登記表與問題卡</td>
+    <td>做完 <code>questionGroups</code> 才會有內容，第 4 個畫面才能動</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>接上規則引擎</td>
+    <td>需要先跟資料層協調決定性條件的輸出（落差二）</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td>隱私閘門（屬性允許清單、原文丟棄的行為）</td>
+    <td>結構已經擋住了，但行為還沒實作</td>
+  </tr>
+</table>
+
+<div class="note">
+  <strong>第 2 項的範圍值得注意。</strong>
+  <code>mock_advance.py</code> 是刻意獨立成一個檔案的，
+  所以做真正的 state machine 時是<strong>刪掉整個檔案</strong>再換掉一行呼叫，
+  不用擔心有殘留的假邏輯藏在路由裡。
+</div>
+
+<h3>還沒決定的事</h3>
+<ul>
+  <li>相關性分數要露給前端，還是只用順序隱含表達</li>
+  <li>「我不確定」在契約上怎麼表達（一個保留代號，還是不送這個欄位）</li>
+  <li>互斥福利（領了 A 就不能領 B）怎麼表達</li>
+  <li>Entitlement graph 用什麼形狀（JSON 還是資料表）</li>
+  <li>欄位登記表放哪、由誰維護</li>
+  <li>Session 的正式持久化方案</li>
+  <li>Bedrock 模型、檢索方案、部署方式</li>
+</ul>
+
+<footer>
+  這份文件是 <code>feat/frontend-backend-contracts</code> 分支的完整說明，
+  用來讓後續接手的人與 agent 一次讀懂這一層。<br>
+  程式與文件衝突時以程式為準。相關文件：
+  <a href="backend-overview.html">backend-overview.html</a>（後端這一層的常態說明）、
+  <code>docs/front_back_doc/</code>、<code>docs/back_database_doc/</code>、
+  <code>docs/decisions/</code>。<br>
+  接住提供福利導航，不取代政府承辦人或專業人員的正式判斷。
+</footer>
+
+</body>
+</html>
