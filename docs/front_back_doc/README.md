@@ -1,0 +1,210 @@
+# 前端 ↔ 後端 溝通紀錄
+
+這份文件記錄前端與後端之間**已經談定的約定**，以及**還沒談定、正在擋人的事**。
+
+不是設計文件，也不是規格書。目的是讓兩邊不用等會議就知道對面的狀態。
+
+- 對外契約的真正定義在 `backend/app/schemas/session.py` 與
+  `frontend/src/types/session.ts`。這份文件與程式衝突時，**程式為準**。
+- 使用者流程與畫面設計見 `docs/backend/backend-overview.html`。
+- 最後更新：2026-07-26
+
+---
+
+## 一、當前狀態
+
+| 項目 | 狀態 | 備註 |
+| --- | --- | --- |
+| 資料契約（後端 Pydantic） | ✅ 完成 | `backend/app/schemas/session.py` |
+| 資料契約（前端 TypeScript） | ✅ 完成 | `frontend/src/types/session.ts` |
+| 走鐘檢查測試 | ✅ 完成 | 改一邊忘了另一邊會讓測試失敗 |
+| 三個 session 端點 | ❌ 未實作 | 後端目前只有 `GET /health` |
+| Session 儲存 | ❌ 未實作 | 下一個任務 |
+| 問題卡的內容 | ❌ 未實作 | 形狀已定，內容等欄位登記表 |
+| 前端 PII 遮罩 | ❌ 未實作 | 目前只有文字提醒 |
+
+**所以現在的實際情況是**：契約可以照著寫程式，但呼叫後端還拿不到東西。前端要繼續用
+假資料，直到端點實作完成。
+
+---
+
+## 二、已定案的約定
+
+這些已經討論過並定案，改動需要兩邊都同意。
+
+| 主題 | 決定 |
+| --- | --- |
+| 端點數量 | 三個：建立 session、推進一步、查目前狀態 |
+| 回應內容 | **完整快照**，不是只回變動。後端擁有權威狀態 |
+| Session 識別 | `session_id` 走 **HTTP header**，不走網址路徑 |
+| 線路欄位命名 | **camelCase**（`itemId`），後端 Python 內部是 snake_case |
+| 列舉值命名 | **snake_case**（`needs_information`），因為那是資料不是欄位名 |
+| 問題卡 | 後端給結構與代號，**前端給所有文字** |
+| 型別同步 | 兩邊手寫，靠自動測試抓不一致 |
+| 錯誤回應 | 只有一種形狀，只帶代號 |
+
+### `session_id` 為什麼走 header
+
+它同時扮演「是誰」和「證明是本人」兩個角色，誰拿到就能讀。放在網址會被瀏覽記錄、
+referrer 與伺服器日誌帶走，所以走 header。
+
+前端需要把它存在 `localStorage`（使用者可選擇不保留），並在每次呼叫時帶上。
+
+---
+
+## 三、端點
+
+尚未實作，以下是約定的形狀。
+
+| 方法 | 路徑 | 用途 |
+| --- | --- | --- |
+| `POST` | `/sessions` | 建立一次諮詢，回應含 `sessionId` |
+| `POST` | `/sessions/{id}/advance` | 送一筆輸入，推進一步 |
+| `GET` | `/sessions/current` | 查目前狀態（輪詢用），id 走 header |
+
+三個都回同一個形狀：`SessionSnapshot`。
+
+---
+
+## 四、七種輸入
+
+`POST advance` 的請求本體是 `{ "input": { "kind": ..., ... } }`。
+`kind` 決定其餘欄位。
+
+| kind | 對應畫面 | 其餘欄位 |
+| --- | --- | --- |
+| `life_event_text` | 1 描述事件 | `text` |
+| `event_confirmation` | 2 確認理解 | `confirmed` |
+| `attribute_answers` | 4 送一組答案；7 修正答案 | `answers`（欄位代號對值） |
+| `item_decline` | 「這一項我不想辦」 | `itemId` |
+| `review_confirmation` | 7 確認產生清單 | `confirmed` |
+| `referral_choice` | 7 要不要轉介 | `requested` |
+| `help_request` | 隨時要求人工協助 | 無 |
+
+**`life_event_text` 是唯一帶文字的形狀。** 其他六種在型別上沒有文字欄位，所以自由
+文字不可能出現在後面的步驟。前端不需要擔心誤送，型別會擋。
+
+文字長度上限 **2000 字元**，兩邊都有常數 `MAX_LIFE_EVENT_TEXT_LENGTH`。
+
+---
+
+## 五、回應快照
+
+`SessionSnapshot` 的欄位。「現在」那一欄是目前實作狀況。
+
+| 欄位 | 內容 | 現在 |
+| --- | --- | --- |
+| `sessionId` | 這次諮詢的隨機編號 | 端點做好後才有 |
+| `workflowState` | 八個步驟之一 | — |
+| `stepIndex` / `stepTotal` | 進度顯示用。**因為中間有迴圈，可能往回走** | — |
+| `lifeEvent` | 事件代號，第 2 步確認後才有值 | — |
+| `attributes` | 使用者答過的答案，第 7 步複查用 | — |
+| `items` | 候選項目與各自結果 | — |
+| `questionGroups` | 問題卡 | **一定是空陣列**（等登記表） |
+| `exitReason` | 提前結束的原因 | — |
+| `referralRequested` | 是否要求轉介 | — |
+| `isProcessing` | 為 true 時輪詢要繼續 | **目前永遠是 false**（同步處理） |
+| `createdAt` / `expiresAt` | 建立與失效時間 | — |
+
+### 項目（`items` 裡的每一筆）
+
+| 欄位 | 內容 |
+| --- | --- |
+| `itemId` | 項目代號 |
+| `kind` | `benefit`（福利）或 `administrative`（行政事項） |
+| `status` | 六種之一，見下 |
+| `missingFieldIds` | 這一項還缺哪些欄位 |
+| `decisiveConditions` | 決定這個結果的條件，含 `expected` 與 `actual` |
+| `citations` | 官方依據 |
+| `amountMin` / `amountMax` / `amountPeriod` / `amountCurrency` | 金額，**只有結構沒有文字** |
+| `explanation` | 白話說明，第 6 步才填入 |
+
+**狀態是每個項目各自一個**，所以同時有好幾項符合是正常情況。結果畫面就是把這份清單
+按狀態分區。
+
+| status | 意思 | 誰設定 |
+| --- | --- | --- |
+| `pending` | 待確認，還在等欄位 | 初始值 |
+| `eligible` | 符合 | 規則引擎 |
+| `ineligible` | 不符合，**會附決定性條件** | 規則引擎 |
+| `needs_information` | 資訊不足 | 規則引擎 |
+| `needs_human_review` | 需人工協助 | 規則引擎 |
+| `declined_by_user` | 使用者不想辦 | 使用者 |
+
+`kind` 的區分在畫面上很重要：**不能讓使用者把「你符合死亡登記的資格」讀成一項可以
+選擇放棄的福利。** 行政事項是義務，福利是權利。
+
+---
+
+## 六、錯誤
+
+所有錯誤共用一種形狀，只有三個欄位，**都不會包含使用者輸入的值**。
+
+```json
+{ "errorCode": "session_expired", "fieldIds": [], "currentState": "collect_missing_fields" }
+```
+
+| errorCode | 什麼情況 | 前端建議做什麼 |
+| --- | --- | --- |
+| `session_not_found` | 找不到這個 session | 清除本機 id，重新開始 |
+| `session_expired` | 超過保存時間（2 小時） | 告知已過期，重新開始 |
+| `unknown_field` | 送了不在登記表上的欄位 | 這是程式錯誤，回報 |
+| `invalid_field_value` | 值不符合欄位型別或選項 | 這是程式錯誤，回報 |
+| `unknown_item` | 項目代號不在候選清單裡 | 這是程式錯誤，回報 |
+| `invalid_transition` | 目前狀態不允許這個動作 | 重新取得快照後再試 |
+| `internal_error` | 後端自身錯誤 | 顯示一般性錯誤訊息 |
+
+**沒有錯誤訊息文字**，只有代號。文字由前端提供。
+
+---
+
+## 七、文案責任分界
+
+後端給**代號**，前端給**所有給人看的文字**。這條界線讓新增一個資格欄位時不需要改
+前端邏輯，也讓文案由負責使用體驗的人掌握 —— 這個產品的使用者正在人生低谷，用字
+很重要。
+
+前端需要準備的文案：
+
+| 代號來源 | 需要什麼文字 |
+| --- | --- |
+| `lifeEvent` | 事件名稱（例如 `spouse_death` → 「配偶過世」） |
+| `itemId` | 項目名稱與簡述 |
+| `status` | 分區標題（「你符合」「需要補充資訊」「不符合」「應辦理的行政事項」） |
+| `QuestionView.fieldId` | 題目文字 |
+| `QuestionView.optionIds` | 每個選項的文字 |
+| `QuestionView.purposeId` | 「為什麼問這個？」那段說明 |
+| `QuestionGroupView.topicId` | 這一組的標題 |
+| `DecisiveConditionView` | 「差在這個條件」的句型與值的說法 |
+| `amount*` | 金額的呈現（千分位、「每月」等） |
+| `errorCode` | 錯誤訊息 |
+| `exitReason` | 走到人工協助時的說明 |
+
+---
+
+## 八、待確認事項
+
+有問題就加一列。解決了就標記並保留紀錄。
+
+| # | 事項 | 誰要回答 | 狀態 |
+| --- | --- | --- | --- |
+| 1 | 端點什麼時候可以呼叫（目前只有 `/health`） | 後端 | 進行中，下一個任務 |
+| 2 | 問題卡的實際欄位與選項代號 | 政策資料 | 未開始，擋住畫面 4 |
+| 3 | 事件代號有哪些（目前只知道會有 `spouse_death`） | 政策資料 | 未開始 |
+| 4 | 項目代號有哪些 | 政策資料 | 未開始 |
+| 5 | 「不確定」要怎麼送？是一個特殊的選項代號，還是不送這個欄位 | 兩邊 | **未討論** |
+| 6 | 輪詢間隔多久合適 | 兩邊 | 未討論，目前後端同步處理所以不急 |
+| 7 | 前端遮罩不掉中文姓名，後端如何處理 | 後端 | 已有方向：抽取後丟棄原文 |
+
+第 5 項值得注意：畫面上有「我不確定」這個選項，但契約還沒定它怎麼表達。兩種可能是
+「一個保留的選項代號」或「乾脆不送這個欄位」。這件事會影響前端的表單邏輯。
+
+---
+
+## 九、改契約的規則
+
+1. 兩邊都要改：`backend/app/schemas/session.py` 與 `frontend/src/types/session.ts`。
+2. 跑 `cd backend; uv run pytest tests/unit/test_session_schemas.py`。走鐘檢查會比對
+   欄位名稱、列舉值與文字長度常數，不一致就失敗。
+3. 前端跑 `npm run typecheck`。
+4. 在這份文件的「已定案的約定」或「待確認事項」留下紀錄。
