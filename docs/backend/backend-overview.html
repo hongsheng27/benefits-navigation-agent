@@ -262,7 +262,7 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
 <table>
   <tr><th></th><th>任務</th><th>狀態</th></tr>
   <tr><td>T1</td><td>Workflow state 資料形狀</td><td><span class="tag tag-green">完成</span></td></tr>
-  <tr><td>T2</td><td>對外契約（<code>schemas/</code> 與前端 <code>types/</code>）</td><td><span class="tag tag-gray">未開始</span></td></tr>
+  <tr><td>T2</td><td>對外契約（<code>schemas/</code> 與前端 <code>types/</code>）</td><td><span class="tag tag-green">完成</span></td></tr>
   <tr><td>T3</td><td>Session 儲存（記憶體、2 小時過期、走 header）</td><td><span class="tag tag-gray">未開始</span></td></tr>
   <tr><td>T4</td><td>三個端點先回假快照</td><td><span class="tag tag-gray">未開始</span></td></tr>
 </table>
@@ -349,7 +349,8 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   <tr><th>檔案</th><th>做什麼的</th><th>狀態</th></tr>
   <tr><td><code>backend/app/orchestration/state.py</code></td><td>Workflow state 的資料形狀</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/orchestration/state_machine.py</code></td><td>狀態轉換、守門條件、停止條件</td><td><span class="tag tag-gray">只有說明</span></td></tr>
-  <tr><td><code>backend/app/schemas/</code></td><td>對外的請求與回應形狀</td><td><span class="tag tag-gray">空的</span></td></tr>
+  <tr><td><code>backend/app/schemas/session.py</code></td><td>對外的請求與回應形狀</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>frontend/src/types/session.ts</code></td><td>同一份契約的 TypeScript 版本</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/privacy/</code></td><td>屬性 allowlist、去識別化</td><td><span class="tag tag-gray">空的</span></td></tr>
   <tr><td><code>backend/app/retrieval/</code></td><td>文件檢索與引用組裝</td><td><span class="tag tag-gray">空的</span></td></tr>
   <tr><td><code>backend/app/tools/</code></td><td>三個 Agent tool</td><td><span class="tag tag-gray">只有說明</span></td></tr>
