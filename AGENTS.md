@@ -13,6 +13,18 @@ including Codex and Kiro.
 - Keep LLM responsibilities separate from deterministic eligibility rules.
 - Never add real credentials, personally identifiable information, or private
   user data to the repository.
+- This repository is **public**. Before every `git push`, run a secrets scan
+  to ensure no API keys, AWS credentials, tokens, `.env` files, or private
+  keys are staged. Use the following check:
+
+  ```bash
+  git diff --cached --name-only | xargs grep -lE \
+    '(AKIA[0-9A-Z]{16}|sk-[a-zA-Z0-9]{20,}|password\s*=\s*["\x27].+["\x27]|AWS_SECRET_ACCESS_KEY|PRIVATE.KEY)' \
+    2>/dev/null && echo "BLOCKED: secrets detected" && exit 1 || echo "OK: no secrets found"
+  ```
+
+  If any match is found, do not push. Remove the secret, use environment
+  variables or `.env` (which is gitignored), and re-stage.
 - Keep large raw government PDFs and local extraction artifacts out of Git
   unless the team explicitly decides otherwise.
 
@@ -103,3 +115,36 @@ When asked to commit:
 - AI agents may directly create boilerplate, folder structure, configuration,
   basic CLI parsing, straightforward documentation, and CRUD scaffolding after
   explaining their purpose.
+
+## AWS Resource Timeline
+
+Live AWS environments and cloud resources are **strictly unavailable** until
+the hackathon official start date (August 1–2, 2026). All AI agents must
+follow the rules below until that date.
+
+### Mock-First Strategy (Before August 1st)
+
+- Do not attempt to establish live AWS connections (S3, RDS, DynamoDB, Bedrock,
+  AgentCore, etc.).
+- Implement local mock or alternative solutions so core business logic runs
+  entirely on a developer's machine:
+  - Local SQLite instead of RDS or DynamoDB.
+  - Local folder instead of S3.
+  - Stub or mock environment variables for AWS APIs.
+- All migration instructions must be centralized in a single file:
+  `docs/aws_migration_guide.md`.
+
+### Migration Guide Requirements
+
+Every time a feature is added or modified that will eventually require an AWS
+service, the AI **must immediately update** `docs/aws_migration_guide.md` as
+part of the same task. The guide must be organized by feature or file path and
+specify:
+
+1. Which local mock code to remove or comment out.
+2. Which AWS SDK or API connection to uncomment or insert.
+3. The exact environment variables (`.env`) that teammates need to fill in on
+   August 1st.
+
+Do not scatter migration notes across multiple files. This single guide is the
+source of truth for the on-site transition.
