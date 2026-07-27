@@ -18,6 +18,7 @@ class EligibilityResult:
     program_id: str
     program_name: str
     status: str  # eligible, ineligible, needs_information, needs_human_review
+    relevance_score: int = 0
     amount: int | None = None
     amount_label: str = ""
     missing_inputs: list[str] = field(default_factory=list)
@@ -284,14 +285,95 @@ def evaluate_program(
     )
 
 
+def compute_relevance_score(
+    rules: dict[str, Any],
+    user_attrs: dict[str, Any],
+    program_jurisdiction: str,
+) -> int:
+    """Compute a relevance score (0-100) for how well a program matches user.
+
+    Higher score = more relevant. This is a deterministic, explainable
+    scoring function based on structured field matching. No LLM needed.
+    """
+    score = 0
+
+    # Jurisdiction match (strong signal)
+    user_jurisdiction = user_attrs.get("jurisdiction")
+    if user_jurisdiction and program_jurisdiction:
+        if user_jurisdiction == program_jurisdiction:
+            score += 25
+
+    # Remains type match
+    eligible_types = rules.get("eligible_remains_types")
+    user_remains = user_attrs.get("remains_type")
+    if eligible_types and user_remains:
+        if user_remains in eligible_types:
+            score += 15
+
+    # Eco burial alignment
+    eco_required = rules.get("eco_burial_required", False)
+    eco_done = user_attrs.get("eco_burial_completed")
+    eco_planned = user_attrs.get("eco_burial_planned")
+    if eco_required and (eco_done or eco_planned):
+        score += 15
+    elif not eco_required:
+        # Program doesn't require eco burial — neutral
+        score += 5
+
+    # Deceased status match (for service programs)
+    eligible_statuses = rules.get("eligible_deceased_statuses")
+    user_status = user_attrs.get("deceased_status")
+    if eligible_statuses and user_status:
+        if user_status in eligible_statuses:
+            score += 20
+
+    # Within deadline (time relevance)
+    deadline_days = rules.get("application_deadline_days")
+    starts_from = rules.get("deadline_starts_from", "")
+    if deadline_days and starts_from:
+        days_key = f"days_since_{starts_from}"
+        user_days = user_attrs.get(days_key)
+        if user_days is not None:
+            if user_days <= deadline_days:
+                score += 10  # Still within window
+            # Don't subtract — ineligibility is handled by evaluate_program
+
+    # Application period active
+    period_start = rules.get("application_period_start")
+    period_end = rules.get("application_period_end")
+    current_date = user_attrs.get("current_date")
+    if current_date and period_start and period_end:
+        if period_start <= current_date <= period_end:
+            score += 5
+
+    # City registration not required (broader eligibility = slight bonus)
+    if rules.get("requires_city_registration") is False:
+        registered = user_attrs.get("registered_in_city")
+        if registered is None or not registered:
+            score += 5
+
+    # Has amount info (more complete data = more useful)
+    if rules.get("min_amount") is not None:
+        score += 5
+
+    return min(score, 100)
+
+
 def evaluate_all_programs(
     connection: sqlite3.Connection,
     user_attrs: dict[str, Any],
     jurisdiction: str | None = None,
 ) -> list[EligibilityResult]:
-    """Evaluate all programs (optionally filtered by jurisdiction)."""
+    """Evaluate all programs, score relevance, and return sorted results.
+
+    Results are sorted by relevance_score descending. Programs with higher
+    match to user attributes appear first.
+    """
     # Load programs
-    query = "SELECT program_id, canonical_name, jurisdiction_code FROM benefit_programs"
+    query = (
+        "SELECT program_id, canonical_name, jurisdiction_code "
+        "FROM benefit_programs"
+    )
     params: list[Any] = []
     if jurisdiction:
         query += " WHERE jurisdiction_code = ?"
@@ -302,11 +384,29 @@ def evaluate_all_programs(
 
     results: list[EligibilityResult] = []
     for prog in programs:
-        pid, name, _ = prog
+        pid, name, prog_jurisdiction = prog
         rules = all_rules.get(pid, {})
         if not rules:
             continue
+
+        score = compute_relevance_score(
+            rules, user_attrs, prog_jurisdiction
+        )
         result = evaluate_program(pid, name, rules, user_attrs)
+        # Replace with scored version
+        result = EligibilityResult(
+            program_id=result.program_id,
+            program_name=result.program_name,
+            status=result.status,
+            relevance_score=score,
+            amount=result.amount,
+            amount_label=result.amount_label,
+            missing_inputs=result.missing_inputs,
+            reasons=result.reasons,
+            source_url=result.source_url,
+        )
         results.append(result)
 
+    # Sort by relevance score descending, then by name for stable order
+    results.sort(key=lambda r: (-r.relevance_score, r.program_name))
     return results
