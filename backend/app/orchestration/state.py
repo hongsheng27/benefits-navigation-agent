@@ -183,6 +183,18 @@ class Citation(BaseModel):
     excerpt: str = ""  # 引用的段落，讓使用者拿著它去問承辦人
 
 
+class AmountPeriod(StrEnum):
+    """金額的發放性質。
+
+    「5,000 元」與「每月 5,000 元」對使用者的意義差很多，不能讓前端從數字猜。
+    行政事項通常沒有金額，此時整組金額欄位都留空。
+    """
+
+    ONE_TIME = "one_time"  # 一次性發放
+    MONTHLY = "monthly"  # 按月發放
+    ANNUAL = "annual"  # 按年發放
+
+
 class CandidateItem(BaseModel):
     """一個正在評估的福利或行政事項。
 
@@ -205,6 +217,15 @@ class CandidateItem(BaseModel):
 
     rule_id: str | None = None  # 用哪一條規則判的，供追查與修正
     rule_version: str | None = None  # 規則版本，規則調整後舊結果仍可追溯
+
+    # 金額只放結構，不放給人看的文字。前端負責組出「骨灰 10,000 元」這種句子，
+    # 因為千分位、幣別寫法與語氣都屬於呈現層的決定。
+    # 對齊資料層的 `min_amount` 與 `max_amount`：金額本來就可能是一個範圍，
+    # 壓成單一數字會在轉接時遺失資訊。單一固定金額時兩者填相同的值。
+    amount_min: int | None = None  # 最低金額，無金額或未知時為 None
+    amount_max: int | None = None  # 最高金額，無金額或未知時為 None
+    amount_period: AmountPeriod | None = None  # 一次性、按月或按年
+    amount_currency: str | None = None  # 幣別代號，例如 TWD
 
     # 在 EXPLAIN_RESULT、所有項目都定案之後才填入。模型可以改寫已定案結果的說法，
     # 但不能改變結論、不能新增項目，也不能引用沒有交給它的文件。

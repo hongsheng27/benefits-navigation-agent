@@ -161,6 +161,50 @@ Backend README 的 framework-neutral 原則已納入考量，判定為不適用�
 `log_event` 已經接受 `state`、`next_state`、`transition` 與 `guard`，而目前沒有任何
 轉換需要讀取歷程。在 state 裡再存一份等於把同一件事記錄兩次。
 
+## Amendment 1: An item carries a structured amount (2026-07-26)
+
+The first version of `CandidateItem` had nowhere to put money, so an eligible
+result could be produced but the figure could not reach the screen.
+
+Options: mirror the rule engine's `amount` plus `amount_label`; store a single
+`amount` with a currency; or store bounds, period, and currency.
+
+**Decision: bounds, period, and currency.** `CandidateItem` gains `amount_min`,
+`amount_max`, `amount_period`, and `amount_currency`, plus an `AmountPeriod`
+enumeration for one-time, monthly, and annual payments.
+
+- Two bounds, because the catalog already treats `min_amount` and `max_amount` as
+  separate fields. A fixed amount repeats the same value in both.
+- No `amount_label`, because display text belongs to the frontend under the same
+  split used for question wording.
+- `amount_period` is part of the shape, because "5,000" and "5,000 per month"
+  cannot be told apart from the number alone.
+- Administrative items normally leave the whole group empty.
+
+The adapter around the rule engine must map its single `amount` onto both bounds
+and source the period from the rule fields.
+
+## 修訂一：項目帶結構化的金額（2026-07-26）
+
+`CandidateItem` 的第一版沒有地方放金額，會出現「判定為符合但金額傳不到畫面」的情況。
+
+候選方案：照抄規則引擎的 `amount` 加 `amount_label`；存單一 `amount` 加幣別；
+或存上下界、發放性質與幣別。
+
+**決定：存上下界、發放性質與幣別。** `CandidateItem` 新增 `amount_min`、
+`amount_max`、`amount_period`、`amount_currency`，並新增 `AmountPeriod` 列舉，
+涵蓋一次性、按月與按年。
+
+- 用兩個上下界，因為 catalog 本來就把 `min_amount` 與 `max_amount` 當成兩個欄位。
+  單一固定金額時兩者填相同的值。
+- 不放 `amount_label`，因為給人看的文字屬於前端，與問題文案沿用同一條分界。
+- `amount_period` 屬於形狀的一部分，因為「5,000 元」與「每月 5,000 元」無法只從
+  數字分辨。
+- 行政事項通常整組金額欄位留空。
+
+包裝規則引擎的轉接層必須把它的單一 `amount` 映射到兩個上下界，並從規則欄位取得
+發放性質。
+
 ## Consequences
 
 ### Positive

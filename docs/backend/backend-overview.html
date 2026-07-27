@@ -145,7 +145,7 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
 <!-- ==================== 資料形狀 ==================== -->
 
 <h2>資料形狀（已完成）</h2>
-<p>檔案：<code>backend/app/orchestration/state.py</code>。決策記錄：<a href="../decisions/0010-frozen-pydantic-session-workflow-state.md">ADR-0010</a>。</p>
+<p>檔案：<code>backend/app/orchestration/state.py</code>。決策記錄：<a href="../decisions/0011-frozen-pydantic-session-workflow-state.md">ADR-0011</a>。</p>
 <table>
   <tr><th>名稱</th><th>白話說明</th></tr>
   <tr><td><code>WorkflowState</code></td><td>八個步驟</td></tr>
@@ -153,9 +153,10 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   <tr><td><code>ItemStatus</code></td><td>單一項目的六種狀態</td></tr>
   <tr><td><code>ExitReason</code></td><td>整次諮詢提前結束的五種原因</td></tr>
   <tr><td><code>AttributeValue</code></td><td>一筆答案可以是是非、整數或代號</td></tr>
+  <tr><td><code>AmountPeriod</code></td><td>金額是一次性、按月還是按年</td></tr>
   <tr><td><code>DecisiveCondition</code></td><td>決定這個結果的條件：哪個欄位、要求什麼、實際什麼</td></tr>
   <tr><td><code>Citation</code></td><td>官方依據：文件代號、標題、機關、日期、連結、引用段落</td></tr>
-  <tr><td><code>CandidateItem</code></td><td>一個候選項目與它的判定結果</td></tr>
+  <tr><td><code>CandidateItem</code></td><td>一個候選項目、它的判定結果與金額</td></tr>
   <tr><td><code>SessionState</code></td><td>一次諮詢的完整狀態，13 個欄位</td></tr>
 </table>
 
@@ -303,10 +304,22 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   <code>EligibilityResult</code>。它的四種狀態跟 workflow 層一致，但兩邊的形狀還沒對齊。
 </p>
 
-<div class="gap">
-  <strong>落差一：<code>CandidateItem</code> 沒有金額欄位。</strong>
-  Rule Engine 會算出 <code>amount</code> 與 <code>amount_label</code>（例如骨灰 10,000 元），
-  但 workflow 層的項目形狀沒有地方放它。使用者最想知道的資訊之一目前傳不到畫面上。
+<div class="card">
+  <h3>落差一：金額 — 形狀已補上，轉接還沒做</h3>
+  <p>
+    原本 <code>CandidateItem</code> 沒有地方放金額，所以會出現「判定為符合但金額傳不到畫面」的情況。
+    現在已補上 <code>amount_min</code>、<code>amount_max</code>、<code>amount_period</code>、
+    <code>amount_currency</code> 四個欄位。決策過程見
+    <a href="../decisions/0011-frozen-pydantic-session-workflow-state.md">ADR-0011 修訂一</a>。
+  </p>
+  <p>
+    刻意<strong>不</strong>收 Rule Engine 的 <code>amount_label</code>，因為那是給人看的文字，
+    屬於前端的責任。後端只給結構，前端自己組出「骨灰 10,000 元」。
+  </p>
+  <p>
+    還沒做的是轉接：Rule Engine 回的是單一 <code>amount</code>，需要映射到兩個上下界，
+    而發放性質（一次性／按月／按年）目前不在它的回傳裡，要另外從規則欄位取。
+  </p>
 </div>
 
 <div class="gap">
@@ -324,7 +337,7 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
 </div>
 
 <p>
-  因此 T9 的範圍要調整：<strong>不是重寫一個規則引擎，而是寫一層轉接</strong>，
+  剩下兩個落差因此 T9 的範圍要調整：<strong>不是重寫一個規則引擎，而是寫一層轉接</strong>，
   把 <code>EligibilityResult</code> 轉成 <code>CandidateItem</code>，並補上結構化的決定性條件。
   這也表示「決定性條件」需要 Rule Engine 端配合輸出，不是 workflow 層能單方面補出來的。
 </p>
