@@ -90,11 +90,60 @@ AWS_ACCOUNT_ID=
 
 | Item | Current (Local) | AWS Target |
 |------|----------------|------------|
-| Sessions | Not yet implemented | TBD (DynamoDB or AgentCore Memory) |
+| Sessions | In-process memory, two hour expiry | TBD (DynamoDB or AgentCore Memory) |
+| Files affected | `backend/app/orchestration/session_store.py`, `backend/app/main.py` | — |
+
+The local mock is `InMemorySessionStore`: a dictionary held on the FastAPI
+application instance. A restart discards every session, which ADR-0005 accepts
+because the persistence choice is still open.
+
+### What the swap has to preserve
+
+`InMemorySessionStore` is the contract. Any AWS-backed replacement must keep the
+same five methods and the same failure modes, so nothing above it changes:
+
+| Method | Behaviour that must not change |
+|--------|-------------------------------|
+| `create()` | Return a new `SessionState` with a `secrets`-generated id and `expires_at` set two hours ahead |
+| `get(session_id)` | Raise `SessionNotFoundError` for unknown ids and `SessionExpiredError` past the TTL, deleting the expired record |
+| `save(state)` | Replace the stored state, stamp `updated_at`, and **not** extend `expires_at` |
+| `delete(session_id)` | Succeed even when the session is already gone |
+| `purge_expired()` | Remove expired records and return how many |
+
+Two constraints carry over from ADR-0005 and ADR-0007 and must survive the swap:
+
+- The stored record holds no direct identifiers and no free text. Do not add
+  fields while migrating.
+- `session_id` is a bearer credential. Keep it out of URLs, table scan logs, and
+  any exported metrics.
 
 ### Migration Steps
 
-1. TBD — session persistence approach not yet decided.
+1. Decide between DynamoDB and AgentCore Memory. Not yet decided.
+2. Add a store class that implements the five methods above, for example
+   `DynamoDbSessionStore`, in the same module.
+3. Use the service's native expiry (DynamoDB TTL) so records disappear without a
+   scheduled job, matching the current read-time deletion.
+4. Swap the single construction site in `backend/app/main.py`:
+   `app.state.session_store = InMemorySessionStore()`.
+5. Keep `InMemorySessionStore` for tests. `backend/tests/unit/test_session_store.py`
+   injects a fake clock and must keep passing without AWS access.
+6. Fill in the environment variables below.
+
+### Environment variables
+
+```env
+# Session persistence (fill in on August 1st)
+# SESSION_TABLE_NAME=
+# SESSION_TTL_HOURS=2
+```
+
+### Known limitation of the local mock
+
+The store lives in one process, so it does not work across processes. Running
+more than one instance today would send a request to a process that has never
+seen that `session_id`. This disappears once a shared store is in place, and is
+the main reason to do this migration rather than leave the mock in production.
 
 ---
 
