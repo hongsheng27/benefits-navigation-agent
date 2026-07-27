@@ -54,6 +54,35 @@ export type AttributeValueKind = "code" | "boolean" | "band" | "integer";
 /** 一筆去識別化的答案。 */
 export type AttributeValue = boolean | number | string;
 
+/**
+ * 後端還沒實作、因此回應中相關內容為佔位資料的能力。
+ *
+ * 實作完成就會從回應的清單裡消失，前端不需要改程式。
+ */
+export type PendingCapability =
+  | "life_event_extraction"
+  | "entitlement_graph"
+  | "state_machine"
+  | "field_registry"
+  | "rule_evaluation"
+  | "official_citations"
+  | "plain_language_explanation"
+  | "action_plan"
+  | "privacy_gate";
+
+/**
+ * 這份回應有多少是真的。
+ *
+ * `placeholderNotice` 是唯一由後端提供中文文字的欄位，違反「後端給代號、前端給文案」
+ * 的分界。這是刻意的臨時例外，會在佔位資料移除時連同整個物件一起刪除。
+ * 只有 `isMock` 為 true 時才有值。
+ */
+export type ImplementationNotice = {
+  isMock: boolean;
+  pending: PendingCapability[];
+  placeholderNotice: string;
+};
+
 /** 錯誤代號。顯示文字由前端決定。 */
 export type ErrorCode =
   | "session_not_found"
@@ -225,6 +254,9 @@ export type SessionSnapshot = {
 
   createdAt: string;
   expiresAt: string;
+
+  /** 這份回應有多少是真的。實作完成後 pending 清單會逐項變短。 */
+  implementation: ImplementationNotice;
 };
 
 /** 所有錯誤共用的形狀。三個欄位都不會包含使用者輸入的值。 */

@@ -83,6 +83,24 @@ class AttributeValueKind(StrEnum):
     INTEGER = "integer"  # 精確整數，例如人數
 
 
+class PendingCapability(StrEnum):
+    """後端還沒實作、因此回應中相關內容為佔位資料的能力。
+
+    每一個代號對應規劃裡的一項具體任務。實作完成就從回應的清單裡移除，前端不需要
+    改程式，顯示的警示會自動變少。
+    """
+
+    LIFE_EVENT_EXTRACTION = "life_event_extraction"  # 用 LLM 聽懂人生事件
+    ENTITLEMENT_GRAPH = "entitlement_graph"  # 事件對應哪些項目、順序與依賴
+    STATE_MACHINE = "state_machine"  # 流程轉換與守門條件
+    FIELD_REGISTRY = "field_registry"  # 有哪些資格欄位、型別與選項
+    RULE_EVALUATION = "rule_evaluation"  # 確定性資格判定
+    OFFICIAL_CITATIONS = "official_citations"  # 官方依據檢索
+    PLAIN_LANGUAGE_EXPLANATION = "plain_language_explanation"  # 白話說明
+    ACTION_PLAN = "action_plan"  # 辦理清單與順序
+    PRIVACY_GATE = "privacy_gate"  # 屬性 allowlist 與原文丟棄
+
+
 class ErrorCode(StrEnum):
     """錯誤代號。前端依代號決定顯示什麼文字。
 
@@ -299,6 +317,23 @@ class QuestionGroupView(_View):
     group_total: int  # 目前已知共幾組
 
 
+class ImplementationNotice(_View):
+    """這份回應有多少是真的。
+
+    存在的理由是誠實：目前多數能力還沒實作，回應裡的事件代號與項目清單是寫死的
+    佔位資料。前端據此在畫面上標示，demo 現場被問到「這個判定是真的嗎」時答得出來。
+
+    `placeholder_notice` 是唯一一個由後端提供**給人看的中文文字**的欄位，違反本專案
+    「後端給代號、前端給文案」的分界。這是刻意的臨時例外：它的讀者是開發者與 demo
+    觀眾，不是真正的使用者，而且它會在佔位資料移除時**連同這整個類別一起刪除**。
+    只有 `is_mock` 為 True 時才有值。
+    """
+
+    is_mock: bool = False
+    pending: tuple[PendingCapability, ...] = ()
+    placeholder_notice: str = ""
+
+
 class SessionSnapshot(_View):
     """一次諮詢在某個時間點的完整對外狀態。
 
@@ -332,18 +367,26 @@ class SessionSnapshot(_View):
     created_at: datetime
     expires_at: datetime
 
+    # 這份回應有多少是真的。實作完成後清單會逐項變短。
+    implementation: ImplementationNotice = Field(default_factory=ImplementationNotice)
+
     @classmethod
     def from_state(
         cls,
         state: SessionState,
         question_groups: tuple[QuestionGroupView, ...] = (),
+        implementation: ImplementationNotice | None = None,
     ) -> "SessionSnapshot":
         """從內部狀態組出對外快照。
 
         `question_groups` 由外部傳入而不是從 state 讀，因為缺漏欄位要變成可顯示的
         問題卡，需要欄位登記表，那不屬於 workflow state。
+
+        `implementation` 同樣由外部傳入，因為「哪些能力已經實作」是應用程式層的
+        事實，不屬於某一次諮詢的狀態。
         """
         return cls(
+            implementation=implementation or ImplementationNotice(),
             session_id=state.session_id,
             workflow_state=state.workflow_state,
             step_index=WORKFLOW_STEPS.index(state.workflow_state) + 1,
