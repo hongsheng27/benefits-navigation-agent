@@ -159,23 +159,31 @@ Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修�
 ├── .env.example                        # 所需環境變數名稱，不放真實密鑰
 ├── .gitignore
 │
-├── frontend/                           # React 前端（尚未初始化）
+├── frontend/                           # React 前端
 │   └── src/
-│       ├── api/                        # Backend API client
+│       ├── api/
+│       │   └── client.ts              # Backend API client（目前只有健康檢查）
 │       ├── components/                 # 對話、問題卡、福利結果、來源與 checklist
-│       ├── pages/                      # 主要頁面
-│       └── types/                      # 前後端共用資料形狀的 TypeScript 版本
+│       ├── pages/
+│       │   └── HomePage.tsx           # 人生事件輸入頁
+│       └── types/
+│           └── session.ts             # 對外契約的 TypeScript 版本
 │
 ├── backend/                            # Python 後端（FastAPI modular monolith）
 │   ├── app/
 │   │   ├── main.py                     # FastAPI application 入口
 │   │   ├── config.py                   # 環境變數設定
 │   │   ├── api/
-│   │   │   └── health.py              # Health check endpoint
-│   │   ├── schemas/                    # Pydantic request / response / domain models
+│   │   │   ├── health.py              # GET /health
+│   │   │   ├── sessions.py            # 四個 session 端點（只做傳輸）
+│   │   │   └── errors.py              # 錯誤轉成契約形狀，不外洩使用者輸入
+│   │   ├── schemas/
+│   │   │   └── session.py             # 對外的請求與回應形狀
 │   │   ├── orchestration/
-│   │   │   ├── state.py               # Workflow state 定義
-│   │   │   └── state_machine.py       # 狀態轉換與停止條件
+│   │   │   ├── state.py               # Workflow state 的資料形狀
+│   │   │   ├── session_store.py       # 記憶體 session 儲存，2 小時過期
+│   │   │   ├── mock_advance.py        # state machine 的臨時替代品（之後刪除）
+│   │   │   └── state_machine.py       # 狀態轉換與停止條件（尚未實作）
 │   │   ├── tools/
 │   │   │   ├── resolve_life_event.py      # Tool：辨識人生事件
 │   │   │   ├── retrieve_official_rules.py # Tool：檢索官方規則

@@ -31,6 +31,47 @@ uv run uvicorn app.main:app --reload      # http://localhost:8000
 啟動後 `GET /health` 會回傳 `{"status": "ok"}`，前端右上角的連線狀態會變成
 「後端已連線」。前端預設連線至 `http://localhost:8000`。
 
+互動式 API 文件在 `http://127.0.0.1:8000/docs`。目前可用的端點：
+
+| 方法 | 路徑 | 用途 |
+| --- | --- | --- |
+| `GET` | `/health` | 存活檢查 |
+| `POST` | `/sessions` | 建立一次諮詢，回應含 `sessionId` |
+| `POST` | `/sessions/advance` | 送一筆輸入，推進一步 |
+| `GET` | `/sessions/current` | 查目前狀態（前端輪詢用） |
+| `DELETE` | `/sessions/current` | 立刻清除這次諮詢 |
+
+除了 `POST /sessions` 之外，每次呼叫都必須帶 header `X-Session-Id`。
+**路徑裡沒有 session id**：它是持有即通行的憑證，放在網址會被瀏覽記錄、referrer
+與伺服器日誌帶走。
+
+> **端點目前回的是佔位資料。** 不管輸入什麼文字，事件都會判定成 `spouse_death`；
+> 候選項目固定四筆且全部是 `pending`；沒有任何資格判定、官方依據或金額。
+> 每個回應都帶 `implementation` 物件說明哪些能力還沒實作，前端可據此在畫面上標示。
+> 詳見 `app/orchestration/mock_advance.py`。
+
+### 端點沒出現在 `/docs` 時先檢查這個
+
+症狀是新端點沒有列出來，看起來像 router 沒掛上。實際原因通常是**有一個舊的 uvicorn
+行程還在跑並佔著 8000 埠**，載入的是還沒有那些端點的程式。父行程死掉後，子行程會
+繼承監聽權，所以查詢埠的擁有者會看到一個已經不存在的 PID。
+
+`--reload` 救不了，因為問題不是「檔案沒重載」而是「舊行程還活著」。
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+  Select-Object ProcessId, CreationDate, CommandLine | Format-List
+```
+
+看 `CreationDate`。比本次工作開始時間更早的就是它，用
+`Stop-Process -Id <PID> -Force` 殺掉再重啟。
+
+先確認程式本身沒問題可以用這一行，它不經過伺服器：
+
+```bash
+uv run python -c "from app.main import app; print(sorted(app.openapi()['paths']))"
+```
+
 環境變數可複製根目錄的 `.env.example` 到根目錄 `.env`；backend 會依序讀取
 `../.env` 與 `backend/.env`，後者可覆寫前者。
 
@@ -39,35 +80,116 @@ uv run uvicorn app.main:app --reload      # http://localhost:8000
 ```bash
 uv run ruff check .
 uv run ruff format --check .
-uv run pytest
 ```
+
+測試目前**不能**用不帶參數的 `uv run pytest`，必須指定要跑的檔案：
+
+```bash
+uv run pytest tests/unit/test_workflow_state.py tests/unit/test_session_schemas.py \
+  tests/unit/test_session_store.py tests/unit/test_mock_advance.py \
+  tests/unit/test_logging.py tests/integration
+```
+
+### 為什麼不能直接跑整個套件
+
+資料層的四個測試檔（`test_benefit_catalog.py`、`test_import_government_oid.py`、
+`test_link_discovery.py`、`test_source_connector.py`、`test_reviewed_page_batch.py`）
+的 import 路徑是從 **repository 根目錄**算起的：
+
+```python
+from backend.app.services.benefit_catalog import ...
+from scripts.init_benefit_catalog import initialize_database
+```
+
+而 `backend/pyproject.toml` 設定 `pythonpath = ["."]`，在 `backend/` 目錄下執行時
+那個 `.` 指的是 `backend/`，所以找不到名為 `backend` 的套件，收集階段就會失敗。
+
+從根目錄執行可以繞過這個問題：
+
+```bash
+backend/.venv/Scripts/python.exe -m pytest backend/tests    # Windows
+```
+
+但**在 Windows 上會有 7 個失敗**，錯誤是 `PermissionError: The process cannot
+access the file`。原因是資料層到處使用 `with sqlite3.connect(...) as connection:`
+—— Python 的 `sqlite3` 用 `with` 包起來只會提交或回滾交易，**不會關閉連線**。
+macOS 與 Linux 允許刪除還開著的檔案，Windows 不允許，所以測試的暫存目錄清理失敗。
+
+這不只影響測試：長時間執行的伺服器沿用同樣寫法會累積不釋放的連線。修法是改用
+`contextlib.closing` 包起來，或明確呼叫 `close()`。這件事尚未有人處理。
 
 ## 目前實作範圍
 
-已建立的只有 transport 邊界與工具設定：
+### 已完成
 
-```text
-pyproject.toml              # 相依套件、ruff 與 pytest 設定
-.python-version             # 釘住 Python 3.13
-app/main.py                 # create_app() factory、CORS、router wiring
-app/config.py               # 環境變數設定
-app/api/health.py           # GET /health
-app/observability/logging.py # 結構化 JSON logging 與欄位 allowlist
-tests/                      # health smoke test、logging allowlist tests
-```
+| 檔案 | 內容 |
+| --- | --- |
+| `app/main.py` | `create_app()` factory、CORS、router wiring、session store 建立 |
+| `app/config.py` | 環境變數設定 |
+| `app/api/health.py` | `GET /health` |
+| `app/api/sessions.py` | 四個 session 端點，只做傳輸 |
+| `app/api/errors.py` | 錯誤轉成契約形狀，且不外洩使用者輸入 |
+| `app/orchestration/state.py` | Workflow state 的資料形狀（frozen Pydantic） |
+| `app/orchestration/session_store.py` | 記憶體 session 儲存，2 小時過期 |
+| `app/schemas/session.py` | 對外的請求與回應形狀 |
+| `app/observability/logging.py` | 結構化 JSON logging 與欄位 allowlist |
+| `app/rules/engine.py` | 通用規則引擎與相關性評分（資料層負責） |
+| `app/services/` | benefit catalog、來源同步、連結探勘（資料層負責） |
 
-以下**刻意未實作**，依 `AGENTS.md` 的 learn-by-building boundary 保留給後端負責人
-實作或密切審查：
+`app/orchestration/state.py` 的設計理由見
+[ADR-0011](../docs/decisions/0011-frozen-pydantic-session-workflow-state.md)。
 
-- `app/schemas/` — Pydantic request / response / domain models
-- `app/orchestration/` — workflow state 定義、狀態轉換與停止條件
+### 佔位，之後整個刪除
+
+| 檔案 | 說明 |
+| --- | --- |
+| `app/orchestration/mock_advance.py` | state machine 的臨時替代品。刻意獨立成一個檔案，實作真正的狀態機時刪掉整個檔案並換掉 `sessions.py` 裡的一行呼叫即可 |
+
+### 尚未實作
+
+依 `AGENTS.md` 的 learn-by-building boundary，以下保留給後端負責人實作或密切審查：
+
+- `app/orchestration/state_machine.py` — 八個狀態的轉換、守門條件、迴圈四道護欄
+- `app/orchestration/agent_runner.py` — framework-neutral 的 LLM 呼叫介面（未建立）
 - `app/tools/` — 三個 Agent tool 的 contracts 與實作
-- `app/rules/` — deterministic eligibility rules
-- `app/privacy/` — PII 偵測、去識別化與欄位 allowlist
-- `app/retrieval/`、`app/services/`
+- `app/privacy/` — PII 偵測、去識別化與屬性 allowlist
+- `app/retrieval/` — 文件切分、metadata filter、citation 組裝
+- 欄位登記表 — 決定要問哪些資格欄位、型別與選項
 
 `app/api/health.py` 內的 `HealthResponse` 是 transport-local 的形狀，用來對齊前端
-既有的 `BackendHealth` 型別；領域 contracts 應該放在 `app/schemas/`。
+既有的 `BackendHealth` 型別；領域 contracts 放在 `app/schemas/`。
+
+## 對外契約與跨組協調
+
+對外契約定義在 `app/schemas/session.py`，前端那一半在
+`../frontend/src/types/session.ts`。**兩邊手寫維護**，由
+`tests/unit/test_session_schemas.py` 檢查是否走鐘 —— 那個測試會直接讀取前端的
+型別檔案，比對欄位名稱、列舉的值與文字長度常數。
+
+改契約的流程：改兩邊 → 跑該測試 → 前端跑 `npm run typecheck` → 在溝通文件留紀錄。
+
+兩份溝通文件記錄已定案的約定與待確認事項，開始接手前請先讀：
+
+- [`docs/front_back_doc/README.md`](../docs/front_back_doc/README.md) — 前後端之間
+- [`docs/back_database_doc/README.md`](../docs/back_database_doc/README.md) — 後端與資料層之間，含五個形狀落差
+
+### 兩個容易誤會的命名慣例
+
+- **線路上的欄位名是 camelCase**（`itemId`），Python 內部維持 snake_case。
+  由 Pydantic 的 alias generator 轉換。
+- **列舉的值保持 snake_case**（`needs_information`），因為那是資料內容不是欄位名稱。
+  改的時候不要一起換。
+
+## AWS 相關
+
+8 月 1 日前**不得建立實際的 AWS 連線**，只能用本機模擬。目前後端連 `boto3` 都沒有
+安裝，所以在沒有網路與雲端帳號的環境也能完整運作。
+
+新增任何未來會需要 AWS 服務的功能時，**必須在同一個任務內**更新
+[`docs/aws_migration_guide.md`](../docs/aws_migration_guide.md)。那份指南是遷移說明
+的唯一來源，不要把遷移步驟寫在別的檔案裡。
+
+`app/orchestration/session_store.py` 是目前唯一有登記在那份指南裡的後端功能。
 
 ## 隱私約束
 
