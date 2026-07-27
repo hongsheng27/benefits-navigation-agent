@@ -77,28 +77,6 @@ UNDERSTAND_EVENT
 - RAG 只使用官方文件，回答需保留來源。
 - Entitlement graph 只描述福利與機關的關聯；MVP 不做完整 GraphRAG。
 - Agent 只能呼叫目前狀態允許的工具，並限制最大迭代次數。
-- Relevance scoring 用結構化欄位匹配做 deterministic 排序，不依賴 LLM。
-
-### Relevance Scoring（相關性評分）
-
-當可能符合的方案超過一筆時，系統用結構化欄位匹配為每筆方案計算相關性分數
-（0–100），越高代表越可能適用。評分完全基於已知欄位比對，不呼叫 LLM，可解釋。
-
-評分因子與權重：
-
-| 因子 | 權重 | 說明 |
-| --- | ---: | --- |
-| 縣市吻合 | +25 | 使用者所在縣市 = 方案適用縣市 |
-| 亡者身分吻合 | +20 | 亡者身分在方案資格清單中 |
-| 骨灰/骨骸類型吻合 | +15 | 使用者類型在方案可適用列表中 |
-| 環保葬需求吻合 | +15 | 方案需要環保葬，使用者已完成或計畫中 |
-| 在申請期限內 | +10 | 使用者天數未超過方案期限 |
-| 受理期間內 | +5 | 目前日期在方案開放申請期間 |
-| 不限設籍 | +5 | 方案不要求設籍，對非本地使用者友善 |
-| 有金額資訊 | +5 | 資料完整度加分 |
-
-評分後結果按分數高到低排序，搜尋範圍過大時（500+ 筆），未來可疊加 embedding
-語意搜尋做二次精篩。
 
 ## 暫定技術棧
 
@@ -115,10 +93,9 @@ UNDERSTAND_EVENT
 | Agent tools               | `resolve_life_event`、`retrieve_official_rules`、`evaluate_eligibility` | MVP 暫定三個核心工具                                    |
 | Document storage          | Amazon S3                                                               | 暫定；存放官方文件與處理後資料                          |
 | RAG                       | Amazon Bedrock Knowledge Bases 或自製 retrieval                         | **後續決定**；先固定 `Retriever` interface              |
-| Relevance scoring         | 結構化欄位匹配評分（本機 deterministic）                                | **已實作**；依使用者屬性對方案評分排序，見下方說明      |
-| Vector store / embeddings | 由 Bedrock Knowledge Bases 管理或自選方案                               | **後續決定**；資料量大時疊加語意搜尋                    |
-| Entitlement graph         | 本機 SQLite + JSON 結構化欄位                                           | **已決定**；SQLite 先行，8/1 後遷移 DynamoDB；見 ADR-0008 |
-| Eligibility rules         | 通用 Rule Engine + 宣告式 JSON 欄位                                     | **已決定**；規則是資料不是程式碼，engine 讀 DB 欄位判斷  |
+| Vector store / embeddings | 由 Bedrock Knowledge Bases 管理或自選方案                               | **後續決定**                                            |
+| Entitlement graph         | JSON 檔                                                                 | **已決定**；見 ADR-0008，不使用 GraphRAG / Neptune      |
+| Eligibility rules         | 宣告式 JSON 規則 + Pydantic validation                                  | **已決定**；規則是資料而非程式碼，見 ADR-0008           |
 | Session state boundary    | Client / server split                                                   | **已決定**；direct identifiers 留在 client              |
 | Session persistence       | 記憶體，不持久化                                                        | **MVP 已定**；結束即消失，保存政策見 ADR-0007           |
 | Safety                    | Dynamic tool allowlist、輸入驗證、human-in-the-loop                     | 暫定核心機制                                            |
@@ -126,113 +103,73 @@ UNDERSTAND_EVENT
 | Observability             | Amazon CloudWatch                                                       | 暫定；記錄狀態轉換、tool call、延遲與錯誤               |
 | Deployment                | AWS Amplify、Lambda、AgentCore Runtime 的組合                           | **後續決定**；本機 vertical slice 跑通後再選            |
 | Infrastructure as Code    | AWS SAM、CDK 或手動設定                                                 | **後續決定**；Hackathon 以速度為優先                    |
-| Testing                   | pytest；前端測試工具待定                                                | **已決定**；以 eligibility 與 end-to-end evaluation 為優先 |
-
-### 技術棧名詞白話說明
-
-以下補充說明技術棧表格中各項的實際功能，特別是標示「後續決定」的部分：
-
-| 項目 | 白話說明 |
-| --- | --- |
-| **LLM (Bedrock)** | 讓系統能「聽懂」使用者的話、產生白話回答的 AI 模型。比賽規定用 AWS Bedrock 上的模型。8/1 後才能連線測試。 |
-| **Agent SDK (Strands)** | Agent 的執行框架 — 控制 AI 怎麼選工具、怎麼停下來。包在自己的 interface 後面，換框架不影響其他模組。 |
-| **Agent hosting (AgentCore)** | 讓 Agent 跑在 AWS 上面（不是跑在你的電腦）。是否用要看比賽帳號有沒有開放權限。 |
-| **Document storage (S3)** | 雲端檔案儲存。目前用本機資料夾放 HTML；8/1 後改放 S3，讓所有人都讀得到。 |
-| **RAG (Knowledge Bases)** | 語意搜尋 — 讓系統用「意思相近」來找資料，不只靠關鍵字。資料量少時用 SQL + 評分就夠，量大時才需要。 |
-| **Vector store / embeddings** | RAG 的底層技術。把文字轉成數字向量，比較向量距離來判斷「意思接不接近」。需要 Bedrock embedding model，8/1 後才能用。 |
-| **Guardrails** | AI 的安全圍欄 — 防止 AI 輸出個資、亂下結論、回答無關問題。目前靠 state machine 控制；8/1 後可再疊一層 AWS 提供的內容過濾。 |
-| **Observability (CloudWatch)** | 系統監控 — 記錄每次狀態轉換、tool 呼叫、回應時間、錯誤。用來 debug 和追蹤效能。部署到 AWS 後才需要。 |
-| **Deployment** | 怎麼讓別人用你的系統。目前只跑在本機；比賽當天需要放到 AWS 上讓評審連得到。Amplify 放前端、Lambda 放後端 API。 |
-| **Infrastructure as Code** | 用程式碼一鍵建立 AWS 資源（S3 bucket、Lambda、資料庫等），不用手動去 console 點。Hackathon 趕時間可能先手動，之後再補。 |
-| **Session persistence** | 使用者跟系統的對話狀態要不要存起來。MVP 決定不存 — 關掉就消失，避免處理個資保存問題。 |
+| Testing                   | pytest；前端測試工具待定                                                | 暫定；以 eligibility 與 end-to-end evaluation 為優先    |
 
 ## 初步檔案結構
 
-以下是目前 repository 的實際結構。原則是讓四位組員可以分別處理前端、
+以下 MVP 骨架已建立在 repository 中。原則是讓四位組員可以分別處理前端、
 Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修改同一檔案的機會。
+目前多數檔案只是 package marker 或職責說明，尚不代表功能已完成。
 
 ```text
 .
-├── README.md                           # 專案總覽、架構、技術棧
-├── AGENTS.md                           # AI agent 行為規範（含 AWS 時程限制）
-├── CONTRIBUTING.md                     # Commit 格式與協作慣例
-├── .env.example                        # 所需環境變數名稱，不放真實密鑰
+├── README.md
+├── .env.example                    # 所需環境變數名稱，不放真實密鑰
 ├── .gitignore
-│
-├── frontend/                           # React 前端（尚未初始化）
+├── frontend/
 │   └── src/
-│       ├── api/                        # Backend API client
-│       ├── components/                 # 對話、問題卡、福利結果、來源與 checklist
-│       ├── pages/                      # 主要頁面
-│       └── types/                      # 前後端共用資料形狀的 TypeScript 版本
-│
-├── backend/                            # Python 後端（FastAPI modular monolith）
+│       ├── api/                    # Backend API client
+│       ├── components/             # 對話、問題卡、福利結果、來源與 checklist
+│       ├── pages/                  # 主要頁面
+│       ├── types/                  # 前後端共用資料形狀的 TypeScript 版本
+│       └── ...                     # 選定套件版本後再初始化 React app
+├── backend/
+│   ├── README.md
 │   ├── app/
-│   │   ├── main.py                     # FastAPI application 入口
-│   │   ├── config.py                   # 環境變數設定
-│   │   ├── api/
-│   │   │   └── health.py              # Health check endpoint
-│   │   ├── schemas/                    # Pydantic request / response / domain models
+│   │   ├── main.py                 # FastAPI application 入口
+│   │   ├── api/                    # Session、message、result endpoints
+│   │   ├── schemas/                # Pydantic request / response / domain models
 │   │   ├── orchestration/
-│   │   │   ├── state.py               # Workflow state 定義
-│   │   │   └── state_machine.py       # 狀態轉換與停止條件
+│   │   │   ├── state.py            # Workflow state 定義
+│   │   │   ├── state_machine.py    # 狀態轉換與停止條件
+│   │   │   ├── agent_runner.py     # Framework-neutral AgentRunner interface
+│   │   │   └── strands_agent.py    # Trial：StrandsAgentRunner adapter
 │   │   ├── tools/
-│   │   │   ├── resolve_life_event.py      # Tool：辨識人生事件
-│   │   │   ├── retrieve_official_rules.py # Tool：檢索官方規則
-│   │   │   └── evaluate_eligibility.py    # Tool：呼叫 Rule Engine 判斷資格
-│   │   ├── rules/
-│   │   │   └── engine.py              # 通用規則引擎（讀 DB 結構化欄位做判斷）
-│   │   ├── retrieval/                  # 文件切分、metadata filter、citation 組裝
-│   │   ├── privacy/                    # PII 偵測、去識別化與欄位 allowlist
-│   │   ├── services/
-│   │   │   ├── benefit_catalog.py     # SQLite schema 定義與 catalog helpers
-│   │   │   ├── source_connector.py    # 官方頁面下載與同步紀錄
-│   │   │   └── link_discovery.py      # 從 HTML 找出子連結、排序候選
-│   │   └── observability/
-│   │       └── logging.py             # Structured logging
+│   │   │   ├── resolve_life_event.py
+│   │   │   ├── retrieve_official_rules.py
+│   │   │   └── evaluate_eligibility.py
+│   │   ├── retrieval/              # 文件切分、metadata filter、citation 組裝
+│   │   ├── rules/                  # Deterministic eligibility rulesｓ
+│   │   ├── privacy/                # PII 偵測、去識別化與欄位 allowlist
+│   │   ├── services/               # Bedrock、S3、DynamoDB 等 AWS adapters
+│   │   └── observability/          # Structured logging、trace 與 metrics
 │   └── tests/
-│       ├── unit/                       # 規則、狀態轉換、隱私、來源連接器測試
-│       └── integration/                # Tool、RAG 與 API integration tests
-│
+│       ├── unit/                   # Rules、state transitions、privacy tests
+│       └── integration/            # Tool、RAG 與 API integration tests
 ├── data/
-│   ├── benefit_discovery/              # 候選發現流程的設定與產出
-│   │   ├── death_benefit_first_batch.v0.1.json   # 人工核准的第一批頁面清單
-│   │   ├── death_benefit_keywords.v0.2.json      # 候選排序關鍵字
-│   │   └── extracted_candidates.v0.1.json        # 抽取後的結構化候選（供人工審查）
-│   ├── source_registry/                # 來源白名單設定
-│   │   └── initial_sources.v0.1.json   # 初始登記的官方來源
-│   ├── evaluations/                    # 正常、邊界與不符合資格的測試案例
-│   └── local/                          # 本機產物（不進 Git）
-│       ├── government_oid.db           # SQLite 資料庫（所有資料表都在這）
-│       ├── source_documents/           # 下載的官方 HTML 檔案
-│       └── discovered_links/           # 候選連結 JSON
-│
+│   ├── benefits/                   # 福利定義、負責機關與所需欄位
+│   ├── entitlement_graph/          # 跨福利 / 機關的 curated relations
+│   ├── document_metadata/          # 官方來源 URL、發布機關、日期與版本Ｐ
+│   └── evaluations/                # 正常、邊界與不符合資格的測試案例
 ├── scripts/
-│   ├── import_government_oid.py        # 下載並匯入政府機關 OID 到 SQLite
-│   ├── init_benefit_catalog.py         # 建立 catalog 所有資料表
-│   ├── sync_benefit_sources.py         # 同步指定入口頁（下載 HTML）
-│   ├── discover_benefit_links.py       # 從入口頁產生子連結候選清單
-│   ├── fetch_reviewed_benefit_pages.py # 只下載人工核准的政府頁面
-│   ├── extract_benefit_candidates.py   # 從 HTML 解析結構化候選資料
-│   ├── load_candidates_to_db.py        # 把候選寫入 benefit_programs 表
-│   ├── review_benefit_status.py        # CLI：列出待審查方案與缺少欄位
-│   ├── review_server.py                # 啟動本機審查網頁介面（FastAPI + HTML）
-│   └── review_ui.html                  # 審查介面前端（瀏覽、編輯、Verify）
-│
+│   ├── ingest_documents.py         # 官方文件清理、切分與匯入
+│   ├── validate_rules.py           # 規則與資料 schema 檢查
+│   └── run_evaluation.py           # 批次執行 evaluation cases
+├── infra/                          # SAM / CDK；選型確定後再建立內容
 ├── docs/
-│   ├── architecture-overview.html      # 視覺化架構與資料庫說明
-│   ├── aws_migration_guide.md          # AWS 遷移集中指南（唯一來源）
-│   ├── official-sources.md             # MVP 採用的政府文件清單
-│   ├── decisions/                      # Architecture Decision Records (ADR)
-│   └── benefit-discovery/              # 搜尋與人工審查規格
-│
-├── record/                             # 進度紀錄（含日期）
-├── infra/                              # SAM / CDK；選型確定後再建立內容
-└── tmp/                                # 本機暫存，不作為正式資料來源
+│   ├── team-guide.md               # 開工、檢查、commit 與隱私紅線
+│   ├── positioning.md              # 產品定位與差異化判準
+│   ├── hackathon-plan.md           # 比賽條件、MVP 範圍與交付分工
+│   ├── data-model.md               # data/ 各層的欄位與填寫格式
+│   ├── architecture.md             # 完整架構與資料流程
+│   ├── decisions/                  # Architecture Decision Records (ADR)
+│   └── official-sources.md         # MVP 採用的政府文件清單
+└── tmp/                            # 本機 PDF 提取 / 測試產物，不作為正式資料來源
 ```
 
-`data/local/` 下的 SQLite、HTML 與 JSON 不進 Git，可由 `scripts/` 中的指令重建。
-Git 保存的是程式碼、schema、設定、關鍵字、測試案例與進度紀錄。
+選用功能如 DynamoDB、Guardrails 與 IaC，等選型確定後再補。大型原始 PDF
+和處理產物原則上放 S3 或本機 `tmp/`，Git 只保存來源 metadata、可審查的規則與小型
+evaluation fixtures。
 
 ## 本機政府機關 OID registry
 
