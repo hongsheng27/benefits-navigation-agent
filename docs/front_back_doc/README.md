@@ -18,13 +18,45 @@
 | 資料契約（後端 Pydantic） | ✅ 完成 | `backend/app/schemas/session.py` |
 | 資料契約（前端 TypeScript） | ✅ 完成 | `frontend/src/types/session.ts` |
 | 走鐘檢查測試 | ✅ 完成 | 改一邊忘了另一邊會讓測試失敗 |
-| 三個 session 端點 | ❌ 未實作 | 後端目前只有 `GET /health` |
-| Session 儲存 | ❌ 未實作 | 下一個任務 |
+| Session 儲存 | ✅ 完成 | 記憶體、2 小時過期 |
+| 四個 session 端點 | 🟡 **可呼叫，但回佔位資料** | 見下一節 |
+| 狀態機 | ❌ 未實作 | 目前是寫死的佔位推進 |
+| 事件辨識（LLM） | ❌ 未實作 | 一律回 `spouse_death` |
+| 資格判定 | ❌ 未實作 | 項目一律 `pending` |
 | 問題卡的內容 | ❌ 未實作 | 形狀已定，內容等欄位登記表 |
+| 前端呼叫程式 | ❌ 未實作 | `client.ts` 目前只有健康檢查 |
 | 前端 PII 遮罩 | ❌ 未實作 | 目前只有文字提醒 |
 
-**所以現在的實際情況是**：契約可以照著寫程式，但呼叫後端還拿不到東西。前端要繼續用
-假資料，直到端點實作完成。
+**所以現在的實際情況是**：端點可以呼叫、資料真的從後端來，但**內容是寫死的佔位資料**。
+前端可以開始接，畫面會拿到真實形狀的回應。
+
+## 一之二、佔位資料怎麼辨識
+
+每個回應都帶一個 `implementation` 物件，說明這份資料有多少是真的：
+
+```json
+{
+  "implementation": {
+    "isMock": true,
+    "pending": ["life_event_extraction", "entitlement_graph", "rule_evaluation", "..."],
+    "placeholderNotice": "（此為後端傳來的暫時資料，尚未進行真實的事件辨識與資格判定）"
+  }
+}
+```
+
+| 欄位 | 用法 |
+| --- | --- |
+| `isMock` | 為 true 時前端應在畫面上標示這不是真實判定 |
+| `pending` | 哪些能力還沒實作。實作完成會逐項消失，前端不用改程式 |
+| `placeholderNotice` | 可直接顯示的中文提示。**這是臨時例外** |
+
+`placeholderNotice` 是唯一由後端提供中文文案的欄位，違反本專案「後端給代號、前端給
+文案」的分界。這是刻意的：它的讀者是開發者與 demo 觀眾，不是真正的使用者。
+**佔位資料移除時，這個欄位連同整個 `implementation` 物件一起刪除。**
+
+`pending` 目前包含全部九項：`life_event_extraction`、`entitlement_graph`、
+`state_machine`、`field_registry`、`rule_evaluation`、`official_citations`、
+`plain_language_explanation`、`action_plan`、`privacy_gate`。
 
 ---
 
@@ -54,15 +86,22 @@ referrer 與伺服器日誌帶走，所以走 header。
 
 ## 三、端點
 
-尚未實作，以下是約定的形狀。
+已實作，可以呼叫。
 
-| 方法 | 路徑 | 用途 |
-| --- | --- | --- |
-| `POST` | `/sessions` | 建立一次諮詢，回應含 `sessionId` |
-| `POST` | `/sessions/{id}/advance` | 送一筆輸入，推進一步 |
-| `GET` | `/sessions/current` | 查目前狀態（輪詢用），id 走 header |
+| 方法 | 路徑 | 用途 | 成功狀態碼 |
+| --- | --- | --- | --- |
+| `POST` | `/sessions` | 建立一次諮詢，回應含 `sessionId` | 201 |
+| `POST` | `/sessions/advance` | 送一筆輸入，推進一步 | 200 |
+| `GET` | `/sessions/current` | 查目前狀態（輪詢用） | 200 |
+| `DELETE` | `/sessions/current` | 立刻清除這次諮詢 | 204 |
 
-三個都回同一個形狀：`SessionSnapshot`。
+前三個都回同一個形狀：`SessionSnapshot`。`DELETE` 沒有回應本體。
+
+**除了 `POST /sessions` 之外，每次呼叫都要帶 header `X-Session-Id`。**
+路徑裡沒有 id，理由見下一段。
+
+`DELETE` 在 session 已經不存在或已過期時**仍然回 204**，因為呼叫端的目的是「確保它
+不在了」，而那個目的已經達成。
 
 ---
 
@@ -146,13 +185,17 @@ referrer 與伺服器日誌帶走，所以走 header。
 
 | errorCode | 什麼情況 | 前端建議做什麼 |
 | --- | --- | --- |
-| `session_not_found` | 找不到這個 session | 清除本機 id，重新開始 |
-| `session_expired` | 超過保存時間（2 小時） | 告知已過期，重新開始 |
+| `session_not_found` | 找不到這個 session（404），或沒帶 header（401） | 清除本機 id，重新開始 |
+| `session_expired` | 超過保存時間（410） | 告知已過期，重新開始 |
 | `unknown_field` | 送了不在登記表上的欄位 | 這是程式錯誤，回報 |
 | `invalid_field_value` | 值不符合欄位型別或選項 | 這是程式錯誤，回報 |
-| `unknown_item` | 項目代號不在候選清單裡 | 這是程式錯誤，回報 |
-| `invalid_transition` | 目前狀態不允許這個動作 | 重新取得快照後再試 |
+| `unknown_item` | 項目代號不在候選清單裡（422） | 這是程式錯誤，回報 |
+| `invalid_transition` | 目前狀態不允許這個動作（409） | 重新取得快照後再試 |
 | `internal_error` | 後端自身錯誤 | 顯示一般性錯誤訊息 |
+
+**錯誤本體就是 `ErrorResponse`，沒有包在 `detail` 底下。** FastAPI 的預設格式已經被
+覆寫，因為預設的驗證錯誤會把不合法的值原文放進訊息裡 —— 那可能是使用者打的一段話。
+現在回應只會有欄位路徑，例如 `["input.life_event_text.text"]`。
 
 **沒有錯誤訊息文字**，只有代號。文字由前端提供。
 
@@ -188,7 +231,9 @@ referrer 與伺服器日誌帶走，所以走 header。
 
 | # | 事項 | 誰要回答 | 狀態 |
 | --- | --- | --- | --- |
-| 1 | 端點什麼時候可以呼叫（目前只有 `/health`） | 後端 | 進行中，下一個任務 |
+| 1 | 端點什麼時候可以呼叫 | 後端 | ✅ 已完成，回佔位資料 |
+| 8 | `placeholderNotice` 何時移除（狀態機與判定實作完成時） | 後端 | 追蹤中 |
+| 9 | 前端 `client.ts` 由誰接上這四個端點 | 兩邊 | 未分配 |
 | 2 | 問題卡的實際欄位與選項代號 | 政策資料 | 未開始，擋住畫面 4 |
 | 3 | 事件代號有哪些（目前只知道會有 `spouse_death`） | 政策資料 | 未開始 |
 | 4 | 項目代號有哪些 | 政策資料 | 未開始 |
