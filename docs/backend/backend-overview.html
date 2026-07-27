@@ -315,6 +315,7 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   <tr><td><code>reasons</code> 是文字，workflow 層需要「哪個欄位、要求什麼、實際什麼」三段結構</td><td><span class="tag tag-red">需資料層配合</span></td></tr>
   <tr><td>欄位命名不一致（<code>program_id</code> 對 <code>item_id</code> 等）</td><td><span class="tag tag-yellow">後端寫轉接</span></td></tr>
   <tr><td><code>reasons</code> 的字串裡混入使用者提供的值，寫進紀錄檔會洩漏</td><td><span class="tag tag-red">需資料層配合</span></td></tr>
+  <tr><td>相關性評分：Rule Engine 會算分並排序，workflow 層沒有欄位接，也沒有說明順序依據</td><td><span class="tag tag-gray">待 T9 決定</span></td></tr>
 </table>
 <p>
   因此 T9 的範圍要調整：<strong>不是重寫一個規則引擎，而是寫一層轉接</strong>，
