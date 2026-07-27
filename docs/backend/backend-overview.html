@@ -298,48 +298,33 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
 
 <!-- ==================== 落差 ==================== -->
 
-<h2>跟 Rule Engine 之間的三個落差</h2>
+<h2>跟 Rule Engine 與資料層之間的落差</h2>
 <p>
   <code>backend/app/rules/engine.py</code> 已經能讀 <code>program_rule_fields</code> 並回傳
-  <code>EligibilityResult</code>。它的四種狀態跟 workflow 層一致，但兩邊的形狀還沒對齊。
+  <code>EligibilityResult</code>。它的四種狀態跟 workflow 層一致，但其餘形狀還沒對齊。
 </p>
-
-<div class="card">
-  <h3>落差一：金額 — 形狀已補上，轉接還沒做</h3>
-  <p>
-    原本 <code>CandidateItem</code> 沒有地方放金額，所以會出現「判定為符合但金額傳不到畫面」的情況。
-    現在已補上 <code>amount_min</code>、<code>amount_max</code>、<code>amount_period</code>、
-    <code>amount_currency</code> 四個欄位。決策過程見
-    <a href="../decisions/0011-frozen-pydantic-session-workflow-state.md">ADR-0011 修訂一</a>。
-  </p>
-  <p>
-    刻意<strong>不</strong>收 Rule Engine 的 <code>amount_label</code>，因為那是給人看的文字，
-    屬於前端的責任。後端只給結構，前端自己組出「骨灰 10,000 元」。
-  </p>
-  <p>
-    還沒做的是轉接：Rule Engine 回的是單一 <code>amount</code>，需要映射到兩個上下界，
-    而發放性質（一次性／按月／按年）目前不在它的回傳裡，要另外從規則欄位取。
-  </p>
+<div class="highlight">
+  落差的完整內容維護在
+  <a href="../back_database_doc/README.md">docs/back_database_doc/README.md</a>，
+  那是後端與資料層的溝通紀錄，包含各項的狀態與待確認事項。
+  這裡只列標題，避免兩份文件各自演進之後對不上。
 </div>
-
-<div class="gap">
-  <strong>落差二：<code>reasons</code> 是文字，<code>decisive_conditions</code> 是結構。</strong>
-  Rule Engine 目前回的是一串說明文字。Workflow 層要的是「哪個欄位、要求什麼、實際什麼」三段結構，
-  因為第 5 個畫面要顯示「差在這個條件：你的情況 X ／ 需要 Y」。
-  只有文字的話，前端只能整段印出來，那個對照就做不出來 —— 而那是整個專案最強的差異點。
-</div>
-
-<div class="gap">
-  <strong>落差三：欄位命名不一致。</strong>
-  Rule Engine 用 <code>missing_inputs</code>、<code>program_id</code>、<code>source_url</code>；
-  workflow 層用 <code>missing_field_ids</code>、<code>item_id</code>、<code>Citation</code>。
-  需要一層轉換，或兩邊統一命名。
-</div>
-
+<table>
+  <tr><th>落差</th><th>狀態</th></tr>
+  <tr><td>金額：Rule Engine 回單一 <code>amount</code>，workflow 層要上下界與發放性質</td><td><span class="tag tag-yellow">形狀已補，轉接未做</span></td></tr>
+  <tr><td><code>reasons</code> 是文字，workflow 層需要「哪個欄位、要求什麼、實際什麼」三段結構</td><td><span class="tag tag-red">需資料層配合</span></td></tr>
+  <tr><td>欄位命名不一致（<code>program_id</code> 對 <code>item_id</code> 等）</td><td><span class="tag tag-yellow">後端寫轉接</span></td></tr>
+  <tr><td><code>reasons</code> 的字串裡混入使用者提供的值，寫進紀錄檔會洩漏</td><td><span class="tag tag-red">需資料層配合</span></td></tr>
+</table>
 <p>
-  剩下兩個落差因此 T9 的範圍要調整：<strong>不是重寫一個規則引擎，而是寫一層轉接</strong>，
-  把 <code>EligibilityResult</code> 轉成 <code>CandidateItem</code>，並補上結構化的決定性條件。
-  這也表示「決定性條件」需要 Rule Engine 端配合輸出，不是 workflow 層能單方面補出來的。
+  因此 T9 的範圍要調整：<strong>不是重寫一個規則引擎，而是寫一層轉接</strong>，
+  把 <code>EligibilityResult</code> 轉成 <code>CandidateItem</code>。
+  但「決定性條件」需要 Rule Engine 端配合輸出，不是 workflow 層能單方面補出來的 ——
+  而那是整個專案最強的差異點。
+</p>
+<p>
+  前後端之間的約定與待確認事項同樣有一份獨立紀錄：
+  <a href="../front_back_doc/README.md">docs/front_back_doc/README.md</a>。
 </p>
 
 <!-- ==================== 檔案 ==================== -->
