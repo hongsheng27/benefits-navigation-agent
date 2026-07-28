@@ -77,46 +77,51 @@ uv run python -c "from app.main import app; print(sorted(app.openapi()['paths'])
 
 ## Checks
 
+在 `backend/` 目錄下執行：
+
 ```bash
+uv run ruff format .          # 先排版
+uv run ruff format --check .  # 確認排版
 uv run ruff check .
-uv run ruff format --check .
+uv run pytest
 ```
 
-測試目前**不能**用不帶參數的 `uv run pytest`，必須指定要跑的檔案：
+不需要列出個別測試檔。
 
-```bash
-uv run pytest tests/unit/test_workflow_state.py tests/unit/test_session_schemas.py \
-  tests/unit/test_session_store.py tests/unit/test_mock_advance.py \
-  tests/unit/test_logging.py tests/integration
+### 測試的 import 路徑有兩種慣例
+
+後端自己的測試從 `backend/` 算起：
+
+```python
+from app.observability.logging import log_event
 ```
 
-### 為什麼不能直接跑整個套件
-
-資料層的四個測試檔（`test_benefit_catalog.py`、`test_import_government_oid.py`、
-`test_link_discovery.py`、`test_source_connector.py`、`test_reviewed_page_batch.py`）
-的 import 路徑是從 **repository 根目錄**算起的：
+資料層的測試從 **repository 根目錄**算起：
 
 ```python
 from backend.app.services.benefit_catalog import ...
 from scripts.init_benefit_catalog import initialize_database
 ```
 
-而 `backend/pyproject.toml` 設定 `pythonpath = ["."]`，在 `backend/` 目錄下執行時
-那個 `.` 指的是 `backend/`，所以找不到名為 `backend` 的套件，收集階段就會失敗。
+因此 `pyproject.toml` 的 `pythonpath` 兩個目錄都收：
 
-從根目錄執行可以繞過這個問題：
-
-```bash
-backend/.venv/Scripts/python.exe -m pytest backend/tests    # Windows
+```toml
+pythonpath = [".", ".."]
 ```
 
-但**在 Windows 上會有 7 個失敗**，錯誤是 `PermissionError: The process cannot
-access the file`。原因是資料層到處使用 `with sqlite3.connect(...) as connection:`
-—— Python 的 `sqlite3` 用 `with` 包起來只會提交或回滾交易，**不會關閉連線**。
-macOS 與 Linux 允許刪除還開著的檔案，Windows 不允許，所以測試的暫存目錄清理失敗。
+這是繞過而非根治。**兩種慣例應該統一成一種**，但那要改動多個測試檔，尚未處理。
 
-這不只影響測試：長時間執行的伺服器沿用同樣寫法會累積不釋放的連線。修法是改用
-`contextlib.closing` 包起來，或明確呼叫 `close()`。這件事尚未有人處理。
+## 已知問題：SQLite 連線未關閉
+
+資料層到處使用 `with sqlite3.connect(...) as connection:`。Python 的 `sqlite3` 用
+`with` 包起來只會提交或回滾交易，**不會關閉連線**。
+
+已回報的影響：**Windows 上有 7 個測試失敗**，錯誤是 `PermissionError: The process
+cannot access the file`——macOS 與 Linux 允許刪除還開著的檔案，Windows 不允許，
+所以測試的暫存目錄清理失敗。（此現象在 `pythonpath` 修正後尚未於 Windows 複驗。）
+
+修法是改用 `contextlib.closing` 包起來，或明確呼叫 `close()`。屬於資料層的程式碼，
+尚未有人處理。
 
 ## 目前實作範圍
 

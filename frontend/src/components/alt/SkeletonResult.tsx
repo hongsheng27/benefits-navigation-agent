@@ -21,11 +21,7 @@ const PLACEHOLDER_FIELDS = [
   { term: "官方依據", value: "尚未串接" },
 ] as const;
 
-export function SkeletonResult({
-  characterCount,
-  onReset,
-  ref,
-}: SkeletonResultProps) {
+export function SkeletonResult({ characterCount, onReset, ref }: SkeletonResultProps) {
   return (
     <div
       ref={ref}

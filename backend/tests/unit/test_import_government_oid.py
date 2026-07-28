@@ -47,9 +47,7 @@ class GovernmentOidImportTests(unittest.TestCase):
         self,
         mocked_urlopen: object,
     ) -> None:
-        payload = csv_bytes(
-            "有效機關,2.16.886.101.1,02-1111,臺北市,ou=valid,A00000001"
-        )
+        payload = csv_bytes("有效機關,2.16.886.101.1,02-1111,臺北市,ou=valid,A00000001")
         mocked_urlopen.side_effect = [
             OSError("primary source unavailable"),
             FakeHttpResponse(payload),

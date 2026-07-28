@@ -555,9 +555,7 @@ def load_source_seeds(seed_path: Path) -> tuple[SourceSeed, ...]:
         if access_method not in ACCESS_METHODS:
             raise ValueError(f"Unsupported access_method: {access_method}")
         if connection_status not in CONNECTION_STATUSES:
-            raise ValueError(
-                f"Unsupported connection_status: {connection_status}"
-            )
+            raise ValueError(f"Unsupported connection_status: {connection_status}")
 
         enabled = raw_source.get("enabled", True)
         if not isinstance(enabled, bool):
@@ -585,9 +583,7 @@ def load_source_seeds(seed_path: Path) -> tuple[SourceSeed, ...]:
                 connection_status=connection_status,
                 enabled=enabled,
                 reviewed_at=_optional_string(raw_source, "reviewed_at"),
-                review_note=(
-                    _optional_string(raw_source, "review_note") or ""
-                ),
+                review_note=(_optional_string(raw_source, "review_note") or ""),
             )
         )
     return tuple(seeds)
@@ -713,9 +709,7 @@ def mark_oid_source_active_when_imported(
 def get_catalog_summary(connection: sqlite3.Connection) -> CatalogSummary:
     """Return counts suitable for a future read-only admin status endpoint."""
 
-    source_status_counts = {
-        status: 0 for status in CONNECTION_STATUSES
-    }
+    source_status_counts = {status: 0 for status in CONNECTION_STATUSES}
     for status, count in connection.execute(
         """
         SELECT connection_status, COUNT(*)
