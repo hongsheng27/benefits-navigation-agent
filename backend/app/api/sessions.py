@@ -22,7 +22,8 @@ from fastapi import APIRouter, Depends, Header, Request, Response, status
 
 from app.api.errors import ApiError
 from app.observability.logging import log_event
-from app.orchestration import mock_advance
+from app.orchestration import state_machine
+from app.orchestration.mock_advance import implementation_notice
 from app.orchestration.session_store import (
     SESSION_ID_HEADER,
     InMemorySessionStore,
@@ -74,13 +75,10 @@ def require_session_state(
 
 
 def _snapshot(state: SessionState) -> SessionSnapshot:
-    """組出對外快照，附上「哪些能力還沒實作」的說明。
-
-    問題卡目前一律為空，因為它需要欄位登記表。
-    """
+    """組出對外快照，附上「哪些能力還沒實作」的說明。"""
     return SessionSnapshot.from_state(
         state,
-        implementation=mock_advance.implementation_notice(),
+        implementation=implementation_notice(),
     )
 
 
@@ -111,14 +109,14 @@ def advance_session(
 ) -> SessionSnapshot:
     """送一筆輸入，推進一步。"""
     try:
-        advanced = mock_advance.advance(state, payload.input)
-    except mock_advance.NotAllowedInStateError as error:
+        advanced = state_machine.advance(state, payload.input)
+    except state_machine.InvalidTransitionError as error:
         raise ApiError(
             status.HTTP_409_CONFLICT,
             ErrorCode.INVALID_TRANSITION,
             current_state=state.workflow_state,
         ) from error
-    except mock_advance.UnknownItemError as error:
+    except state_machine.UnknownItemError as error:
         raise ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             ErrorCode.UNKNOWN_ITEM,

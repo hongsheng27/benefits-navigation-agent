@@ -76,7 +76,8 @@ def test_advancing_with_text_then_confirming_reveals_items(
     )
     assert confirmed.status_code == 200
     body = confirmed.json()
-    assert body["workflowState"] == "resolve_entitlements"
+    # 確認事件後，狀態機自動推進到需要等使用者的 collect_missing_fields。
+    assert body["workflowState"] == "collect_missing_fields"
     assert [item["itemId"] for item in body["items"]] == [
         "death_registration",
         "funeral_benefit",
@@ -157,11 +158,23 @@ def test_text_sent_at_the_wrong_step_is_a_conflict(client: TestClient) -> None:
     assert response.status_code == 409
     body = response.json()
     assert body["errorCode"] == "invalid_transition"
-    assert body["currentState"] == "resolve_entitlements"
+    # 自動推進後停在 collect_missing_fields，不是 resolve_entitlements。
+    assert body["currentState"] == "collect_missing_fields"
 
 
 def test_declining_an_unknown_item_is_reported(client: TestClient) -> None:
     session_id, _ = _create(client)
+    # 先走到有 items 的狀態。
+    client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={"input": {"kind": "life_event_text", "text": "測試"}},
+    )
+    client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={"input": {"kind": "event_confirmation", "confirmed": True}},
+    )
 
     response = client.post(
         "/sessions/advance",
