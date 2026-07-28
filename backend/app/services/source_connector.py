@@ -215,8 +215,7 @@ def _validate_reviewed_government_url(url: str) -> None:
         or not is_taiwan_government_host(parts.hostname)
     ):
         raise ValueError(
-            "Reviewed child pages must use an HTTPS Taiwan government URL: "
-            f"{url}"
+            f"Reviewed child pages must use an HTTPS Taiwan government URL: {url}"
         )
 
 
@@ -266,9 +265,7 @@ def _sync_source_page(
         observed_at = utc_now()
         changed = existing is None or existing[1] != page.content_hash
         storage_ref = (
-            _write_raw_page(raw_directory, source_id, page)
-            if changed
-            else existing[2]
+            _write_raw_page(raw_directory, source_id, page) if changed else existing[2]
         )
         if not storage_ref:
             storage_ref = _write_raw_page(raw_directory, source_id, page)
@@ -472,9 +469,7 @@ def sync_registered_source(
 
     connection.execute("PRAGMA foreign_keys = ON")
     source = _load_registered_source(connection, source_id)
-    document_type = (
-        "index" if source.source_type == "benefit_index" else "benefit_page"
-    )
+    document_type = "index" if source.source_type == "benefit_index" else "benefit_page"
     return _sync_source_page(
         connection,
         source_id=source_id,
@@ -503,9 +498,7 @@ def sync_reviewed_source_page(
     connection.execute("PRAGMA foreign_keys = ON")
     source = _load_registered_source(connection, source_id)
     if source.official_status != "verified_official":
-        raise ValueError(
-            f"Source is not verified_official: {source_id}"
-        )
+        raise ValueError(f"Source is not verified_official: {source_id}")
     _validate_reviewed_government_url(page_url)
     return _sync_source_page(
         connection,
