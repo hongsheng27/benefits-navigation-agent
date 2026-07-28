@@ -1,22 +1,20 @@
 export type ConnectionState = "checking" | "connected" | "unavailable";
 
-const statusContent: Record<
-  ConnectionState,
-  { label: string; dotClassName: string }
-> = {
-  checking: {
-    label: "正在確認後端",
-    dotClassName: "bg-amber-400",
-  },
-  connected: {
-    label: "後端已連線",
-    dotClassName: "bg-emerald-500",
-  },
-  unavailable: {
-    label: "後端尚未啟動",
-    dotClassName: "bg-slate-400",
-  },
-};
+const statusContent: Record<ConnectionState, { label: string; dotClassName: string }> =
+  {
+    checking: {
+      label: "正在確認後端",
+      dotClassName: "bg-amber-400",
+    },
+    connected: {
+      label: "後端已連線",
+      dotClassName: "bg-emerald-500",
+    },
+    unavailable: {
+      label: "後端尚未啟動",
+      dotClassName: "bg-slate-400",
+    },
+  };
 
 type ConnectionStatusProps = {
   state: ConnectionState;

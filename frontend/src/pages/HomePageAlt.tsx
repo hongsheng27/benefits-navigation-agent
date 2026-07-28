@@ -46,8 +46,7 @@ const UPCOMING_QUESTIONS = [
 export function HomePageAlt() {
   const [description, setDescription] = useState("");
   const [submittedLength, setSubmittedLength] = useState<number | null>(null);
-  const [connection, setConnection] =
-    useState<BackendConnectionState>("checking");
+  const [connection, setConnection] = useState<BackendConnectionState>("checking");
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);

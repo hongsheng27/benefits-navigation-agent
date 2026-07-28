@@ -26,12 +26,7 @@
  */
 .serif {
   font-family:
-    "Songti TC",
-    "Source Han Serif TC",
-    "Noto Serif TC",
-    "Noto Serif CJK TC",
-    "PMingLiU",
-    Georgia,
-    serif;
+    "Songti TC", "Source Han Serif TC", "Noto Serif TC", "Noto Serif CJK TC",
+    "PMingLiU", Georgia, serif;
   text-wrap: balance;
 }

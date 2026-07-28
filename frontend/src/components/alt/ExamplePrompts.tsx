@@ -4,11 +4,7 @@ type ExamplePromptsProps = {
   onSelect: (prompt: string) => void;
 };
 
-export function ExamplePrompts({
-  labelId,
-  prompts,
-  onSelect,
-}: ExamplePromptsProps) {
+export function ExamplePrompts({ labelId, prompts, onSelect }: ExamplePromptsProps) {
   return (
     <div role="group" aria-labelledby={labelId} className="mt-6">
       <p

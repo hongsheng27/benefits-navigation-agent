@@ -18,9 +18,7 @@ from scripts.init_benefit_catalog import initialize_database
 class BenefitCatalogTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
-        self.database_path = (
-            Path(self.temporary_directory.name) / "government_oid.db"
-        )
+        self.database_path = Path(self.temporary_directory.name) / "government_oid.db"
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()

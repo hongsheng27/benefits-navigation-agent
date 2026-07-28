@@ -1,10 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { getBackendHealth } from "../api/client";
-import {
-  ConnectionStatus,
-  type ConnectionState,
-} from "../components/ConnectionStatus";
+import { ConnectionStatus, type ConnectionState } from "../components/ConnectionStatus";
 
 const exampleEvents = [
   "家人剛過世，不知道接下來要辦什麼",
@@ -12,8 +9,7 @@ const exampleEvents = [
 ];
 
 export function HomePage() {
-  const [connectionState, setConnectionState] =
-    useState<ConnectionState>("checking");
+  const [connectionState, setConnectionState] = useState<ConnectionState>("checking");
   const [lifeEvent, setLifeEvent] = useState("");
   const [submittedEvent, setSubmittedEvent] = useState<string | null>(null);
 
@@ -149,9 +145,7 @@ export function HomePage() {
                     ✓
                   </span>
                   <div>
-                    <h2 className="font-bold text-[#153f3b]">
-                      我們先從這裡接住你
-                    </h2>
+                    <h2 className="font-bold text-[#153f3b]">我們先從這裡接住你</h2>
                     <p className="mt-2 text-sm leading-6 text-slate-600">
                       已收到：「{submittedEvent}」
                     </p>

@@ -51,10 +51,7 @@ def load_program_rules(
            WHERE program_id = ?""",
         (program_id,),
     ).fetchall()
-    return {
-        row[0]: _parse_field_value(row[1], row[2])
-        for row in rows
-    }
+    return {row[0]: _parse_field_value(row[1], row[2]) for row in rows}
 
 
 def load_all_program_rules(
@@ -370,10 +367,7 @@ def evaluate_all_programs(
     match to user attributes appear first.
     """
     # Load programs
-    query = (
-        "SELECT program_id, canonical_name, jurisdiction_code "
-        "FROM benefit_programs"
-    )
+    query = "SELECT program_id, canonical_name, jurisdiction_code FROM benefit_programs"
     params: list[Any] = []
     if jurisdiction:
         query += " WHERE jurisdiction_code = ?"
@@ -389,9 +383,7 @@ def evaluate_all_programs(
         if not rules:
             continue
 
-        score = compute_relevance_score(
-            rules, user_attrs, prog_jurisdiction
-        )
+        score = compute_relevance_score(rules, user_attrs, prog_jurisdiction)
         result = evaluate_program(pid, name, rules, user_attrs)
         # Replace with scored version
         result = EligibilityResult(

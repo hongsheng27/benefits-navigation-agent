@@ -24,5 +24,9 @@ line-length = 88
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+# "." lets the app's own tests import `app.*`. ".." is the repository root,
+# which the data layer tests need because they import `backend.app.*` and
+# `scripts.*`. Without it, collecting the whole suite fails and the tests have
+# to be listed by hand.
+pythonpath = [".", ".."]
 testpaths = ["tests"]
