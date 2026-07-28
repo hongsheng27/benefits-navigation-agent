@@ -11,9 +11,8 @@
 
 ## 目前的推進是佔位的
 
-`app.orchestration.mock_advance` 是狀態機的臨時替代品，回傳的事件代號與候選項目都是
-寫死的。回應裡的 `implementation` 會說明哪些能力還沒實作，讓前端可以在畫面上標示。
-真正的狀態機完成後，只需要把 `advance` 的來源換掉。
+推進由 `app.orchestration.state_machine` 負責。回應裡的 `implementation` 會說明哪些
+能力還沒實作（見 `app.api.implementation`），讓前端可以在畫面上標示。
 """
 
 from typing import Annotated
@@ -21,17 +20,24 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Request, Response, status
 
 from app.api.errors import ApiError
+from app.api.implementation import implementation_notice
 from app.observability.logging import log_event
 from app.orchestration import state_machine
-from app.orchestration.mock_advance import implementation_notice
+from app.orchestration.field_registry import FieldRegistry
+from app.orchestration.missing_fields import compute_question_groups
 from app.orchestration.session_store import (
     SESSION_ID_HEADER,
     InMemorySessionStore,
     SessionExpiredError,
     SessionNotFoundError,
 )
-from app.orchestration.state import SessionState
-from app.schemas.session import AdvanceRequest, ErrorCode, SessionSnapshot
+from app.orchestration.state import SessionState, WorkflowState
+from app.schemas.session import (
+    AdvanceRequest,
+    ErrorCode,
+    QuestionGroupView,
+    SessionSnapshot,
+)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -75,9 +81,17 @@ def require_session_state(
 
 
 def _snapshot(state: SessionState) -> SessionSnapshot:
-    """組出對外快照，附上「哪些能力還沒實作」的說明。"""
+    """組出對外快照，附上問題卡與「哪些能力還沒實作」的說明。
+
+    問題卡只在需要追問欄位的狀態才計算 —— 其他狀態算出來也沒有用，前端不會顯示。
+    """
+    question_groups: tuple[QuestionGroupView, ...] = ()
+    if state.workflow_state is WorkflowState.COLLECT_MISSING_FIELDS:
+        question_groups = compute_question_groups(state, FieldRegistry.from_json())
+
     return SessionSnapshot.from_state(
         state,
+        question_groups=question_groups,
         implementation=implementation_notice(),
     )
 
