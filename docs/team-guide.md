@@ -36,38 +36,47 @@ uv run uvicorn app.main:app --reload    # http://localhost:8000
 改東西  →  跑檢查  →  commit
 ```
 
-**提交前一定要跑過**，只跑你動到的那一邊即可。
+**提交前一定要跑過**：
 
-**前端**
+```bash
+make format    # 先排版
+make check     # 前後端全部檢查
+```
+
+只想跑單邊：`make check-frontend` 或 `make check-backend`。
+
+沒跑過就不要說「檢查通過」。
+
+### Windows 沒有 make
+
+兩個選擇，擇一即可。
+
+裝一次就跟大家一樣：
+
+```powershell
+winget install ezwinports.make
+```
+
+或直接打底下的指令，效果相同：
 
 ```bash
 cd frontend
-npm run format        # 先排版
-npm run format:check  # 確認排版
-npm run lint
-npm run typecheck
-npm test
+npm run format && npm run format:check && npm run lint && npm run typecheck && npm test
 ```
-
-**後端**
 
 ```bash
 cd backend
-uv run ruff format .          # 先排版
-uv run ruff format --check .  # 確認排版
-uv run ruff check .
-uv run pytest
+uv run ruff format . && uv run ruff format --check . && uv run ruff check . && uv run pytest
 ```
 
-沒跑過就不要說「檢查通過」。
+> 這兩段是 `Makefile` 內容的展開。改動檢查流程時兩邊要一起更新。
 
 ### 排版由工具決定，不要手動對齊
 
 前端用 **Prettier**，後端用 **ruff format**。兩邊都是 88 字元寬。
 
 排版**不是個人偏好**——四個人不同編輯器產生的縮排差異，會變成純排版的 merge
-conflict，在現場最浪費時間。上面的 `format:check` 與 `ruff format --check` 會擋下
-沒排版的檔案。
+conflict，在現場最浪費時間。`make check` 會擋下沒排版的檔案。
 
 另外請在編輯器裝 **EditorConfig** 外掛（VS Code、JetBrains、Kiro 都支援）。
 根目錄的 `.editorconfig` 會統一縮排、換行字元與檔尾空行。
