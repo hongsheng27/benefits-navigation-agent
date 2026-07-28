@@ -23,21 +23,19 @@ from app.schemas.session import AttributeAnswersInput
 def _state_at_collect(
     *, loop_iterations: int = 0, attributes: dict | None = None
 ) -> SessionState:
-    """建立一個「已經走到追問欄位、有四個待確認項目」的狀態。"""
+    """建立一個「已經走到追問欄位、有待確認項目」的狀態。
+
+    只放 survivor_pension，因為它需要三個欄位（deceased_insurance_type、
+    has_dependent_children、applicant_age_band）才會就緒。這樣測試可以精確控制
+    「只答一個欄位不會讓它就緒」的情況。
+    """
     now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
     return SessionState(
         session_id="s_test",
         workflow_state=WorkflowState.COLLECT_MISSING_FIELDS,
         life_event="spouse_death",
         attributes=attributes or {},
-        items=(
-            CandidateItem(item_id="death_registration", kind=ItemKind.ADMINISTRATIVE),
-            CandidateItem(item_id="funeral_benefit", kind=ItemKind.BENEFIT),
-            CandidateItem(item_id="survivor_pension", kind=ItemKind.BENEFIT),
-            CandidateItem(
-                item_id="health_insurance_change", kind=ItemKind.ADMINISTRATIVE
-            ),
-        ),
+        items=(CandidateItem(item_id="survivor_pension", kind=ItemKind.BENEFIT),),
         loop_iterations=loop_iterations,
         created_at=now,
         updated_at=now,
@@ -70,17 +68,20 @@ def test_loop_does_not_exit_before_the_limit() -> None:
 def test_loop_exits_when_no_progress_is_made() -> None:
     """繞了一圈但「沒有任何項目狀態改變」也「沒有收到新屬性」，設 exit_reason。
 
-    模擬方式：已經有 attributes，這次送同樣的 key（覆蓋而非新增），而 auto-step
-    不會改變項目狀態（因為目前是空操作）。
+    模擬方式：項目需要 deceased_insurance_type（在登記表上），使用者已經答過了，
+    但還需要其他欄位（survivor_pension 還需要 has_dependent_children 和
+    applicant_age_band）。這次送的是同一個 key 的新值 —— key 數量沒增加，
+    而 stub 判斷 survivor_pension 還沒湊齊所以不會改狀態。
     """
-    # 第一圈已經走過（loop_iterations=1 代表已繞一圈），有一個屬性。
     state = _state_at_collect(
-        loop_iterations=1, attributes={"existing_field": "old_value"}
+        loop_iterations=1,
+        attributes={"deceased_insurance_type": "labor_insurance"},
     )
 
-    # 送的是同一個 key 的新值 —— key 數量沒有增加。
+    # 送同一個 key 的新值 —— key 數量沒有增加。
     result = advance(
-        state, AttributeAnswersInput(answers={"existing_field": "new_value"})
+        state,
+        AttributeAnswersInput(answers={"deceased_insurance_type": "national_pension"}),
     )
 
     assert result.exit_reason is ExitReason.NO_PROGRESS

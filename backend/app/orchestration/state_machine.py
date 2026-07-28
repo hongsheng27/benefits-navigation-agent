@@ -40,6 +40,8 @@
 
 from collections.abc import Callable
 
+from app.orchestration.determination import evaluate_ready_items_stub
+from app.orchestration.field_registry import FieldRegistry
 from app.orchestration.state import (
     CandidateItem,
     ExitReason,
@@ -503,9 +505,11 @@ def _do_retrieve_rules(state: SessionState) -> SessionState:
 def _do_evaluate_eligibility(state: SessionState) -> SessionState:
     """判定資格。
 
-    TODO(T9, T10): 呼叫規則引擎。目前是空操作，所有項目維持 PENDING。
+    使用 stub 版本：把已經湊齊欄位的項目標為 eligible。
+    TODO(T18): 接上真正的 SQLite 規則引擎。
     """
-    return state
+    registry = FieldRegistry.from_json()
+    return evaluate_ready_items_stub(state, registry)
 
 
 def _do_explain_result(state: SessionState) -> SessionState:
