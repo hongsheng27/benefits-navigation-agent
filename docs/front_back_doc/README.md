@@ -25,7 +25,7 @@
 | 資格判定 | 🟡 stub 版 | 湊齊欄位的項目標 eligible，不會真的判斷不符合 |
 | 欄位登記表 | ✅ 完成 | 三筆種子資料（draft），機制可用 |
 | 缺漏欄位計算與分組 | ✅ 完成 | 按主題分組，每題帶 unlocks_item_ids |
-| 問題卡的內容 | ❌ 未實作 | 形狀已定，內容等欄位登記表 |
+| 問題卡 | 🟡 機制完成，內容是 draft | 有三組真的問題可以顯示，但欄位與選項是暫定的 |
 | 前端呼叫程式 | ❌ 未實作 | `client.ts` 目前只有健康檢查 |
 | 前端 PII 遮罩 | ❌ 未實作 | 目前只有文字提醒 |
 
@@ -57,9 +57,12 @@
 文案」的分界。這是刻意的：它的讀者是開發者與 demo 觀眾，不是真正的使用者。
 **佔位資料移除時，這個欄位連同整個 `implementation` 物件一起刪除。**
 
-`pending` 目前包含全部九項：`life_event_extraction`、`entitlement_graph`、
-`state_machine`、`field_registry`、`rule_evaluation`、`official_citations`、
-`plain_language_explanation`、`action_plan`、`privacy_gate`。
+`pending` 目前有七項：`life_event_extraction`、`entitlement_graph`、
+`rule_evaluation`、`official_citations`、`plain_language_explanation`、
+`action_plan`、`privacy_gate`。
+
+已經從清單移除的（代表那一項已實作）：`state_machine`、`field_registry`。
+清單只會變短，前端不需要改程式。
 
 ---
 
@@ -142,7 +145,7 @@ referrer 與伺服器日誌帶走，所以走 header。
 | `lifeEvent` | 事件代號，第 2 步確認後才有值 | — |
 | `attributes` | 使用者答過的答案，第 7 步複查用 | — |
 | `items` | 候選項目與各自結果 | — |
-| `questionGroups` | 問題卡 | **一定是空陣列**（等登記表） |
+| `questionGroups` | 問題卡 | **只在 `collect_missing_fields` 狀態有值**，其他狀態是空陣列 |
 | `exitReason` | 提前結束的原因 | — |
 | `referralRequested` | 是否要求轉介 | — |
 | `isProcessing` | 為 true 時輪詢要繼續 | **目前永遠是 false**（同步處理） |
@@ -237,7 +240,7 @@ referrer 與伺服器日誌帶走，所以走 header。
 | 1 | 端點什麼時候可以呼叫 | 後端 | ✅ 已完成，回佔位資料 |
 | 8 | `placeholderNotice` 何時移除（狀態機與判定實作完成時） | 後端 | 追蹤中 |
 | 9 | 前端 `client.ts` 由誰接上這四個端點 | 兩邊 | 未分配 |
-| 2 | 問題卡的實際欄位與選項代號 | 政策資料 | 未開始，擋住畫面 4 |
+| 2 | 問題卡的**正式**欄位與選項代號 | 政策資料 | 目前是三筆 draft 種子資料，前端可以先接 |
 | 3 | 事件代號有哪些（目前只知道會有 `spouse_death`） | 政策資料 | 未開始 |
 | 4 | 項目代號有哪些 | 政策資料 | 未開始 |
 | 5 | 「不確定」要怎麼送？是一個特殊的選項代號，還是不送這個欄位 | 兩邊 | **未討論** |
