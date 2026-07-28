@@ -160,6 +160,9 @@ def advance(state: SessionState, user_input: AdvanceInput) -> SessionState:
 
     回傳的是一個新的 `SessionState`，不修改傳入的。
     """
+    # 記住推進前的快照，護欄用它比較「有沒有進展」。
+    state_before = state
+
     # HelpRequestInput 在任何需要等使用者的狀態都可以送。
     if isinstance(user_input, HelpRequestInput):
         if not ALLOWED_INPUTS.get(state.workflow_state):
@@ -175,7 +178,7 @@ def advance(state: SessionState, user_input: AdvanceInput) -> SessionState:
     new_state = _handle_input(state, user_input)
 
     # 自動推進：一直往前走，直到下一個需要等使用者的狀態。
-    new_state = _auto_advance(new_state)
+    new_state = _auto_advance(new_state, state_before)
 
     return new_state
 
@@ -256,7 +259,11 @@ def _confirm_event(
 def _record_answers(
     state: SessionState, user_input: AttributeAnswersInput
 ) -> SessionState:
-    """記下一組答案並推進到迴圈的下一步。"""
+    """記下一組答案並推進到迴圈的下一步。
+
+    `_state_before_loop_iteration` 會被 `_auto_advance` 在進入 RETRIEVE_RULES 之前
+    快照，用來比較「這一圈有沒有進展」。
+    """
     merged = dict(state.attributes)
     merged.update(user_input.answers)
 
@@ -302,7 +309,9 @@ def _confirm_review(
 # ---------------------------------------------------------------------------
 
 
-def _auto_advance(state: SessionState) -> SessionState:
+def _auto_advance(
+    state: SessionState, state_before_input: SessionState
+) -> SessionState:
     """從當前狀態開始，自動走完不需要使用者的中間步驟。
 
     停止條件：
@@ -310,27 +319,33 @@ def _auto_advance(state: SessionState) -> SessionState:
     - 到達終點（COMPLETE）
     - 已經有 exit_reason（流程結束）
     - 迴圈判斷需要回到 COLLECT_MISSING_FIELDS
+
+    護欄檢查在 EVALUATE_ELIGIBILITY 完成後觸發。
+    `state_before_input` 是使用者這次操作之前的快照，用來判斷有沒有進展。
     """
-    # 安全上限，避免無限迴圈（例如守門條件寫錯導致一直跳過）
     max_auto_steps = 20
     steps = 0
 
     while steps < max_auto_steps:
         steps += 1
 
-        # 已經到終點或已有出口原因，停。
         if state.exit_reason is not None:
             break
         if state.workflow_state == WorkflowState.COMPLETE:
             break
 
-        # 目前狀態需要等使用者，停。
         allowed = ALLOWED_INPUTS.get(state.workflow_state, set())
         if allowed:
             break
 
         # 執行自動步驟。
         state = _execute_auto_step(state)
+
+        # 如果剛做完 EVALUATE_ELIGIBILITY，跑護欄。
+        if state.workflow_state == WorkflowState.EVALUATE_ELIGIBILITY:
+            state = _check_loop_guardrails(state, state_before_input)
+            if state.exit_reason is not None:
+                break
 
         # 走到下一步。
         next_ws = _resolve_next_state(state)
@@ -390,6 +405,9 @@ def _should_loop_back(state: SessionState) -> bool:
 
     如果有任何項目仍然是 PENDING 或 NEEDS_INFORMATION，而且迭代次數還沒到上限，
     就回到追問步驟。
+
+    注意：到達上限或沒有進展時，不在這裡設 exit_reason —— 那由 _check_loop_guardrails
+    負責，在 _auto_advance 裡的合適時機呼叫。這個函式只回答「要不要回去」。
     """
     if state.loop_iterations >= MAX_LOOP_ITERATIONS:
         return False
@@ -399,6 +417,52 @@ def _should_loop_back(state: SessionState) -> bool:
         for item in state.items
         if item.status != ItemStatus.DECLINED_BY_USER
     )
+
+
+def _check_loop_guardrails(
+    state: SessionState, state_before_iteration: SessionState
+) -> SessionState:
+    """在迴圈的 EVALUATE_ELIGIBILITY 結束後，檢查兩道護欄。
+
+    護欄一：迭代上限
+    如果已經繞了 MAX_LOOP_ITERATIONS 圈但還有項目未定案，設 exit_reason。
+
+    護欄二：必須有進展
+    比較這一圈開始前和結束後的狀態。「進展」的定義是：
+    - 至少一個項目的 status 改變了，或
+    - attributes 的鍵的數量增加了（收到了新的答案）
+
+    兩者都沒有就表示死循環 —— 一直問同樣的問題卻得不到新資訊。
+    """
+    # 護欄一：到上限了嗎
+    if state.loop_iterations >= MAX_LOOP_ITERATIONS:
+        has_unsettled = any(
+            item.status in {ItemStatus.PENDING, ItemStatus.NEEDS_INFORMATION}
+            for item in state.items
+            if item.status != ItemStatus.DECLINED_BY_USER
+        )
+        if has_unsettled:
+            return state.model_copy(
+                update={"exit_reason": ExitReason.LOOP_LIMIT_REACHED}
+            )
+
+    # 護欄二：有進展嗎
+    # 只有在已經繞了至少一圈之後才檢查（第一圈一定是新的）
+    if state.loop_iterations > 1:
+        old_statuses = {
+            item.item_id: item.status for item in state_before_iteration.items
+        }
+        new_statuses = {item.item_id: item.status for item in state.items}
+        status_changed = old_statuses != new_statuses
+
+        old_attr_count = len(state_before_iteration.attributes)
+        new_attr_count = len(state.attributes)
+        attrs_grew = new_attr_count > old_attr_count
+
+        if not status_changed and not attrs_grew:
+            return state.model_copy(update={"exit_reason": ExitReason.NO_PROGRESS})
+
+    return state
 
 
 # ---------------------------------------------------------------------------
