@@ -35,6 +35,10 @@
 | 方案證據（含引用段落） | `program_sources` | 🟡 同上 |
 | 機關角色 | `program_organization_roles` | 🟡 同上 |
 | 結構化規則欄位 | `program_rule_fields` | 🟡 有資料 |
+| 轉接層（rule adapter） | `backend/app/orchestration/rule_adapter.py` | ✅ 完成（條件留空） |
+| 逐項判定組裝 | `backend/app/orchestration/determination.py` | 🟡 stub |
+| 欄位登記表機制 | `backend/app/orchestration/field_registry.py` | ✅ 完成 |
+| 缺漏欄位計算 | `backend/app/orchestration/missing_fields.py` | ✅ 完成 |
 | 通用規則引擎 | `backend/app/rules/engine.py` | ✅ 可運作 |
 | 相關性評分與排序 | `engine.py` 的 `compute_relevance_score` | ✅ 可運作 |
 | 審查介面 | `scripts/review_server.py` | ✅ 可用 |
@@ -68,14 +72,30 @@
 
 每個介面會先配一個回固定資料的假實作，所以**後端不需要等資料層完成才能開發**。
 
+### 目前接上了什麼
+
+- **規則引擎轉接層**已完成（`orchestration/rule_adapter.py`）。目前使用 stub：
+  湊齊欄位就標 eligible。接上真正的 SQLite 時只需要把
+  `determination.py` 裡的 `evaluate_ready_items_stub` 換掉。
+- **欄位登記表**已完成（`orchestration/field_registry.py` 讀
+  `data/eligibility_fields/fields.v0.1.json`），三筆種子欄位。
+- **缺漏欄位計算**已完成（`orchestration/missing_fields.py`），可直接產出
+  `QuestionGroupView` 給前端。
+
 ---
 
 ## 四、形狀落差
 
 規則引擎的 `EligibilityResult` 與 workflow 層的 `CandidateItem` 都有四種判定狀態，
-但其餘形狀還沒對齊。以下五項需要協調。
+但其餘形狀還沒對齊。以下五項需要協調，其中**金額轉接已完成**，**命名轉接已完成**。
 
-### 落差一：金額 — 後端已補上形狀，轉接還沒做
+### 落差一：金額 — 形狀已補上，轉接已做（period 除外）
+
+規則引擎回 `amount`（單一整數），轉接層映射到 `amount_min` 和 `amount_max`（兩者填
+同一個值）。`amount_currency` 有值時固定為 `TWD`。
+
+**`amount_period` 仍然留空**：規則欄位裡還沒有「一次性／按月／按年」這個資訊。
+需要在 `program_rule_fields` 增加一個欄位。
 
 規則引擎回 `amount`（單一整數）與 `amount_label`（例如 `10000~20000`）。
 
@@ -125,18 +145,17 @@ Workflow 層需要的是三段結構：**哪個欄位、要求什麼、實際什
 
 留到 T9（接上規則引擎）再決定，因為那時才會真的有分數流進來。
 
-### 落差四：欄位命名不一致
+### 落差四：欄位命名不一致 — 已由轉接層處理
 
-| 規則引擎 | Workflow 層 |
-| --- | --- |
-| `program_id` | `item_id` |
-| `program_name` | 前端自己提供文案，後端不存名稱 |
-| `missing_inputs` | `missing_field_ids` |
-| `source_url`（單一字串） | `Citation`（六個欄位的結構） |
-| `status`（純字串） | `ItemStatus`（列舉） |
+| 規則引擎 | Workflow 層 | 轉接方式 |
+| --- | --- | --- |
+| `program_id` | `item_id` | 直接映射 |
+| `program_name` | 前端自己提供文案 | 不轉 |
+| `missing_inputs` | `missing_field_ids` | 直接映射 |
+| `source_url`（單一字串） | `Citation`（六個欄位的結構） | 組成最小的 Citation（只有 URL） |
+| `status`（純字串） | `ItemStatus`（列舉） | 查對照表，未知字串降級為 `NEEDS_HUMAN_REVIEW` |
 
-後端會寫一層轉接處理。不要求資料層改名，但**新增欄位時希望先在這份文件登記**，避免
-兩邊各自命名。
+不要求資料層改名。轉接集中在 `orchestration/rule_adapter.py` 一個函式裡。
 
 `source_url` 那一項值得注意：workflow 層需要的是文件代號、標題、發布機關、發布日期、
 網址、引用段落六項，因為畫面上要顯示「依據：〈條例名稱〉第 X 條，官方連結，發布日期」。

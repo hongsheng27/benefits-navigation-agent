@@ -271,12 +271,12 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
 <p>這一階段完全不依賴 AWS、網路或 LLM。</p>
 <table>
   <tr><th></th><th>任務</th><th>狀態</th></tr>
-  <tr><td>T5</td><td>狀態機轉換與守門條件</td><td><span class="tag tag-gray">未開始</span></td></tr>
-  <tr><td>T6</td><td>迴圈四道護欄</td><td><span class="tag tag-gray">未開始</span></td></tr>
-  <tr><td>T7</td><td>欄位登記表機制（不含實際欄位內容）</td><td><span class="tag tag-gray">未開始</span></td></tr>
-  <tr><td>T8</td><td>缺漏欄位計算與主題分組</td><td><span class="tag tag-gray">未開始</span></td></tr>
-  <tr><td>T9</td><td>接上 Rule Engine 並轉成 workflow 的形狀</td><td><span class="tag tag-yellow">範圍需調整</span></td></tr>
-  <tr><td>T10</td><td>逐項判定的組裝</td><td><span class="tag tag-gray">未開始</span></td></tr>
+  <tr><td>T5</td><td>狀態機轉換與守門條件</td><td><span class="tag tag-green">完成</span></td></tr>
+  <tr><td>T6</td><td>迴圈四道護欄（前兩道）</td><td><span class="tag tag-green">完成</span></td></tr>
+  <tr><td>T7</td><td>欄位登記表機制</td><td><span class="tag tag-green">完成</span></td></tr>
+  <tr><td>T8</td><td>缺漏欄位計算與主題分組</td><td><span class="tag tag-green">完成</span></td></tr>
+  <tr><td>T9</td><td>接上 Rule Engine 並轉成 workflow 的形狀</td><td><span class="tag tag-green">完成</span>（決定性條件留空，等資料層配合）</td></tr>
+  <tr><td>T10</td><td>逐項判定的組裝</td><td><span class="tag tag-green">完成</span>（stub 版，標 eligible）</td></tr>
 </table>
 
 <h3><span class="tag tag-blue">階段 3</span> 隱私閘門</h3>
@@ -334,7 +334,11 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
 <table>
   <tr><th>檔案</th><th>做什麼的</th><th>狀態</th></tr>
   <tr><td><code>backend/app/orchestration/state.py</code></td><td>Workflow state 的資料形狀</td><td><span class="tag tag-green">已完成</span></td></tr>
-  <tr><td><code>backend/app/orchestration/state_machine.py</code></td><td>狀態轉換、守門條件、停止條件</td><td><span class="tag tag-gray">只有說明</span></td></tr>
+  <tr><td><code>backend/app/orchestration/state_machine.py</code></td><td>狀態轉換、守門條件、自動推進、護欄</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/orchestration/field_registry.py</code></td><td>欄位登記表讀取與驗證</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/orchestration/missing_fields.py</code></td><td>缺漏欄位計算與主題分組</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/orchestration/rule_adapter.py</code></td><td>規則引擎 → CandidateItem 轉接</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/orchestration/determination.py</code></td><td>逐項判定組裝（stub 版）</td><td><span class="tag tag-yellow">佔位</span></td></tr>
   <tr><td><code>backend/app/schemas/session.py</code></td><td>對外的請求與回應形狀</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>frontend/src/types/session.ts</code></td><td>同一份契約的 TypeScript 版本</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/privacy/</code></td><td>屬性 allowlist、去識別化</td><td><span class="tag tag-gray">空的</span></td></tr>
