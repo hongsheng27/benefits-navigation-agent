@@ -31,11 +31,11 @@
 這些都有對應的後續任務。這個模組提供的是**骨幹**：轉換規則、守門條件、自動推進，
 讓那些任務有地方接入。
 
-## 跟 `mock_advance.py` 的差別
+## 流程規則是真的，資料來源還不是
 
-`mock_advance.py` 是佔位的，它寫死了事件代號和候選項目，讓前端有東西可接。
-這個模組是真正的流程控制，**但還沒有真正的資料來源** —— 事件辨識和項目展開暫時
-仍由呼叫端提供，這裡只負責管「什麼時候能做什麼」。
+轉換規則、守門條件、自動推進與護欄都已經是最終行為。但**事件辨識與項目展開仍是
+寫死的** —— 前者等 LLM（T21），後者等 entitlement graph（T15）。每一處都有
+`TODO` 標記。
 """
 
 from collections.abc import Callable
@@ -219,11 +219,8 @@ def _receive_life_event(
 
     自由文字本身沒有被保存 —— SessionState 沒有欄位放它（ADR-0007）。
     """
-    if state.life_event is not None:
-        # 已經有事件代號了（使用者之前否認後要重新描述），先清掉。
-        pass
-
-    # TODO(T21): 呼叫 LLM 抽取事件代號。目前寫死。
+    # TODO(T21): 呼叫 LLM 抽取事件代號。目前寫死，不管輸入什麼都回同一個值。
+    # 直接覆寫 life_event，所以使用者否認後重新描述也會正確更新。
     extracted_event = "spouse_death"
 
     return state.model_copy(update={"life_event": extracted_event})
@@ -472,8 +469,8 @@ def _check_loop_guardrails(
 # ---------------------------------------------------------------------------
 
 
-# 寫死的候選項目，跟 mock_advance.py 一樣。
-# TODO(T15): 改成從 entitlement graph 查。
+# 寫死的候選項目，取自 README 的 MVP 情境（配偶過世）。
+# TODO(T15): 改成從 entitlement graph 依事件代號查。
 _PLACEHOLDER_ITEMS: tuple[CandidateItem, ...] = (
     CandidateItem(item_id="death_registration", kind="administrative"),
     CandidateItem(item_id="funeral_benefit", kind="benefit"),

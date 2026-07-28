@@ -176,14 +176,18 @@ Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修�
 │   │   ├── api/
 │   │   │   ├── health.py              # GET /health
 │   │   │   ├── sessions.py            # 四個 session 端點（只做傳輸）
-│   │   │   └── errors.py              # 錯誤轉成契約形狀，不外洩使用者輸入
+│   │   │   ├── errors.py              # 錯誤轉成契約形狀，不外洩使用者輸入
+│   │   │   └── implementation.py      # 宣告哪些能力還沒實作（之後移除）
 │   │   ├── schemas/
 │   │   │   └── session.py             # 對外的請求與回應形狀
 │   │   ├── orchestration/
 │   │   │   ├── state.py               # Workflow state 的資料形狀
 │   │   │   ├── session_store.py       # 記憶體 session 儲存，2 小時過期
-│   │   │   ├── mock_advance.py        # state machine 的臨時替代品（之後刪除）
-│   │   │   └── state_machine.py       # 狀態轉換與停止條件（尚未實作）
+│   │   │   ├── field_registry.py      # 欄位登記表讀取與驗證
+│   │   │   ├── missing_fields.py      # 缺漏欄位計算與主題分組
+│   │   │   ├── rule_adapter.py        # 規則引擎結果 → CandidateItem
+│   │   │   ├── determination.py       # 逐項判定組裝（目前為 stub）
+│   │   │   └── state_machine.py       # 狀態轉換、守門條件、自動推進、迴圈護欄
 │   │   ├── tools/
 │   │   │   ├── resolve_life_event.py      # Tool：辨識人生事件
 │   │   │   ├── retrieve_official_rules.py # Tool：檢索官方規則

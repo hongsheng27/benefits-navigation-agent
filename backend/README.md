@@ -48,7 +48,7 @@ uv run uvicorn app.main:app --reload      # http://localhost:8000
 > **端點目前回的是佔位資料。** 不管輸入什麼文字，事件都會判定成 `spouse_death`；
 > 候選項目固定四筆且全部是 `pending`；沒有任何資格判定、官方依據或金額。
 > 每個回應都帶 `implementation` 物件說明哪些能力還沒實作，前端可據此在畫面上標示。
-> 詳見 `app/orchestration/mock_advance.py`。
+> 未實作的能力清單見 `app/api/implementation.py`。
 
 ### 端點沒出現在 `/docs` 時先檢查這個
 
@@ -86,7 +86,9 @@ uv run ruff format --check .
 
 ```bash
 uv run pytest tests/unit/test_workflow_state.py tests/unit/test_session_schemas.py \
-  tests/unit/test_session_store.py tests/unit/test_mock_advance.py \
+  tests/unit/test_session_store.py tests/unit/test_loop_guardrails.py \
+  tests/unit/test_field_registry.py tests/unit/test_missing_fields.py \
+  tests/unit/test_rule_adapter.py tests/unit/test_determination.py \
   tests/unit/test_logging.py tests/integration
 ```
 
@@ -143,7 +145,8 @@ macOS 與 Linux 允許刪除還開著的檔案，Windows 不允許，所以測�
 
 | 檔案 | 說明 |
 | --- | --- |
-| `app/orchestration/mock_advance.py` | state machine 的臨時替代品。刻意獨立成一個檔案，實作真正的狀態機時刪掉整個檔案並換掉 `sessions.py` 裡的一行呼叫即可 |
+| `app/api/implementation.py` | 回應裡「哪些能力還沒實作」的宣告。全部實作完成後連同 `ImplementationNotice` 一起從契約移除 |
+| `app/orchestration/determination.py` | 逐項判定組裝。目前是 stub：湊齊欄位標 `eligible`，接上 SQLite 後換掉 |
 
 ### 尚未實作
 

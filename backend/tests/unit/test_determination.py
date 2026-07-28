@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from app.orchestration.determination import (
     evaluate_ready_items_stub,
     find_ready_item_ids,
+    find_undeclared_item_ids,
 )
 from app.orchestration.field_registry import FieldRegistry
 from app.orchestration.state import (
@@ -119,3 +120,61 @@ def test_stub_does_nothing_when_no_items_ready() -> None:
     result = evaluate_ready_items_stub(state, _registry())
 
     assert result is state  # 沒有變，回的是同一個物件
+
+
+def test_items_with_no_declared_fields_are_flagged_as_undeclared() -> None:
+    """登記表沒有宣告任何欄位的項目，屬於資料缺漏。"""
+    items = (
+        CandidateItem(item_id="funeral_benefit", kind=ItemKind.BENEFIT),
+        CandidateItem(item_id="death_registration", kind=ItemKind.ADMINISTRATIVE),
+    )
+    state = _state(items=items)
+
+    undeclared = find_undeclared_item_ids(state, _registry())
+
+    # death_registration 在種子登記表裡沒有任何欄位宣告 used_by 包含它。
+    assert "death_registration" in undeclared
+    assert "funeral_benefit" not in undeclared
+
+
+def test_undeclared_items_are_not_counted_as_ready() -> None:
+    """沒有宣告欄位不等於「沒有條件所以就緒」。"""
+    items = (CandidateItem(item_id="death_registration", kind=ItemKind.ADMINISTRATIVE),)
+    state = _state(items=items, attributes={"anything": "value"})
+
+    ready = find_ready_item_ids(state, _registry())
+
+    assert "death_registration" not in ready
+
+
+def test_undeclared_items_become_needs_human_review() -> None:
+    """資料缺漏的項目標成需人工協助，不是符合資格。
+
+    把資料缺漏誤判成「你符合資格」比誠實說「需要人看一下」危險 ——
+    使用者可能因此白跑一趟。
+    """
+    items = (
+        CandidateItem(item_id="death_registration", kind=ItemKind.ADMINISTRATIVE),
+        CandidateItem(item_id="funeral_benefit", kind=ItemKind.BENEFIT),
+    )
+    state = _state(
+        items=items,
+        attributes={"deceased_insurance_type": "labor_insurance"},
+    )
+
+    result = evaluate_ready_items_stub(state, _registry())
+    statuses = {i.item_id: i.status for i in result.items}
+
+    assert statuses["death_registration"] is ItemStatus.NEEDS_HUMAN_REVIEW
+    assert statuses["funeral_benefit"] is ItemStatus.ELIGIBLE
+
+
+def test_undeclared_items_alone_still_change_state() -> None:
+    """只有資料缺漏的項目時，也要回傳新的狀態（不是原封不動）。"""
+    items = (CandidateItem(item_id="death_registration", kind=ItemKind.ADMINISTRATIVE),)
+    state = _state(items=items)
+
+    result = evaluate_ready_items_stub(state, _registry())
+
+    assert result is not state
+    assert result.items[0].status is ItemStatus.NEEDS_HUMAN_REVIEW
