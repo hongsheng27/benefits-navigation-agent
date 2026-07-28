@@ -6,15 +6,8 @@
 
 ## 開工
 
-第一次拉下 repo：
-
-```bash
-make install    # 安裝前後端相依套件
-```
-
-需要先安裝 [uv](https://docs.astral.sh/uv/) 與 Node.js 22.12 以上。
-
-分別啟動：
+需要先安裝 [uv](https://docs.astral.sh/uv/) 與 Node.js 22.12 以上。不需要自己裝
+Python，uv 會取得正確的版本。
 
 **前端**
 
@@ -32,8 +25,6 @@ uv sync                                 # 自動取得 Python 3.13、建立 .ven
 uv run uvicorn app.main:app --reload    # http://localhost:8000
 ```
 
-需要先安裝 [uv](https://docs.astral.sh/uv/)，不需要自己裝 Python。
-
 環境變數複製根目錄 `.env.example` 到根目錄 `.env`。後端會依序讀取 `../.env` 與
 `backend/.env`；前端讀 `frontend/.env.local` 或根目錄的 `VITE_` 變數。
 
@@ -45,14 +36,28 @@ uv run uvicorn app.main:app --reload    # http://localhost:8000
 改東西  →  跑檢查  →  commit
 ```
 
-**提交前一定要跑過**：
+**提交前一定要跑過**，只跑你動到的那一邊即可。
+
+**前端**
 
 ```bash
-make check     # 前後端全部檢查
-make format    # 排版有問題時先跑這個
+cd frontend
+npm run format        # 先排版
+npm run format:check  # 確認排版
+npm run lint
+npm run typecheck
+npm test
 ```
 
-只想跑單邊：`make check-frontend` 或 `make check-backend`。
+**後端**
+
+```bash
+cd backend
+uv run ruff format .          # 先排版
+uv run ruff format --check .  # 確認排版
+uv run ruff check .
+uv run pytest
+```
 
 沒跑過就不要說「檢查通過」。
 
@@ -61,7 +66,8 @@ make format    # 排版有問題時先跑這個
 前端用 **Prettier**，後端用 **ruff format**。兩邊都是 88 字元寬。
 
 排版**不是個人偏好**——四個人不同編輯器產生的縮排差異，會變成純排版的 merge
-conflict，在現場最浪費時間。`make check` 會擋下沒排版的檔案。
+conflict，在現場最浪費時間。上面的 `format:check` 與 `ruff format --check` 會擋下
+沒排版的檔案。
 
 另外請在編輯器裝 **EditorConfig** 外掛（VS Code、JetBrains、Kiro 都支援）。
 根目錄的 `.editorconfig` 會統一縮排、換行字元與檔尾空行。
