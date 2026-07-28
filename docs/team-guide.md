@@ -6,6 +6,16 @@
 
 ## 開工
 
+第一次拉下 repo：
+
+```bash
+make install    # 安裝前後端相依套件
+```
+
+需要先安裝 [uv](https://docs.astral.sh/uv/) 與 Node.js 22.12 以上。
+
+分別啟動：
+
 **前端**
 
 ```bash
@@ -35,17 +45,26 @@ uv run uvicorn app.main:app --reload    # http://localhost:8000
 改東西  →  跑檢查  →  commit
 ```
 
-**提交前一定要跑過**，而且只跑你動到的那一邊：
+**提交前一定要跑過**：
 
 ```bash
-# 前端
-cd frontend && npm run lint && npm run typecheck && npm test
-
-# 後端
-cd backend && uv run ruff check . && uv run ruff format --check . && uv run pytest
+make check     # 前後端全部檢查
+make format    # 排版有問題時先跑這個
 ```
 
+只想跑單邊：`make check-frontend` 或 `make check-backend`。
+
 沒跑過就不要說「檢查通過」。
+
+### 排版由工具決定，不要手動對齊
+
+前端用 **Prettier**，後端用 **ruff format**。兩邊都是 88 字元寬。
+
+排版**不是個人偏好**——四個人不同編輯器產生的縮排差異，會變成純排版的 merge
+conflict，在現場最浪費時間。`make check` 會擋下沒排版的檔案。
+
+另外請在編輯器裝 **EditorConfig** 外掛（VS Code、JetBrains、Kiro 都支援）。
+根目錄的 `.editorconfig` 會統一縮排、換行字元與檔尾空行。
 
 **Commit** 使用 Conventional Commit 格式，型別與 scope 見
 [CONTRIBUTING.md](../CONTRIBUTING.md)：

@@ -24,15 +24,11 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("最近發生了什麼事？"), {
       target: { value: "家人剛過世，不知道接下來要辦什麼" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "開始整理下一步" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "開始整理下一步" }));
 
     expect(
       screen.getByRole("heading", { name: "我們先從這裡接住你" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/這是前端骨架的示意結果/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/這是前端骨架的示意結果/)).toBeInTheDocument();
   });
 });

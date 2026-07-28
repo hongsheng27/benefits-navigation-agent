@@ -1,14 +1,11 @@
 const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://localhost:8000";
+  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
 
 export type BackendHealth = {
   status: string;
 };
 
-export async function getBackendHealth(
-  signal?: AbortSignal,
-): Promise<BackendHealth> {
+export async function getBackendHealth(signal?: AbortSignal): Promise<BackendHealth> {
   const response = await fetch(`${apiBaseUrl}/health`, {
     headers: {
       Accept: "application/json",
