@@ -36,12 +36,24 @@
 轉換規則、守門條件、自動推進與護欄都已經是最終行為。但**事件辨識與項目展開仍是
 寫死的** —— 前者等 LLM（T21），後者等 entitlement graph（T15）。每一處都有
 `TODO` 標記。
+
+資料來源不再由這個模組自己去拿，而是透過 `protocols.py` 的接縫注入（見 `advance()`
+的具名參數）。Phase 2 注入的是離線 fixture，換成真實來源時這個模組不用改。
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from app.orchestration.determination import evaluate_ready_items_stub
 from app.orchestration.field_registry import FieldRegistry
+from app.orchestration.protocols import (
+    EntitlementSource,
+    EvidenceRetriever,
+    FixtureEntitlementSource,
+    PassThroughPrivacyGate,
+    PrivacyGate,
+    RuleSource,
+)
 from app.orchestration.state import (
     CandidateItem,
     ExitReason,
@@ -69,6 +81,13 @@ MAX_EVENT_RETRIES = 2
 
 # 中間迴圈的迭代上限。
 MAX_LOOP_ITERATIONS = 6
+
+# 「還沒定案」的項目狀態。護欄的降級範圍與迴圈的回跳判斷共用這一份定義，避免兩邊
+# 各寫一次集合而在之後走鐘。`DECLINED_BY_USER` 不在裡面：使用者已經決定不辦了，
+# 那就是一種定案。
+UNSETTLED_STATUSES: frozenset[ItemStatus] = frozenset(
+    {ItemStatus.PENDING, ItemStatus.NEEDS_INFORMATION}
+)
 
 # ---------------------------------------------------------------------------
 # 宣告表一：每個狀態接受哪些種類的輸入
@@ -157,11 +176,100 @@ class UnknownItemError(LookupError):
     """送來的項目代號不在候選清單裡。"""
 
 
-def advance(state: SessionState, user_input: AdvanceInput) -> SessionState:
+class UnknownFieldError(ValueError):
+    """送來的欄位代號不在登記表上。
+
+    帶的是**欄位代號**，不是使用者填的值。這一點是刻意的：錯誤會流到 HTTP 回應與
+    紀錄檔，而那兩個地方都不得出現使用者輸入（Req 16.5）。
+
+    `field_ids` 排序後才存，讓同一組違規欄位永遠得到同一個順序 —— 錯誤回應因此是
+    可預期的，測試也不必去猜 dict 的迭代順序。
+    """
+
+    def __init__(self, field_ids: tuple[str, ...]) -> None:
+        ordered = tuple(sorted(field_ids))
+        super().__init__(f"未登記的欄位代號：{', '.join(ordered)}")
+        self.field_ids = ordered
+
+
+# 模組層的登記表快取。lazy 初始化，因為 `from_json` 會讀磁碟 —— 放在 import 時執行
+# 會讓「匯入這個模組」變成一件可能失敗的事（例如登記表檔案還沒建好）。
+_REGISTRY_CACHE: FieldRegistry | None = None
+
+
+def default_registry() -> FieldRegistry:
+    """取得共用的欄位登記表實例。
+
+    登記表是啟動後不再變動的資料，每次呼叫都重讀一次磁碟只是浪費；更重要的是這樣
+    整個請求週期內大家看到的是**同一份**登記表，不會出現「驗證用一份、算缺漏用另一
+    份」的可能。
+    """
+    global _REGISTRY_CACHE
+    if _REGISTRY_CACHE is None:
+        _REGISTRY_CACHE = FieldRegistry.from_json()
+    return _REGISTRY_CACHE
+
+
+@dataclass(frozen=True)
+class _Seams:
+    """一次推進過程中會用到的外部依賴。
+
+    把它們收在一個物件裡，是為了讓自動推進那一串內部函式的簽章不會隨著接縫變多而
+    一直加參數。內容全部來自 `advance()` 的具名參數，所以呼叫端仍然能逐項替換。
+    """
+
+    registry: FieldRegistry
+    entitlement_source: EntitlementSource
+    privacy_gate: PrivacyGate
+    # 下面兩個目前沒有實作也沒有被讀取：`RETRIEVE_RULES` 是空操作，判定走的是
+    # `determination` 的 stub。保留欄位是為了讓 Phase 4 接上時只需改 `_do_*`
+    # 函式，不必再動 `advance()` 的簽章（Req 19.1）。
+    rule_source: RuleSource | None = None
+    evidence_retriever: EvidenceRetriever | None = None
+
+
+def advance(
+    state: SessionState,
+    user_input: AdvanceInput,
+    *,
+    registry: FieldRegistry | None = None,
+    entitlement_source: EntitlementSource | None = None,
+    privacy_gate: PrivacyGate | None = None,
+    rule_source: RuleSource | None = None,
+    evidence_retriever: EvidenceRetriever | None = None,
+) -> SessionState:
     """依輸入推進狀態，並自動走完不需要使用者的中間步驟。
 
     回傳的是一個新的 `SessionState`，不修改傳入的。
+
+    所有接縫都是具名參數且可以省略，預設值是 Phase 2 的離線實作。測試與 Phase 4/5
+    可以逐個換掉，不需要改這個模組（Req 19）。
     """
+    seams = _Seams(
+        registry=registry if registry is not None else default_registry(),
+        entitlement_source=(
+            entitlement_source
+            if entitlement_source is not None
+            else FixtureEntitlementSource()
+        ),
+        privacy_gate=(
+            privacy_gate if privacy_gate is not None else PassThroughPrivacyGate()
+        ),
+        rule_source=rule_source,
+        evidence_retriever=evidence_retriever,
+    )
+
+    # 流程已經結束就不再接受任何輸入（Req 1.5、Req 5.3）。
+    #
+    # 這道檢查必須放在 help_request 的分支**之前**。否則一個已經因為護欄而結束的
+    # session 還能再送一次 help_request，把 exit_reason 從 LOOP_LIMIT_REACHED 覆寫成
+    # USER_REQUESTED_HELP —— 出口的原因會變成假的。
+    #
+    # 放在最開頭也順帶擋掉「已結束的 session 送答案還能讓 loop_iterations 繼續加」
+    # 的破口，那會讓 design.md 的 Property 4（迭代有界）不成立。
+    if state.exit_reason is not None or state.workflow_state == WorkflowState.COMPLETE:
+        raise InvalidTransitionError(state.workflow_state)
+
     # 記住推進前的快照，護欄用它比較「有沒有進展」。
     state_before = state
 
@@ -177,10 +285,10 @@ def advance(state: SessionState, user_input: AdvanceInput) -> SessionState:
         raise InvalidTransitionError(state.workflow_state)
 
     # 依輸入種類處理。
-    new_state = _handle_input(state, user_input)
+    new_state = _handle_input(state, user_input, seams)
 
     # 自動推進：一直往前走，直到下一個需要等使用者的狀態。
-    new_state = _auto_advance(new_state, state_before)
+    new_state = _auto_advance(new_state, state_before, seams)
 
     return new_state
 
@@ -190,7 +298,9 @@ def advance(state: SessionState, user_input: AdvanceInput) -> SessionState:
 # ---------------------------------------------------------------------------
 
 
-def _handle_input(state: SessionState, user_input: AdvanceInput) -> SessionState:
+def _handle_input(
+    state: SessionState, user_input: AdvanceInput, seams: _Seams
+) -> SessionState:
     """依輸入種類產生新狀態。這裡只處理「使用者做了什麼」，不處理自動推進。"""
     match user_input:
         case LifeEventTextInput():
@@ -198,7 +308,7 @@ def _handle_input(state: SessionState, user_input: AdvanceInput) -> SessionState
         case EventConfirmationInput():
             return _confirm_event(state, user_input)
         case AttributeAnswersInput():
-            return _record_answers(state, user_input)
+            return _record_answers(state, user_input, seams)
         case ItemDeclineInput():
             return _decline_item(state, user_input)
         case ReviewConfirmationInput():
@@ -256,15 +366,33 @@ def _confirm_event(
 
 
 def _record_answers(
-    state: SessionState, user_input: AttributeAnswersInput
+    state: SessionState, user_input: AttributeAnswersInput, seams: _Seams
 ) -> SessionState:
     """記下一組答案並推進到迴圈的下一步。
 
-    `_state_before_loop_iteration` 會被 `_auto_advance` 在進入 RETRIEVE_RULES 之前
-    快照，用來比較「這一圈有沒有進展」。
+    先擋掉不在登記表上的欄位代號（Req 9）。**任何一個代號沒登記就拒絕整筆**，不做
+    部分接受也不靜默丟棄：
+    - 部分接受會讓使用者以為答案都收到了，其實少了一題
+    - 靜默丟棄會讓 bug（前端送錯代號）在畫面上看起來像正常運作
+
+    這道檢查是隱私閘門的核心。`AttributeValue` 的 `str` 沒有長度上限，所以只要有
+    未登記的代號能寫進 `state.attributes`，任何一段自由文字都能藉著它被保存下來，
+    再經 `SessionSnapshot.attributes` 原值回到前端 —— 那正是 ADR-0007 要防的事。
     """
+    unknown = tuple(
+        field_id for field_id in user_input.answers if not seams.registry.has(field_id)
+    )
+    if unknown:
+        raise UnknownFieldError(unknown)
+
+    # 代號合格之後，值本身再交給隱私閘門。Phase 2 的閘門原樣回傳；型別與選項的
+    # 驗證屬於 Req 16.3（T11），換掉閘門的實作就能加上，狀態機不用改。
+    accepted = seams.privacy_gate.validate_attributes(
+        dict(user_input.answers), seams.registry
+    )
+
     merged = dict(state.attributes)
-    merged.update(user_input.answers)
+    merged.update(accepted)
 
     return state.model_copy(
         update={
@@ -309,7 +437,7 @@ def _confirm_review(
 
 
 def _auto_advance(
-    state: SessionState, state_before_input: SessionState
+    state: SessionState, state_before_input: SessionState, seams: _Seams
 ) -> SessionState:
     """從當前狀態開始，自動走完不需要使用者的中間步驟。
 
@@ -338,7 +466,7 @@ def _auto_advance(
             break
 
         # 執行自動步驟。
-        state = _execute_auto_step(state)
+        state = _execute_auto_step(state, seams)
 
         # 如果剛做完 EVALUATE_ELIGIBILITY，跑護欄。
         if state.workflow_state == WorkflowState.EVALUATE_ELIGIBILITY:
@@ -356,18 +484,18 @@ def _auto_advance(
     return state
 
 
-def _execute_auto_step(state: SessionState) -> SessionState:
+def _execute_auto_step(state: SessionState, seams: _Seams) -> SessionState:
     """在自動推進的狀態裡執行動作。
 
     目前多數都是空操作（T7–T10 之後才會有內容）。
     """
     match state.workflow_state:
         case WorkflowState.RESOLVE_ENTITLEMENTS:
-            return _do_resolve_entitlements(state)
+            return _do_resolve_entitlements(state, seams)
         case WorkflowState.RETRIEVE_RULES:
-            return _do_retrieve_rules(state)
+            return _do_retrieve_rules(state, seams)
         case WorkflowState.EVALUATE_ELIGIBILITY:
-            return _do_evaluate_eligibility(state)
+            return _do_evaluate_eligibility(state, seams)
         case WorkflowState.EXPLAIN_RESULT:
             return _do_explain_result(state)
 
@@ -411,11 +539,7 @@ def _should_loop_back(state: SessionState) -> bool:
     if state.loop_iterations >= MAX_LOOP_ITERATIONS:
         return False
 
-    return any(
-        item.status in {ItemStatus.PENDING, ItemStatus.NEEDS_INFORMATION}
-        for item in state.items
-        if item.status != ItemStatus.DECLINED_BY_USER
-    )
+    return any(item.status in UNSETTLED_STATUSES for item in state.items)
 
 
 def _check_loop_guardrails(
@@ -424,7 +548,8 @@ def _check_loop_guardrails(
     """在迴圈的 EVALUATE_ELIGIBILITY 結束後，檢查兩道護欄。
 
     護欄一：迭代上限
-    如果已經繞了 MAX_LOOP_ITERATIONS 圈但還有項目未定案，設 exit_reason。
+    如果已經繞了 MAX_LOOP_ITERATIONS 圈但還有項目未定案，設 exit_reason，並把那些
+    未定案的項目降級為需人工協助。
 
     護欄二：必須有進展
     比較這一圈開始前和結束後的狀態。「進展」的定義是：
@@ -435,14 +560,13 @@ def _check_loop_guardrails(
     """
     # 護欄一：到上限了嗎
     if state.loop_iterations >= MAX_LOOP_ITERATIONS:
-        has_unsettled = any(
-            item.status in {ItemStatus.PENDING, ItemStatus.NEEDS_INFORMATION}
-            for item in state.items
-            if item.status != ItemStatus.DECLINED_BY_USER
-        )
+        has_unsettled = any(item.status in UNSETTLED_STATUSES for item in state.items)
         if has_unsettled:
             return state.model_copy(
-                update={"exit_reason": ExitReason.LOOP_LIMIT_REACHED}
+                update={
+                    "exit_reason": ExitReason.LOOP_LIMIT_REACHED,
+                    "items": _downgrade_unsettled_items(state.items),
+                }
             )
 
     # 護欄二：有進展嗎
@@ -464,49 +588,72 @@ def _check_loop_guardrails(
     return state
 
 
+def _downgrade_unsettled_items(
+    items: tuple[CandidateItem, ...],
+) -> tuple[CandidateItem, ...]:
+    """把還沒定案的項目改成需人工協助。
+
+    迭代上限觸發時流程就結束了，如果項目還留在 `PENDING`，使用者拿到的清單上會有
+    永遠不會有答案的項目 —— 系統等於承認「我問到放棄，但不告訴你怎麼辦」。降級成
+    需人工協助至少指出一條路可走（Req 5.2、Req 17.4）。
+
+    已定案的狀態（ELIGIBLE / INELIGIBLE / NEEDS_HUMAN_REVIEW / DECLINED_BY_USER）
+    一律不動：護欄不該推翻已經有結論的判定。
+    """
+    return tuple(
+        item.model_copy(update={"status": ItemStatus.NEEDS_HUMAN_REVIEW})
+        if item.status in UNSETTLED_STATUSES
+        else item
+        for item in items
+    )
+
+
 # ---------------------------------------------------------------------------
 # 自動步驟的實作（目前多數是佔位的）
 # ---------------------------------------------------------------------------
 
 
-# 寫死的候選項目，取自 README 的 MVP 情境（配偶過世）。
-# TODO(T15): 改成從 entitlement graph 依事件代號查。
-_PLACEHOLDER_ITEMS: tuple[CandidateItem, ...] = (
-    CandidateItem(item_id="death_registration", kind="administrative"),
-    CandidateItem(item_id="funeral_benefit", kind="benefit"),
-    CandidateItem(item_id="survivor_pension", kind="benefit"),
-    CandidateItem(item_id="health_insurance_change", kind="administrative"),
-)
-
-
-def _do_resolve_entitlements(state: SessionState) -> SessionState:
+def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState:
     """展開候選項目。
 
-    TODO(T15): 從 entitlement graph 查，不是寫死的。
+    項目從 `EntitlementSource` 來，不是從這個模組裡的常數。Phase 2 注入的是寫死的
+    fixture，行為與之前相同；換成真的 entitlement graph 時這個函式不用改。
+
+    TODO(T15): 提供讀 entitlement graph 的 `EntitlementSource` 實作。
     """
     if state.items:
         # 已經有項目了（例如退回修改後再走一次），不重複展開。
         return state
 
-    return state.model_copy(update={"items": _PLACEHOLDER_ITEMS})
+    if state.life_event is None:
+        # 還沒有事件代號就沒有東西可以展開。理論上到不了這裡（要先確認事件才會進
+        # RESOLVE_ENTITLEMENTS），但不猜一組項目比較安全。
+        return state
+
+    items = seams.entitlement_source.resolve(state.life_event)
+    if not items:
+        return state
+
+    return state.model_copy(update={"items": items})
 
 
-def _do_retrieve_rules(state: SessionState) -> SessionState:
+def _do_retrieve_rules(state: SessionState, seams: _Seams) -> SessionState:
     """檢索官方依據。
 
-    TODO(T9): 從資料層取。目前是空操作。
+    TODO(T9): 改用 `seams.evidence_retriever` 從資料層取。目前是空操作。
     """
+    del seams  # 接縫已經備好，還沒有實作可以注入。
     return state
 
 
-def _do_evaluate_eligibility(state: SessionState) -> SessionState:
+def _do_evaluate_eligibility(state: SessionState, seams: _Seams) -> SessionState:
     """判定資格。
 
-    使用 stub 版本：把已經湊齊欄位的項目標為 eligible。
-    TODO(T18): 接上真正的 SQLite 規則引擎。
+    使用 stub 版本：把已經湊齊欄位的項目標為 eligible。登記表用的是傳進來的同一份
+    實例 —— 之前這裡每次呼叫都自己 `from_json()` 讀一次磁碟，也把依賴藏起來。
+    TODO(T18): 接上真正的 SQLite 規則引擎（透過 `seams.rule_source`）。
     """
-    registry = FieldRegistry.from_json()
-    return evaluate_ready_items_stub(state, registry)
+    return evaluate_ready_items_stub(state, seams.registry)
 
 
 def _do_explain_result(state: SessionState) -> SessionState:

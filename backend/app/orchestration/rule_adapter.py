@@ -14,6 +14,16 @@
 | decisive_conditions | ❌ 規則引擎沒有輸出結構化條件，先留空 |
 | citations | ❌ 目前規則引擎只有 source_url，不是完整的 Citation |
 
+## 現階段不會有任何項目回報「不符合資格」
+
+因為 `decisive_conditions` 恆為空，而「不符合但說不出差在哪個條件」一律降級為
+`NEEDS_HUMAN_REVIEW`（Req 12.3），所以規則引擎判定 ineligible 的項目**現在全部走
+人工協助**。
+
+這是刻意的取捨：沒有理由的「你不符合」比轉人工更糟 —— 使用者無法判斷是自己真的不
+符合、還是系統看錯了，也不知道下一步該做什麼。等資料層開始輸出結構化決定性條件，
+這個降級就會自動停止觸發，不需要再改一次程式。
+
 ## decisive_conditions 為什麼留空
 
 規則引擎判定「不符合」時只回一句中文（例如「需設籍該縣市」），不回「哪個欄位、
@@ -47,6 +57,23 @@ _STATUS_MAP: dict[str, ItemStatus] = {
 }
 
 
+def downgrade_unexplained_ineligible(
+    status: ItemStatus,
+    decisive_conditions: tuple[DecisiveCondition, ...],
+) -> ItemStatus:
+    """「不符合」而說不出決定性條件時，改成需人工協助（Req 12.3）。
+
+    分成獨立函式的理由是可測試性：`adapt_result` 目前**永遠**產生空的
+    decisive_conditions，所以從它那邊無法驗證「有條件時不降級」這一半的規則。等資料層
+    開始輸出結構化條件，那條路徑就會被真正走到，而規則本身不需要再改。
+
+    其他狀態原樣回傳。
+    """
+    if status is ItemStatus.INELIGIBLE and not decisive_conditions:
+        return ItemStatus.NEEDS_HUMAN_REVIEW
+    return status
+
+
 def adapt_result(
     result: EligibilityResult,
     *,
@@ -55,6 +82,9 @@ def adapt_result(
     """把一筆 EligibilityResult 轉成 CandidateItem。
 
     `item_kind` 由呼叫端提供，因為規則引擎不知道這個項目是福利還是行政事項。
+
+    注意「不符合資格」目前一定會被降級為需人工協助，理由見模組開頭。呼叫端不需要
+    為此做任何事，但看到結果裡沒有 INELIGIBLE 時不必懷疑是 bug。
     """
     status = _STATUS_MAP.get(result.status)
     if status is None:
@@ -71,6 +101,8 @@ def adapt_result(
 
     # decisive_conditions：目前留空，等資料層配合。
     decisive_conditions: tuple[DecisiveCondition, ...] = ()
+
+    status = downgrade_unexplained_ineligible(status, decisive_conditions)
 
     # citations：目前規則引擎只有 source_url，組成最小的 Citation。
     citations: tuple[Citation, ...] = ()
@@ -95,6 +127,8 @@ def adapt_result(
         amount_max=amount_max,
         amount_period=None,  # TODO: 等規則欄位增加發放性質
         amount_currency="TWD" if amount_min is not None else None,
+        # 只有「資訊不足」還沒定案，其餘四種都是結論，包含降級後的需人工協助 ——
+        # 那也是一個結論（交給人處理），所以照樣蓋上定案時間。
         resolved_at=datetime.now(UTC)
         if status != ItemStatus.NEEDS_INFORMATION
         else None,

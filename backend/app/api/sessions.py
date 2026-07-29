@@ -23,7 +23,6 @@ from app.api.errors import ApiError
 from app.api.implementation import implementation_notice
 from app.observability.logging import log_event
 from app.orchestration import state_machine
-from app.orchestration.field_registry import FieldRegistry
 from app.orchestration.missing_fields import compute_question_groups
 from app.orchestration.session_store import (
     SESSION_ID_HEADER,
@@ -87,7 +86,9 @@ def _snapshot(state: SessionState) -> SessionSnapshot:
     """
     question_groups: tuple[QuestionGroupView, ...] = ()
     if state.workflow_state is WorkflowState.COLLECT_MISSING_FIELDS:
-        question_groups = compute_question_groups(state, FieldRegistry.from_json())
+        question_groups = compute_question_groups(
+            state, state_machine.default_registry()
+        )
 
     return SessionSnapshot.from_state(
         state,
@@ -123,11 +124,21 @@ def advance_session(
 ) -> SessionSnapshot:
     """送一筆輸入，推進一步。"""
     try:
-        advanced = state_machine.advance(state, payload.input)
+        advanced = state_machine.advance(
+            state, payload.input, registry=state_machine.default_registry()
+        )
     except state_machine.InvalidTransitionError as error:
         raise ApiError(
             status.HTTP_409_CONFLICT,
             ErrorCode.INVALID_TRANSITION,
+            current_state=state.workflow_state,
+        ) from error
+    except state_machine.UnknownFieldError as error:
+        # 只帶欄位代號。使用者填的值不會離開後端（Req 16.5）。
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.UNKNOWN_FIELD,
+            field_ids=error.field_ids,
             current_state=state.workflow_state,
         ) from error
     except state_machine.UnknownItemError as error:

@@ -186,6 +186,95 @@ def test_declining_an_unknown_item_is_reported(client: TestClient) -> None:
     assert response.json()["errorCode"] == "unknown_item"
 
 
+def _advance_to_questions(client: TestClient) -> str:
+    """建立 session 並走到會追問欄位的步驟，回傳 session_id。"""
+    session_id, _ = _create(client)
+    client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={"input": {"kind": "life_event_text", "text": "測試"}},
+    )
+    client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={"input": {"kind": "event_confirmation", "confirmed": True}},
+    )
+    return session_id
+
+
+def test_an_unregistered_field_id_is_rejected_without_echoing_the_value(
+    client: TestClient,
+) -> None:
+    """不在登記表上的欄位代號回 unknown_field，回應裡只有代號、沒有值。"""
+    session_id = _advance_to_questions(client)
+    secret = "這段文字不應該被保存"
+
+    response = client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={
+            "input": {
+                "kind": "attribute_answers",
+                "answers": {"totally_unknown_field": secret},
+            }
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["errorCode"] == "unknown_field"
+    assert body["fieldIds"] == ["totally_unknown_field"]
+    assert body["currentState"] == "collect_missing_fields"
+    assert secret not in response.text
+
+
+def test_a_rejected_answer_set_leaves_the_session_untouched(
+    client: TestClient,
+) -> None:
+    """一個已知 + 一個未知 → 整筆拒絕，attributes 完全沒被修改。"""
+    session_id = _advance_to_questions(client)
+
+    rejected = client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={
+            "input": {
+                "kind": "attribute_answers",
+                "answers": {
+                    "deceased_insurance_type": "labor_insurance",
+                    "totally_unknown_field": "編出來的代號",
+                },
+            }
+        },
+    )
+    current = client.get("/sessions/current", headers=_headers(session_id))
+
+    assert rejected.status_code == 422
+    assert current.json()["attributes"] == {}
+    assert current.json()["workflowState"] == "collect_missing_fields"
+
+
+def test_registered_field_ids_are_recorded(client: TestClient) -> None:
+    """全部都在登記表上就接受，答案回到快照裡。"""
+    session_id = _advance_to_questions(client)
+
+    response = client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={
+            "input": {
+                "kind": "attribute_answers",
+                "answers": {"deceased_insurance_type": "labor_insurance"},
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["attributes"] == {
+        "deceased_insurance_type": "labor_insurance"
+    }
+
+
 def test_a_validation_error_reports_field_names_without_values(
     client: TestClient,
 ) -> None:
