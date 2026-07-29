@@ -47,6 +47,9 @@ make check     # 前後端全部檢查
 
 沒跑過就不要說「檢查通過」。
 
+紅燈怎麼辦：**紅在自己改的地方**，把錯誤訊息整段貼給 agent 修到綠。
+**紅在自己沒動過的測試**，先在群組問一聲，不要叫 agent 把那個測試改到過。
+
 ### Windows 沒有 make
 
 兩個選擇，擇一即可。
@@ -92,6 +95,22 @@ feat(rules): add survivor pension eligibility conditions
 ```
 
 一個 commit 一件事。不要把前端、後端、資料混在同一個 commit。
+
+## PR 怎麼合併
+
+每個 PR 都會收到 Codex 自動 review。可以按 merge 的條件：
+
+1. 本機跑過 `make check`，把結果寫進 PR 描述。
+2. 如果 Codex review 提出 blocking 項目，先處理完再 merge。
+
+兩條都滿足後，**可以自己 merge 自己的 PR**，不用等別人按或等待固定的
+review verdict。
+
+Review 只會因為三條紅線擋人：**secrets／PII／LLM 做資格判定**。
+其他都只是提醒，不會卡你。
+
+給 AI reviewer 與 coding agent 的規則本體在 [AGENTS.md](../AGENTS.md)，
+不用背，agent 會照做。
 
 ## 三條隱私紅線
 
