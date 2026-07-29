@@ -31,6 +31,11 @@ def _state_at_collect(
 
     這些測試送出的答案都必須用**登記表上真的存在**的欄位代號，否則會先被欄位
     allowlist 擋下來（Req 9），根本走不到護欄。
+
+    `program_status` 明確設成 `"verified"`：`CandidateItem` 的預設值是 `"candidate"`，
+    而候選資料一進判定就被安全閘門定案為需人工協助（提案第 8 節）。那樣項目永遠不會
+    停在待確認，迴圈根本不會繞第二圈，這裡的兩道護欄就都測不到。已審查的方案才會
+    因為「欄位還沒湊齊」而留在待確認，也才是護欄真正要處理的情況。
     """
     now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
     return SessionState(
@@ -38,7 +43,13 @@ def _state_at_collect(
         workflow_state=WorkflowState.COLLECT_MISSING_FIELDS,
         life_event="spouse_death",
         attributes=attributes or {},
-        items=(CandidateItem(item_id="survivor_pension", kind=ItemKind.BENEFIT),),
+        items=(
+            CandidateItem(
+                item_id="survivor_pension",
+                kind=ItemKind.BENEFIT,
+                program_status="verified",
+            ),
+        ),
         loop_iterations=loop_iterations,
         created_at=now,
         updated_at=now,
@@ -65,6 +76,10 @@ def test_loop_limit_downgrades_unsettled_items() -> None:
     只設 exit_reason 而讓項目停在 PENDING，使用者會拿到一份「永遠不會有答案」的
     清單（違反 Req 17.4：流程結束後所有項目都要有非 PENDING 的狀態）。
     已定案的項目與使用者放棄的項目不受影響。
+
+    survivor_pension 標成 `"verified"`，這樣它是因為「欄位沒湊齊」而留在待確認，
+    降級才是護欄做的事 —— 用預設的 `"candidate"` 會被安全閘門先定案，測到的就變成
+    閘門而不是護欄。
     """
     now = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
     state = SessionState(
@@ -72,7 +87,11 @@ def test_loop_limit_downgrades_unsettled_items() -> None:
         workflow_state=WorkflowState.COLLECT_MISSING_FIELDS,
         life_event="spouse_death",
         items=(
-            CandidateItem(item_id="survivor_pension", kind=ItemKind.BENEFIT),
+            CandidateItem(
+                item_id="survivor_pension",
+                kind=ItemKind.BENEFIT,
+                program_status="verified",
+            ),
             CandidateItem(
                 item_id="funeral_benefit",
                 kind=ItemKind.BENEFIT,

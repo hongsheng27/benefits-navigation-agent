@@ -47,6 +47,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.orchestration.data_contracts import ProgramStatus
+
 
 class WorkflowState(StrEnum):
     """專案 README 定義的八個 workflow state。
@@ -210,6 +212,14 @@ class CandidateItem(BaseModel):
     item_id: str  # 項目代號，例如 funeral_benefit
     kind: ItemKind  # 福利或行政事項
     status: ItemStatus = ItemStatus.PENDING  # 這個項目自己的狀態，與其他項目無關
+
+    # 資料層對這筆方案資料的治理狀態，決定 runtime 敢對它做到什麼程度
+    # （閘門實作見 `determination.py`）。這不是使用者的判定結果 —— `status` 才是。
+    #
+    # 預設 `"candidate"` 是刻意選擇：依提案第 14 節，crawler 與 LLM 只能建立候選資料，
+    # 所以「沒有人明確說這筆已經審過」時就必須當成候選。預設 `"verified"` 會讓任何
+    # 忘記帶狀態的資料自動取得完整判定資格，那是最危險的預設值。
+    program_status: ProgramStatus = "candidate"
 
     missing_field_ids: tuple[str, ...] = ()  # 還缺哪些欄位才能判定這一項
     decisive_conditions: tuple[DecisiveCondition, ...] = ()  # 造成這個結果的條件

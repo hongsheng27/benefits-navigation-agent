@@ -1,9 +1,21 @@
-"""規則引擎的轉接層：把 EligibilityResult 轉成 CandidateItem。
+"""資料層與 workflow 之間的轉接層。
 
-這個模組是規則引擎（`app.rules.engine`）和 workflow 層之間的翻譯。
-兩邊各自用自己的資料形狀，改動時不需要互相配合 —— 只有這裡要跟著動。
+這個模組是資料層形狀（`app.orchestration.data_contracts`、`app.rules.engine`）和
+workflow 形狀（`app.orchestration.state`）之間的翻譯。兩邊各自用自己的資料形狀，
+改動時不需要互相配合 —— 只有這裡要跟著動。
 
-## 目前做到什麼
+三個方向：
+
+| 函式 | 從 | 到 |
+| --- | --- | --- |
+| `adapt_graph_candidate` | `data_contracts.CandidateItem` | `state.CandidateItem` |
+| `apply_decision` | `data_contracts.EligibilityDecision` | `state.CandidateItem` |
+| `adapt_result` | `rules.engine.EligibilityResult` | `state.CandidateItem` |
+
+依提案第 7 節，`program_id` ↔ `item_id` 的映射與欄位命名差異都由 adapter 處理，
+workflow 不因為資料表欄名改變而改自己的形狀。
+
+## `adapt_result`（SQL 規則引擎那條路）目前做到什麼
 
 | 轉接項目 | 狀態 |
 | --- | --- |
@@ -39,7 +51,9 @@
 
 from datetime import UTC, datetime
 
+from app.orchestration import data_contracts
 from app.orchestration.state import (
+    AmountPeriod,
     CandidateItem,
     Citation,
     DecisiveCondition,
@@ -55,6 +69,115 @@ _STATUS_MAP: dict[str, ItemStatus] = {
     "needs_information": ItemStatus.NEEDS_INFORMATION,
     "needs_human_review": ItemStatus.NEEDS_HUMAN_REVIEW,
 }
+
+# 哪些項目代號是「必須辦理的行政事項」而不是「可以申請的福利」。
+#
+# 這個區分不在 `data_contracts.CandidateItem` 裡，因為提案第 7 節的契約沒有它。
+# 但畫面上這個區分很重要：不能讓使用者把「你符合死亡登記的資格」讀成一項可以選擇
+# 放棄的福利。所以先由 adapter 用一份已知清單判斷，其餘一律視為福利。
+#
+# 這是 adapter 的暫行職責。資料層若之後在契約裡帶上這個分類，這份清單就可以刪掉。
+_ADMINISTRATIVE_ITEM_IDS: frozenset[str] = frozenset(
+    {
+        "death_registration",
+        "health_insurance_change",
+    }
+)
+
+
+def adapt_graph_candidate(
+    candidate: data_contracts.CandidateItem,
+) -> CandidateItem:
+    """把資料層交出來的候選方案轉成 workflow 的項目。
+
+    只搬「這一項是什麼」，不搬任何判定結果：新項目一律從 `PENDING` 開始，因為資料層
+    不知道也不該決定這位使用者符不符合。
+
+    `relevance_score` 刻意**不**搬進 workflow 形狀。它只代表相關性，不代表符合資格的
+    機率或程度（提案第 7 節），而 `state.CandidateItem` 目前沒有任何欄位承載排序用的
+    分數 —— 硬塞一個進去會讓下游有機會把它讀成「有多符合」。它是否要露給前端仍是
+    提案第 12 節第 3 項的待決策項目。
+    """
+    kind = (
+        ItemKind.ADMINISTRATIVE
+        if candidate.item_id in _ADMINISTRATIVE_ITEM_IDS
+        else ItemKind.BENEFIT
+    )
+    return CandidateItem(
+        item_id=candidate.item_id,
+        kind=kind,
+        program_status=candidate.program_status,
+        missing_field_ids=candidate.missing_field_ids,
+    )
+
+
+def _decisive_conditions(
+    reasons: tuple[data_contracts.StructuredReason, ...],
+) -> tuple[DecisiveCondition, ...]:
+    """把結構化原因轉成 workflow 的決定性條件。
+
+    `StructuredReason.expected` 與 `actual` 的型別是 `Any`，而 `DecisiveCondition`
+    只接受去識別化的三種值（布林、整數、字串代號）。型別對不上的原因（例如巢狀的
+    條件 JSON）**整筆略過**，不硬轉成字串 —— 錯的「差在哪一條」比不顯示更糟，而略過
+    之後 `downgrade_unexplained_ineligible` 會接手把說不出理由的「不符合」降級。
+
+    `actual` 在這裡被搬進 workflow 形狀是允許的：它會回給提出請求的使用者。它不得
+    進入紀錄檔，而 `app.observability.logging` 的允許欄位清單裡沒有任何欄位能容納它。
+    """
+    converted: list[DecisiveCondition] = []
+    for reason in reasons:
+        if not isinstance(reason.expected, bool | int | str):
+            continue
+        if not isinstance(reason.actual, bool | int | str):
+            continue
+        converted.append(
+            DecisiveCondition(
+                field_id=reason.field_id,
+                expected=reason.expected,
+                actual=reason.actual,
+            )
+        )
+    return tuple(converted)
+
+
+def apply_decision(
+    item: CandidateItem,
+    decision: data_contracts.EligibilityDecision,
+    *,
+    now: datetime | None = None,
+) -> CandidateItem:
+    """把一筆判定結果套回既有的項目。
+
+    回傳新的項目，不修改傳入的那一個。`kind`、`program_status` 與既有的缺漏欄位都
+    保留 —— 判定結果不會改變「這一項是什麼」，也不會改變資料層對它的治理狀態。
+
+    未知的 status 字串安全降級為需人工協助：那代表資料層送來了我們不認識的結論，
+    猜它的意思比說「需要人看一下」危險。
+    """
+    resolved_at = now if now is not None else datetime.now(UTC)
+
+    status = _STATUS_MAP.get(decision.status, ItemStatus.NEEDS_HUMAN_REVIEW)
+    decisive_conditions = _decisive_conditions(decision.reasons)
+    status = downgrade_unexplained_ineligible(status, decisive_conditions)
+
+    return item.model_copy(
+        update={
+            "status": status,
+            "decisive_conditions": decisive_conditions,
+            "amount_min": decision.amount_min,
+            "amount_max": decision.amount_max,
+            "amount_period": (
+                AmountPeriod(decision.amount_period)
+                if decision.amount_period is not None
+                else None
+            ),
+            "amount_currency": decision.amount_currency,
+            # 只有「資訊不足」還沒定案，其餘三種都是結論。
+            "resolved_at": (
+                None if status is ItemStatus.NEEDS_INFORMATION else resolved_at
+            ),
+        }
+    )
 
 
 def downgrade_unexplained_ineligible(

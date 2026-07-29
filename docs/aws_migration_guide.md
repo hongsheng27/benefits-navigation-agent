@@ -147,6 +147,104 @@ the main reason to do this migration rather than leave the mock in production.
 
 ---
 
+## Feature: Storage-Neutral Data Layer Interfaces
+
+These are the seams the workflow uses to reach the data layer. Until August 1st
+every one of them has an offline implementation that needs no database at all,
+which is why the workflow test suite runs without SQLite.
+
+| Item | Current (Local) | AWS Target |
+|------|----------------|------------|
+| Interfaces | `backend/app/orchestration/protocols.py` | unchanged — this is the contract |
+| Exchange shapes | `backend/app/orchestration/data_contracts.py` | unchanged — this is the contract |
+| Entitlement graph | `FixtureEntitlementGraphRepository` (hardcoded table) | SQLite repository, then TBD cloud database |
+| Eligibility | `FixtureEligibilityService` (decisions passed in) | SQLite rule tables plus the deterministic rule engine |
+| Evidence | `FixtureEvidenceRepository` (empty by default) | SQLite `source_documents` / `program_sources` |
+| Source refresh | `LocalSourceRefreshService` (in-process list) | TBD queue (SQS or EventBridge) |
+
+### What the swap has to preserve
+
+The four `Protocol` classes in `protocols.py` are the contract. Any SQLite or
+cloud adapter must keep the same method names and the same return types:
+
+| Interface | Methods that must not change |
+|-----------|------------------------------|
+| `EntitlementGraphRepository` | `expand_from_event`, `get_prerequisites`, `get_produces`, `get_programs_by_system` |
+| `EligibilityService` | `get_required_fields`, `evaluate`, `evaluate_many` |
+| `EvidenceRepository` | `get_citations` |
+| `SourceRefreshService` | `get_coverage_status`, `request_on_demand_refresh` |
+
+Three constraints carry over and must survive the swap:
+
+- Return the frozen dataclasses from `data_contracts.py`. Never return
+  `sqlite3.Row`, a SQL tuple, or an undecoded `metadata_json` blob. This is what
+  keeps table renames from reaching the workflow.
+- `StructuredReason.actual` may travel back to the user who asked. It must never
+  reach a log, trace, metric, exception message, or persisted audit event. The
+  allowlist in `backend/app/observability/logging.py` has no field that can hold
+  it, and `backend/tests/unit/test_logging.py` asserts that.
+- Crawler and LLM output stays in `candidate` or `under_review`. Promotion to
+  `verified` is a human review step, never an automatic one.
+
+### Migration Steps
+
+1. Replace the construction sites in `backend/app/orchestration/state_machine.py`
+   (`advance()` builds the defaults) with the data layer's SQLite repositories.
+   Every seam is already a named parameter, so no other file changes.
+2. Add the SQLite adapters in the data layer, mapping `program_id` to `item_id`
+   and decoding stored JSON into the `data_contracts` dataclasses.
+3. Only after the database choice is settled, add a cloud adapter behind the
+   same interfaces.
+4. Keep the fixture implementations. They are what the workflow tests use.
+
+### Feature: On-Demand Source Refresh Queue
+
+| Item | Current (Local) | AWS Target |
+|------|----------------|------------|
+| Queue | `LocalSourceRefreshService._queue`, a Python list | TBD (SQS, EventBridge Scheduler, or Step Functions) |
+| Flow | `backend/app/orchestration/source_refresh.py` | unchanged |
+| Dedup | in-memory set keyed by `source_id + event_id + date` | must move to shared storage |
+
+Migration steps:
+
+1. Remove the in-process list in `LocalSourceRefreshService` and publish a
+   message instead. Keep `request_on_demand_refresh` returning immediately: the
+   user's request must never wait for a crawl, attachment extraction, or LLM
+   call.
+2. Move the same-day dedup key to shared storage. The in-memory set only works
+   in a single process, so today two workers would trigger the same source
+   twice on the same day.
+3. Keep failures non-blocking. `refresh_after_response` swallows the error,
+   logs the exception class only, and returns the coverage that was already
+   read. That behaviour is required, not incidental.
+
+### Environment variables
+
+```env
+# Data layer (fill in on August 1st)
+# ENTITLEMENT_DB_URL=
+# SOURCE_REFRESH_QUEUE_URL=
+# SOURCE_REFRESH_DEDUP_TABLE=
+```
+
+### Open decision recorded here on purpose: `stale` behaviour
+
+`stale` programs currently return `needs_human_review`. This is a **provisional**
+choice, not a settled decision. Section 12 of
+`tmp/sqlite-runtime-alignment-proposal.md` lists it as a joint decision that
+neither side may make silently, with two options:
+
+- Option A: serve the last-verified snapshot with an explicit warning.
+- Option B: always downgrade to `needs_human_review`.
+
+The backend took the safer end of the range for now, because treating expired
+data as current is the failure mode that sends someone to a counter for nothing.
+Once the owners decide, change `_STALE_FALLBACK_STATUS` in
+`backend/app/orchestration/determination.py` — that is the only place it lives.
+Do not read the current behaviour as Option B having been chosen.
+
+---
+
 ## Notes
 
 - This file must be updated every time a new feature is added that uses a

@@ -23,37 +23,37 @@
 
 ## 這個版本還沒有的
 
-- 規則引擎（T9）：目前中間步驟的自動推進是空操作，不會真的判定資格
-- 欄位登記表（T7）：不知道要問什麼
-- 缺漏欄位計算（T8）：不知道哪些項目已經湊齊了
-- 迴圈護欄（T6）：目前只有迭代計數，沒有「必須有進展」的檢查
-
-這些都有對應的後續任務。這個模組提供的是**骨幹**：轉換規則、守門條件、自動推進，
-讓那些任務有地方接入。
+- 官方依據檢索：`RETRIEVE_RULES` 仍是空操作，資料層還沒交出 `EvidenceRepository`
+- 白話說明：`EXPLAIN_RESULT` 仍是空操作，還沒接模型
 
 ## 流程規則是真的，資料來源還不是
 
-轉換規則、守門條件、自動推進與護欄都已經是最終行為。但**事件辨識與項目展開仍是
-寫死的** —— 前者等 LLM（T21），後者等 entitlement graph（T15）。每一處都有
-`TODO` 標記。
+轉換規則、守門條件、自動推進與護欄都已經是最終行為。但**事件辨識仍是寫死的**
+（等 LLM），**項目展開仍來自離線 fixture**（等資料層的 SQLite repository）。每一處
+都有註解說明。
 
-資料來源不再由這個模組自己去拿，而是透過 `protocols.py` 的接縫注入（見 `advance()`
-的具名參數）。Phase 2 注入的是離線 fixture，換成真實來源時這個模組不用改。
+資料來源不由這個模組自己去拿，而是透過 `protocols.py` 的接縫注入（見 `advance()`
+的具名參數）。目前注入的是不需要 SQLite 的離線實作，換成真實來源時這個模組不用改。
 """
 
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from app.orchestration.determination import evaluate_ready_items_stub
+from app.orchestration.determination import evaluate_ready_items, visible_items
 from app.orchestration.field_registry import FieldRegistry
 from app.orchestration.protocols import (
-    EntitlementSource,
-    EvidenceRetriever,
-    FixtureEntitlementSource,
+    EligibilityService,
+    EntitlementGraphRepository,
+    EvidenceRepository,
+    FixtureEligibilityService,
+    FixtureEntitlementGraphRepository,
+    LocalSourceRefreshService,
     PassThroughPrivacyGate,
     PrivacyGate,
-    RuleSource,
+    SourceRefreshService,
 )
+from app.orchestration.rule_adapter import adapt_graph_candidate
+from app.orchestration.source_refresh import refresh_after_response
 from app.orchestration.state import (
     CandidateItem,
     ExitReason,
@@ -219,13 +219,13 @@ class _Seams:
     """
 
     registry: FieldRegistry
-    entitlement_source: EntitlementSource
+    entitlement_repository: EntitlementGraphRepository
     privacy_gate: PrivacyGate
-    # 下面兩個目前沒有實作也沒有被讀取：`RETRIEVE_RULES` 是空操作，判定走的是
-    # `determination` 的 stub。保留欄位是為了讓 Phase 4 接上時只需改 `_do_*`
-    # 函式，不必再動 `advance()` 的簽章（Req 19.1）。
-    rule_source: RuleSource | None = None
-    evidence_retriever: EvidenceRetriever | None = None
+    eligibility_service: EligibilityService
+    source_refresh_service: SourceRefreshService
+    # 官方依據的檢索還沒接上（`RETRIEVE_RULES` 仍是空操作）。保留欄位是為了讓資料層
+    # 交出 repository 時只需改 `_do_retrieve_rules`，不必再動 `advance()` 的簽章。
+    evidence_repository: EvidenceRepository | None = None
 
 
 def advance(
@@ -233,30 +233,44 @@ def advance(
     user_input: AdvanceInput,
     *,
     registry: FieldRegistry | None = None,
-    entitlement_source: EntitlementSource | None = None,
+    entitlement_repository: EntitlementGraphRepository | None = None,
     privacy_gate: PrivacyGate | None = None,
-    rule_source: RuleSource | None = None,
-    evidence_retriever: EvidenceRetriever | None = None,
+    eligibility_service: EligibilityService | None = None,
+    source_refresh_service: SourceRefreshService | None = None,
+    evidence_repository: EvidenceRepository | None = None,
 ) -> SessionState:
     """依輸入推進狀態，並自動走完不需要使用者的中間步驟。
 
     回傳的是一個新的 `SessionState`，不修改傳入的。
 
-    所有接縫都是具名參數且可以省略，預設值是 Phase 2 的離線實作。測試與 Phase 4/5
-    可以逐個換掉，不需要改這個模組（Req 19）。
+    所有接縫都是具名參數且可以省略，預設值是不需要 SQLite 的離線實作。資料層交出
+    SQLite repository 後逐個換掉即可，這個模組不用改（Req 19）。
     """
     seams = _Seams(
         registry=registry if registry is not None else default_registry(),
-        entitlement_source=(
-            entitlement_source
-            if entitlement_source is not None
-            else FixtureEntitlementSource()
+        entitlement_repository=(
+            entitlement_repository
+            if entitlement_repository is not None
+            else FixtureEntitlementGraphRepository()
         ),
         privacy_gate=(
             privacy_gate if privacy_gate is not None else PassThroughPrivacyGate()
         ),
-        rule_source=rule_source,
-        evidence_retriever=evidence_retriever,
+        # 預設的判定服務沒有任何已核准規則，所以它對每一項都回「需人工協助」。
+        # 那是誠實的預設值：離線環境本來就沒有可以下結論的依據。
+        eligibility_service=(
+            eligibility_service
+            if eligibility_service is not None
+            else FixtureEligibilityService()
+        ),
+        # 預設的來源表是空的，所以 coverage 查詢回空、不會排任何 refresh。真正的
+        # 來源表由呼叫端注入。
+        source_refresh_service=(
+            source_refresh_service
+            if source_refresh_service is not None
+            else LocalSourceRefreshService()
+        ),
+        evidence_repository=evidence_repository,
     )
 
     # 流程已經結束就不再接受任何輸入（Req 1.5、Req 5.3）。
@@ -614,12 +628,18 @@ def _downgrade_unsettled_items(
 
 
 def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState:
-    """展開候選項目。
+    """展開候選項目，並順手觸發來源刷新。
 
-    項目從 `EntitlementSource` 來，不是從這個模組裡的常數。Phase 2 注入的是寫死的
-    fixture，行為與之前相同；換成真的 entitlement graph 時這個函式不用改。
+    項目從 `EntitlementGraphRepository` 來，不是從這個模組裡的常數。資料層交出的是
+    `data_contracts.CandidateItem`（帶資料治理狀態），這裡用 `adapt_graph_candidate`
+    轉成 workflow 的 `state.CandidateItem`（帶判定狀態）。
 
-    TODO(T15): 提供讀 entitlement graph 的 `EntitlementSource` 實作。
+    `rejected` 與 `inactive` 的方案在這裡就被濾掉，不進入候選結果（提案第 8 節）。
+    `determination` 那邊還會再濾一次 —— 兩層都做，是因為項目也可能從其他路徑進到
+    state 裡（例如之後從持久化的 session 讀回來）。
+
+    來源刷新在項目展開之後才呼叫，而且不會等待任何抓取：使用者這次拿到的答案完全
+    依目前本機資料產生（提案第 9 節第 1 項）。
     """
     if state.items:
         # 已經有項目了（例如退回修改後再走一次），不重複展開。
@@ -630,7 +650,17 @@ def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState
         # RESOLVE_ENTITLEMENTS），但不猜一組項目比較安全。
         return state
 
-    items = seams.entitlement_source.resolve(state.life_event)
+    candidates = seams.entitlement_repository.expand_from_event(
+        state.life_event, state.attributes
+    )
+    items = visible_items(
+        tuple(adapt_graph_candidate(candidate) for candidate in candidates)
+    )
+
+    # coverage 目前只用來決定要不要排 refresh。把它露給前端需要新的對外欄位，
+    # 那屬於還沒開始的前端契約那一批。
+    refresh_after_response(seams.source_refresh_service, state.life_event)
+
     if not items:
         return state
 
@@ -640,7 +670,8 @@ def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState
 def _do_retrieve_rules(state: SessionState, seams: _Seams) -> SessionState:
     """檢索官方依據。
 
-    TODO(T9): 改用 `seams.evidence_retriever` 從資料層取。目前是空操作。
+    目前是空操作：`seams.evidence_repository` 的接縫已經備好，但資料層還沒交出實作，
+    而編一份「官方依據」比沒有依據更糟。
     """
     del seams  # 接縫已經備好，還沒有實作可以注入。
     return state
@@ -649,11 +680,10 @@ def _do_retrieve_rules(state: SessionState, seams: _Seams) -> SessionState:
 def _do_evaluate_eligibility(state: SessionState, seams: _Seams) -> SessionState:
     """判定資格。
 
-    使用 stub 版本：把已經湊齊欄位的項目標為 eligible。登記表用的是傳進來的同一份
-    實例 —— 之前這裡每次呼叫都自己 `from_json()` 讀一次磁碟，也把依賴藏起來。
-    TODO(T18): 接上真正的 SQLite 規則引擎（透過 `seams.rule_source`）。
+    閘門與逐項判定都在 `determination` 裡。登記表用的是傳進來的同一份實例 ——
+    之前這裡每次呼叫都自己 `from_json()` 讀一次磁碟，也把依賴藏起來。
     """
-    return evaluate_ready_items_stub(state, seams.registry)
+    return evaluate_ready_items(state, seams.registry, seams.eligibility_service)
 
 
 def _do_explain_result(state: SessionState) -> SessionState:
