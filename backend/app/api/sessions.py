@@ -31,6 +31,7 @@ from app.orchestration.session_store import (
     SessionNotFoundError,
 )
 from app.orchestration.state import SessionState, WorkflowState
+from app.privacy.attribute_gate import InvalidAttributeValueError
 from app.schemas.session import (
     AdvanceRequest,
     ErrorCode,
@@ -138,6 +139,14 @@ def advance_session(
         raise ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             ErrorCode.UNKNOWN_FIELD,
+            field_ids=error.field_ids,
+            current_state=state.workflow_state,
+        ) from error
+    except InvalidAttributeValueError as error:
+        # 同樣只帶欄位代號。不合法的值本身不會離開後端。
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.INVALID_FIELD_VALUE,
             field_ids=error.field_ids,
             current_state=state.workflow_state,
         ) from error

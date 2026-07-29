@@ -48,7 +48,6 @@ from app.orchestration.protocols import (
     FixtureEligibilityService,
     FixtureEntitlementGraphRepository,
     LocalSourceRefreshService,
-    PassThroughPrivacyGate,
     PrivacyGate,
     SourceRefreshService,
 )
@@ -61,6 +60,7 @@ from app.orchestration.state import (
     SessionState,
     WorkflowState,
 )
+from app.privacy.attribute_gate import RegistryBackedPrivacyGate
 from app.schemas.session import (
     AdvanceInput,
     AttributeAnswersInput,
@@ -254,7 +254,7 @@ def advance(
             else FixtureEntitlementGraphRepository()
         ),
         privacy_gate=(
-            privacy_gate if privacy_gate is not None else PassThroughPrivacyGate()
+            privacy_gate if privacy_gate is not None else RegistryBackedPrivacyGate()
         ),
         # 預設的判定服務沒有任何已核准規則，所以它對每一項都回「需人工協助」。
         # 那是誠實的預設值：離線環境本來就沒有可以下結論的依據。
