@@ -11,6 +11,7 @@ from app.observability.logging import (
     configure_logging,
     log_event,
 )
+from app.orchestration.data_contracts import StructuredReason
 
 
 @pytest.fixture(autouse=True)
@@ -88,5 +89,35 @@ def test_exception_records_type_and_stack_without_the_message(
 
 def test_free_text_field_names_are_absent_from_the_allowlist() -> None:
     forbidden = {"text", "message", "prompt", "response", "question", "answer"}
+
+    assert forbidden.isdisjoint(ALLOWED_FIELDS)
+
+
+def test_an_actual_eligibility_value_cannot_be_logged() -> None:
+    """`StructuredReason.actual` is the user's own situation.
+
+    The shared data contract allows it to travel back to the user who asked, but
+    it must never reach a log, trace, metric, exception message, or persisted
+    audit event. Every plausible field name for it is rejected, so a caller
+    cannot smuggle it in under a different label.
+    """
+    reason = StructuredReason(
+        condition_id="cond_1",
+        field_id="deceased_insured_years_band",
+        operator="at_least",
+        expected="fifteen_years_or_more",
+        actual="five_to_fifteen_years",
+        label="〈condition label〉",
+        source_reference="doc_1#section_2",
+    )
+
+    for field_name in ("actual", "actual_value", "expected", "reason", "reasons"):
+        with pytest.raises(DisallowedLogFieldError):
+            log_event("eligibility_evaluated", **{field_name: reason.actual})
+
+
+def test_no_allowlisted_field_is_named_after_an_eligibility_value() -> None:
+    """Guards the allowlist itself, not just today's call sites."""
+    forbidden = {"actual", "actual_value", "expected", "expected_value", "value"}
 
     assert forbidden.isdisjoint(ALLOWED_FIELDS)
