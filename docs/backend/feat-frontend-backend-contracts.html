@@ -48,6 +48,24 @@ footer { margin-top: 70px; padding-top: 20px; border-top: 1px solid #e0e0e0; fon
 
 <h1>feat/frontend-backend-contracts</h1>
 <p class="subtitle">分支說明文件 ｜ 撰寫日期 2026-07-28</p>
+
+<div class="warn">
+  <strong>這份文件描述的是 <code>feat/frontend-backend-contracts</code> 分支完成時的狀態。</strong>
+  後續的 <code>feat/backend-state-machine</code> 分支已經改變了其中幾件事：
+  <ul>
+    <li><code>orchestration/mock_advance.py</code> <strong>已刪除</strong>，
+      由 <code>orchestration/state_machine.py</code> 取代（見
+      <a href="../decisions/0012-deterministic-state-machine-with-guardrails.md">ADR-0012</a>）</li>
+    <li><code>tests/unit/test_mock_advance.py</code> 已隨之刪除</li>
+    <li>「哪些能力還沒實作」的宣告搬到 <code>app/api/implementation.py</code>，
+      並移除了 <code>state_machine</code> 與 <code>field_registry</code> 兩項</li>
+    <li>新增 <code>field_registry.py</code>、<code>missing_fields.py</code>、
+      <code>rule_adapter.py</code>、<code>determination.py</code></li>
+    <li>第 5.3 節記載的依賴方向問題仍然存在，現在是
+      <code>state_machine.py</code> import <code>schemas/</code></li>
+  </ul>
+  目前的狀態見 <a href="backend-overview.html">backend-overview.html</a>。
+</div>
 <p class="lead">
   這份文件從最上層的架構講到具體的程式檔案，再講這一層跟其他模組怎麼互通。
   由淺入深，看到哪裡覺得夠了就可以停。

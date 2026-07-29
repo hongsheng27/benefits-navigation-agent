@@ -46,9 +46,12 @@ uv run uvicorn app.main:app --reload      # http://localhost:8000
 與伺服器日誌帶走。
 
 > **端點目前回的是佔位資料。** 不管輸入什麼文字，事件都會判定成 `spouse_death`；
-> 候選項目固定四筆且全部是 `pending`；沒有任何資格判定、官方依據或金額。
+> 候選項目固定四筆，來自離線的 entitlement graph 實作；沒有官方依據或金額。
+> 狀態機會真的按規則推進、回答欄位會讓項目逐項定案，但**離線流程目前不會產出
+> `eligible`**：那四筆示範資料的資料治理狀態是 `candidate`，依安全檢查一律回
+> `needs_human_review`。
 > 每個回應都帶 `implementation` 物件說明哪些能力還沒實作，前端可據此在畫面上標示。
-> 詳見 `app/orchestration/mock_advance.py`。
+> 未實作的能力清單見 `app/api/implementation.py`。
 
 ### 端點沒出現在 `/docs` 時先檢查這個
 
@@ -88,12 +91,12 @@ uv run pytest
 
 不需要列出個別測試檔。
 
-### 測試的 import 路徑有兩種慣例
-
-後端自己的測試從 `backend/` 算起：
-
-```python
-from app.observability.logging import log_event
+```bash
+uv run pytest tests/unit/test_workflow_state.py tests/unit/test_session_schemas.py \
+  tests/unit/test_session_store.py tests/unit/test_loop_guardrails.py \
+  tests/unit/test_field_registry.py tests/unit/test_missing_fields.py \
+  tests/unit/test_rule_adapter.py tests/unit/test_determination.py \
+  tests/unit/test_logging.py tests/integration
 ```
 
 資料層的測試從 **repository 根目錄**算起：
@@ -111,17 +114,23 @@ pythonpath = [".", ".."]
 
 這是繞過而非根治。**兩種慣例應該統一成一種**，但那要改動多個測試檔，尚未處理。
 
-## 已知問題：SQLite 連線未關閉
+`cd backend; uv run pytest` 目前可以正常執行：**226 個測試全部通過**（2026-07-29 於
+Windows 驗證），`uv run ruff check .` 與 `uv run ruff format --check .` 也都通過。
 
-資料層到處使用 `with sqlite3.connect(...) as connection:`。Python 的 `sqlite3` 用
-`with` 包起來只會提交或回滾交易，**不會關閉連線**。
+## 已解決：SQLite 連線未關閉
 
-已回報的影響：**Windows 上有 7 個測試失敗**，錯誤是 `PermissionError: The process
-cannot access the file`——macOS 與 Linux 允許刪除還開著的檔案，Windows 不允許，
-所以測試的暫存目錄清理失敗。（此現象在 `pythonpath` 修正後尚未於 Windows 複驗。）
+曾經的問題是資料層到處使用 `with sqlite3.connect(...) as connection:`。Python 的
+`sqlite3` 用 `with` 包起來只會提交或回滾交易，**不會關閉連線**，因此 Windows 上有
+7 個測試以 `PermissionError: The process cannot access the file` 失敗 —— macOS 與
+Linux 允許刪除還開著的檔案，Windows 不允許，所以測試的暫存目錄清理失敗。
 
-修法是改用 `contextlib.closing` 包起來，或明確呼叫 `close()`。屬於資料層的程式碼，
-尚未有人處理。
+修法是改用 `contextlib.closing` 包起來，或在 `try/finally` 裡明確呼叫 `close()`。
+
+**2026-07-29 驗證已解決**：`backend/app` 底下沒有任何一處自己開連線（services 與
+rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/` 的 10 處與測試的
+10 處都有關閉。細節記在
+[`docs/back_database_doc/README.md`](../docs/back_database_doc/README.md) 第七節。
+新增資料層程式碼時請沿用同樣寫法。
 
 ## 目前實作範圍
 
@@ -136,6 +145,11 @@ cannot access the file`——macOS 與 Linux 允許刪除還開著的檔案，Wi
 | `app/api/errors.py` | 錯誤轉成契約形狀，且不外洩使用者輸入 |
 | `app/orchestration/state.py` | Workflow state 的資料形狀（frozen Pydantic） |
 | `app/orchestration/session_store.py` | 記憶體 session 儲存，2 小時過期 |
+| `app/orchestration/state_machine.py` | 八個狀態的轉換、守門條件、自動推進與迴圈護欄。見 ADR-0012 |
+| `app/orchestration/data_contracts.py` | 資料層與 workflow 之間的邊界格式（七個 dataclass、三組固定值） |
+| `app/orchestration/protocols.py` | 四個資料層接口（graph、判定、證據、來源刷新）與各自的離線實作 |
+| `app/orchestration/source_refresh.py` | on-demand refresh 的流程組裝，本機佇列、非阻塞、失敗不影響回應 |
+| `app/orchestration/determination.py` | 逐項判定組裝、依 `program_status` 的安全檢查、單項失敗隔離 |
 | `app/schemas/session.py` | 對外的請求與回應形狀 |
 | `app/observability/logging.py` | 結構化 JSON logging 與欄位 allowlist |
 | `app/rules/engine.py` | 通用規則引擎與相關性評分（資料層負責） |
@@ -148,13 +162,32 @@ cannot access the file`——macOS 與 Linux 允許刪除還開著的檔案，Wi
 
 | 檔案 | 說明 |
 | --- | --- |
-| `app/orchestration/mock_advance.py` | state machine 的臨時替代品。刻意獨立成一個檔案，實作真正的狀態機時刪掉整個檔案並換掉 `sessions.py` 裡的一行呼叫即可 |
+| `app/api/implementation.py` | 回應裡「哪些能力還沒實作」的宣告。全部實作完成後連同 `ImplementationNotice` 一起從契約移除 |
+| `app/orchestration/protocols.py` 裡的 `Fixture*` / `Local*` 類別 | 四個接口的離線實作。資料層交出 SQLite 實作後，改注入參數即可換掉，介面本身保留 |
+
+### 資料層接口目前的狀態
+
+四個接口（`EntitlementGraphRepository`、`EligibilityService`、`EvidenceRepository`、
+`SourceRefreshService`）都已定義且各有不連資料庫的離線實作，所以測試不需要資料庫。
+**目前沒有任何連 SQLite 的實作** —— 那是資料層要交的東西。注入點是
+`state_machine.advance()` 的具名參數，換實作不用改狀態機。
+
+已實作的安全行為：
+
+- **資料可信程度的安全檢查**：`verified` 才做完整判定；`candidate`／`under_review`
+  可以顯示但一律回 `needs_human_review`；`rejected`／`inactive` 隱藏；`stale` 暫行
+  降級（待決策，非定案）。
+- **單項失敗隔離**：某一項判定拋例外時只有那一項標成 `needs_human_review`，其餘照常。
+- **說不出理由的「不符合」會降級**：規則引擎還不輸出結構化決定性條件，所以現階段不會
+  回報任何 `ineligible`。
+
+跨層形狀落差與待決事項記在
+[`docs/back_database_doc/README.md`](../docs/back_database_doc/README.md)。
 
 ### 尚未實作
 
 依 `AGENTS.md` 的 learn-by-building boundary，以下保留給後端負責人實作或密切審查：
 
-- `app/orchestration/state_machine.py` — 八個狀態的轉換、守門條件、迴圈四道護欄
 - `app/orchestration/agent_runner.py` — framework-neutral 的 LLM 呼叫介面（未建立）
 - `app/tools/` — 三個 Agent tool 的 contracts 與實作
 - `app/privacy/` — PII 偵測、去識別化與屬性 allowlist
@@ -176,7 +209,7 @@ cannot access the file`——macOS 與 Linux 允許刪除還開著的檔案，Wi
 兩份溝通文件記錄已定案的約定與待確認事項，開始接手前請先讀：
 
 - [`docs/front_back_doc/README.md`](../docs/front_back_doc/README.md) — 前後端之間
-- [`docs/back_database_doc/README.md`](../docs/back_database_doc/README.md) — 後端與資料層之間，含五個形狀落差
+- [`docs/back_database_doc/README.md`](../docs/back_database_doc/README.md) — 後端與資料層之間，含八個形狀落差
 
 ### 兩個容易誤會的命名慣例
 

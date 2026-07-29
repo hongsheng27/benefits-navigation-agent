@@ -15,6 +15,7 @@
 - [ADR-0009: Use Generated SQLite for the Local Government OID Registry](0009-use-generated-sqlite-for-government-oid.md)
 - [ADR-0010: Use a Provenance-First Local Benefit Catalog](0010-use-local-provenance-first-benefit-catalog.md)
 - [ADR-0011: Use Frozen Pydantic Models for Session Workflow State](0011-frozen-pydantic-session-workflow-state.md)
+- [ADR-0012: Deterministic State Machine with Loop Guardrails](0012-deterministic-state-machine-with-guardrails.md)
 
 新 ADR 至少記錄背景、決定、理由與後果。候選方案不必逐一列出，除非那個比較本身是
 決策的重點。
