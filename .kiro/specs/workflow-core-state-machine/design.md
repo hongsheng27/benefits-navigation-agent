@@ -1002,4 +1002,3 @@ Phase 2 的 `transition()` 預留呼叫 `PrivacyGate` 的位置，但預設注�
 | sqlite3 | stdlib | 規則引擎 DB 連線 | 否 |
 | pytest | 既有 | 測試 | 否 |
 | hypothesis | 需新增 | property-based testing | 是（dev dependency） |
-

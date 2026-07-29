@@ -2,7 +2,9 @@
 
 ## 概覽
 
-將設計文件中的六個任務（T5 狀態機轉換、T6 護欄、T7 欄位登記表、T8 缺漏欄位、T9 規則引擎轉接、T10 判定組裝）轉為可執行的實作步驟。完成後，`mock_advance.py` 被刪除，整條流程在離線環境下以手寫規則跑完 UNDERSTAND_EVENT → COMPLETE。
+將設計文件中的六個任務（T5 狀態機轉換、T6 護欄、T7 欄位登記表、T8 缺漏欄位、T9 規則引擎轉接、T10 判定組裝）轉為可執行的實作步驟。
+
+**目前狀態**：`mock_advance.py` 已刪除，`api/sessions.py` 已改為呼叫 `state_machine.advance()`。骨幹（轉換表、守門、自動推進、兩道護欄、欄位登記表、缺漏計算、規則轉接層、接縫 Protocol）都已就位。尚未完成的是：真正的規則引擎接線（T18，見任務 9.1）、端到端整合測試（任務 13.1）、全部 property-based 測試（`hypothesis` 尚未加入依賴），以及 `schemas` ↔ `orchestration` 的循環依賴拆除（任務 16，獨立 PR）。
 
 **語言**：Python（與設計文件一致）
 
@@ -18,37 +20,42 @@
 ## 任務列表
 
 - [ ] 1. 建立狀態機轉換引擎（T5）
-  - [ ] 1.1 建立 `backend/app/orchestration/state_machine.py` 核心模組
-    - 定義 `TransitionResult` dataclass（new_state, question_groups, guardrail_triggered）
-    - 定義 `ALLOWED_INPUTS` 字典（每個 WorkflowState → frozenset of input kinds）
-    - 定義 `InvalidTransitionError`、`UnknownFieldError`、`InvalidFieldValueError`、`UnknownItemError` 例外類別
-    - 實作 `transition()` 函式：守門檢查 → dispatch → auto-advance → 回傳 TransitionResult
-    - 實作 `_dispatch()` 分派邏輯，處理七種 input kind
-    - 實作 `should_skip_confirm()` 判定 CONFIRM 是否跳過
+  - [x] 1.1 建立 `backend/app/orchestration/state_machine.py` 核心模組
+    - 定義三張宣告表：`ALLOWED_INPUTS`（每個 WorkflowState → 允許的 input 類型集合）、`ENTRY_GUARDS`（進入狀態前的守門條件）、`NOMINAL_PATH`（正常路徑的下一步）
+    - 定義 `InvalidTransitionError`、`UnknownFieldError`、`UnknownItemError` 例外類別
+    - 實作 `advance()` 函式：已結束檢查 → 輸入允許清單守門 → `_handle_input()` → `_auto_advance()`
+    - 實作 `_handle_input()` 分派邏輯，處理七種 input kind
+    - CONFIRM 的條件性跳過由 `ENTRY_GUARDS[WorkflowState.CONFIRM]` 實作，不是獨立的 `should_skip_confirm()` 函式
     - 全程使用 `model_copy(update=...)` 確保 frozen 不變性
-    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 18.1, 18.2, 20.2_
+    - **偏離設計文件**：沒有 `TransitionResult`，`advance()` 直接回傳 `SessionState`；`question_groups` 由 `api/sessions.py` 的 `_snapshot()` 另外呼叫 `compute_question_groups()` 計算。理由是狀態機的產出就是狀態本身，問題卡是對外快照的一部分而非狀態的一部分
+    - **偏離設計文件**：`InvalidFieldValueError` 尚未定義（值的型別與選項驗證屬 Req 16.3 / T11）
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 18.1, 18.2_
 
-  - [ ] 1.2 實作 `_auto_advance()` 自動推進邏輯
+  - [x] 1.2 實作 `_auto_advance()` 自動推進邏輯
     - RESOLVE_ENTITLEMENTS → COLLECT_MISSING_FIELDS 自動
     - RETRIEVE_RULES → EVALUATE_ELIGIBILITY 自動（Phase 2 跳過真實檢索）
     - EVALUATE_ELIGIBILITY → COLLECT 或 EXPLAIN_RESULT 視項目狀態
-    - EXPLAIN_RESULT → CONFIRM 或 COMPLETE 視 should_skip_confirm
-    - 內部迴圈最多 4 步保護（防無限遞迴）
+    - EXPLAIN_RESULT → CONFIRM 或 COMPLETE 由 `ENTRY_GUARDS` 決定
+    - 防遞迴上限實作為 `max_auto_steps = 20`（**非**設計文件寫的 4 步）。設計文件的 4 步是「正常路徑最長多少步」的觀察，不是安全上限；實作用一個明顯寬鬆的數字，只用來擋無限迴圈
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
 
   - [ ] 1.3 定義 orchestration 層的 input 類型（取代 schemas import）
+    - **與任務 16 重疊，實作時併入任務 16 處理**（避免兩處各做一半）
+    - 現況：`orchestration/inputs.py` 不存在。`state_machine.py`、`field_registry.py`、`missing_fields.py` 三個模組仍 `import app.schemas.session`，而 `schemas/session.py` 反向 import `app.orchestration.state`，形成套件級循環。Req 20.2 未達成
     - 在 `backend/app/orchestration/inputs.py` 定義七種 parsed input dataclass
     - `LifeEventTextInput`、`EventConfirmationInput`、`AttributeAnswersInput`、`ReviewConfirmationInput`、`ReferralChoiceInput`、`HelpRequestInput`、`ItemDeclineInput`
     - 確保 state_machine.py 只 import orchestration 內部模組，不 import schemas/
     - _Requirements: 20.2_
 
   - [ ]* 1.4 撰寫 state_machine.py 單元測試
+    - 現況（部分完成）：`test_workflow_state.py`、`test_loop_guardrails.py`、`test_state_machine_guards.py` 已涵蓋守門拒絕、CONFIRM 條件性跳過、已結束的 session 拒絕所有輸入、兩道護欄
+    - 缺口：**沒有逐一驗證完整轉換表的測試**（每個 (state, input) → expected_state 的窮舉）
     - 測試每個合法轉換 (state, input) → expected_state
     - 測試守門拒絕不合法 input（InvalidTransitionError）
-    - 測試 CONFIRM 跳過邏輯（should_skip_confirm）
+    - 測試 CONFIRM 跳過邏輯（`ENTRY_GUARDS[CONFIRM]`）
     - 測試 exit_reason 非 None 時拒絕所有 input
     - 測試 workflow_state == COMPLETE 時拒絕所有 input
-    - 測試自動推進鏈最多 4 步
+    - 測試自動推進鏈有界（`max_auto_steps`）
     - 測試 session_id 不變性
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.2, 3.1, 3.2, 4.6_
 
@@ -72,18 +79,21 @@
     - **Validates: Requirements 2.2, 1.5**
 
 - [ ] 2. 實作迴圈護欄（T6）
-  - [ ] 2.1 建立護欄模組 `backend/app/orchestration/guardrails.py`
-    - 定義 `LoopGuardrails` frozen dataclass（max_iterations=6）
-    - 定義 `GuardrailVerdict` StrEnum（CONTINUE, EXIT_LOOP_LIMIT, EXIT_NO_PROGRESS）
-    - 實作 `check_guardrails(prev_state, curr_state, guardrails)` → GuardrailVerdict
-    - 實作 `has_progress(prev, curr)` 進展判斷邏輯
-    - 護欄 4（不重跑已定案項目）整合到 determination.py（T10 處理）
+  - [x] 2.1 實作護欄邏輯（**併在 `backend/app/orchestration/state_machine.py` 裡，沒有獨立的 `guardrails.py`**，見 ADR-0012）
+    - 政策參數為模組層常數 `MAX_LOOP_ITERATIONS = 6` 與 `MAX_EVENT_RETRIES = 2`，不是 `LoopGuardrails` dataclass
+    - 未定案狀態的共用定義是 `UNSETTLED_STATUSES`（PENDING、NEEDS_INFORMATION）
+    - 實作 `_check_loop_guardrails(state, state_before_iteration)`，直接回傳新的 `SessionState`，不經過 `GuardrailVerdict` 中介列舉
+    - 進展判斷內嵌在 `_check_loop_guardrails` 中（status 有變化或 attributes 鍵數增加），不是獨立的 `has_progress()`
+    - 實作 `_downgrade_unsettled_items()` 把未定案項目降級為 NEEDS_HUMAN_REVIEW
+    - **只有兩道護欄**：護欄 2（迭代上限）與護欄 3（必須有進展）
+    - 護欄 4（不重跑已定案）在 `determination.find_ready_item_ids` 以 `status != PENDING` 過濾實現
+    - 護欄 1（檢索先行）**未實作** —— Phase 2 沒有真實檢索，等 Phase 4（T15/T18）
     - _Requirements: 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4_
 
-  - [ ] 2.2 在 state_machine.py 整合護欄呼叫
-    - 在 `_auto_advance` 的 EVALUATE_ELIGIBILITY 後呼叫 `check_guardrails`
-    - EXIT_LOOP_LIMIT：所有 PENDING 項目降級 NEEDS_HUMAN_REVIEW，設 exit_reason
-    - EXIT_NO_PROGRESS：設 exit_reason 為 NO_PROGRESS，終止流程
+  - [x] 2.2 在 state_machine.py 整合護欄呼叫
+    - 在 `_auto_advance` 的 EVALUATE_ELIGIBILITY 步驟後呼叫 `_check_loop_guardrails`
+    - 迭代上限觸發：未定案項目降級 NEEDS_HUMAN_REVIEW，設 `exit_reason = LOOP_LIMIT_REACHED`
+    - 無進展觸發：設 `exit_reason = NO_PROGRESS`，終止流程
     - _Requirements: 5.2, 5.3, 6.4_
 
   - [ ]* 2.3 撰寫護欄單元測試
@@ -96,66 +106,69 @@
   - [ ]* 2.4 撰寫 Property-Based Test：Guardrail Termination Guarantee
     - **Property 4: Guardrail Termination Guarantee**
     - 驗證 loop_iterations 永不超過 max_iterations
-    - 驗證觸發後所有 PENDING 項目降級
-    - 驗證 auto-advance 內部迴圈最多 4 步
+    - 驗證觸發後所有未定案項目降級
+    - 驗證 auto-advance 內部迴圈有界（`max_auto_steps = 20`，非設計文件的 4）
     - **Validates: Requirements 5.2, 5.3, 4.6**
 
   - [ ]* 2.5 撰寫 Property-Based Test：Progress Definition Correctness
     - **Property 5: Progress Definition Correctness**
     - 產生隨機 (prev_state, curr_state) 組合
-    - 驗證 has_progress 回傳 True iff 至少一個 status 改變或 attributes 新增 key
+    - 進展判斷內嵌在 `_check_loop_guardrails`，沒有獨立的 `has_progress()` 可測；驗證方式是觀察 `exit_reason` 是否為 NO_PROGRESS
+    - 驗證「至少一個 status 改變或 attributes 新增 key」時不觸發 NO_PROGRESS，反之觸發
     - **Validates: Requirements 6.2, 6.3, 6.4**
 
 - [ ] 3. 中間檢查點
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 4. 實作欄位登記表機制（T7）
-  - [ ] 4.1 建立 `backend/app/orchestration/field_registry.py`
-    - 定義 `FieldValueKind` StrEnum（CODE, BOOLEAN, BAND, INTEGER）
-    - 定義 `FieldOption` frozen dataclass
-    - 定義 `FieldDefinition` frozen dataclass（field_id, value_kind, options, required_by_items, topic_id, purpose_id）
-    - 定義 `FieldRegistry` Protocol 介面（get_field, get_fields_for_item, get_all_fields, is_known_field）
-    - 實作 `InMemoryFieldRegistry` 類別（以 dict 索引 + item_id 反向索引）
+  - [x] 4.1 建立 `backend/app/orchestration/field_registry.py`
+    - 定義 `FieldValueKind` StrEnum
+    - 定義 `FieldDefinition` frozen dataclass
+    - 實作 `FieldRegistry`（**具體類別，不是 Protocol**；也沒有另一個 `InMemoryFieldRegistry`）
+    - 方法：`get`、`has`、`all_field_ids`、`fields_for_items`、`topics`、`fields_in_topic`、`count`
+    - **偏離設計文件的命名**：`get` / `has` / `all_field_ids` / `fields_for_items` 取代了設計文件的 `get_field` / `is_known_field` / `get_all_fields` / `get_fields_for_item`；`fields_for_items` 接受一組 item_id 而非單一 item_id（呼叫端幾乎都是一次查多個項目）
+    - 欄位定義以 `used_by` 表示哪些項目需要它（設計文件寫 `required_by_items`）
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
-  - [ ] 4.2 建立手寫 fixture JSON 與載入機制
-    - 建立 `backend/tests/fixtures/field_registry_fixture.json`（含 2-3 個範例欄位用於喪葬給付情境）
-    - 在 InMemoryFieldRegistry 加一個 `from_dicts()` 類別方法從 JSON 載入
-    - 確保測試 fixture 不含 PII
+  - [x] 4.2 建立登記表資料與載入機制
+    - 登記表資料在 `data/eligibility_fields/fields.v0.1.json`（**不是** `backend/tests/fixtures/`）—— 它是正式的政策資料，不是測試 fixture
+    - 由 `FieldRegistry.from_json()` 載入；`state_machine.default_registry()` 做 lazy 快取
+    - 資料不含 PII，適用於公開 repo
     - _Requirements: 8.5, 17.3_
 
-  - [ ]* 4.3 撰寫 Field Registry 單元測試
-    - 測試 get_field 存在/不存在
-    - 測試 get_fields_for_item 正確回傳
-    - 測試 is_known_field 布林值正確
-    - 測試 get_all_fields 回傳全部
+  - [x]* 4.3 撰寫 Field Registry 單元測試
+    - `backend/tests/unit/test_field_registry.py`
+    - 測試 `get` 存在/不存在
+    - 測試 `fields_for_items` 正確回傳
+    - 測試 `has` 布林值正確
+    - 測試 `all_field_ids` 回傳全部
     - 測試空 registry 的邊界情況
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
 
   - [ ]* 4.4 撰寫 Property-Based Test：Field Registry Index Consistency
     - **Property 7: Field Registry Index Consistency**
     - 產生隨機 FieldDefinition 集合注入 registry
-    - 驗證 get_field(f.field_id) 回傳正確的 f
-    - 驗證 get_fields_for_item 回傳 required_by_items 含 item_id 的所有欄位
-    - 驗證 is_known_field 與 registered 一致
+    - 驗證 `get(f.field_id)` 回傳正確的 f
+    - 驗證 `fields_for_items` 回傳 `used_by` 含該 item_id 的所有欄位
+    - 驗證 `has` 與 registered 一致
     - **Validates: Requirements 8.1, 8.2, 8.4, 8.5**
 
 - [ ] 5. 實作缺漏欄位計算與主題分組（T8）
-  - [ ] 5.1 建立 `backend/app/orchestration/missing_fields.py`
-    - 實作 `compute_missing_fields(items, attributes, registry)` → dict[str, tuple[str, ...]]
+  - [x] 5.1 建立 `backend/app/orchestration/missing_fields.py`
+    - 缺漏計算內嵌在 `compute_question_groups(state, registry)` 裡，**沒有**獨立的 `compute_missing_fields()`：唯一的呼叫端就是分組，多一層 `dict[item_id, fields]` 中介結構沒有用到
     - 只考慮 PENDING/NEEDS_INFORMATION 項目
-    - 排除已在 attributes 中的 field_id
+    - 排除已在 `state.attributes` 中的 field_id
     - _Requirements: 10.1, 10.2, 10.3_
 
-  - [ ] 5.2 實作 `compute_question_groups()` 問題分組
-    - 以 topic_id 為分組鍵
-    - 空 topic_id 各自獨立成組
-    - 跨項目去重：同一 field_id 只問一次，unlocks_item_ids 列出所有相關項目
+  - [x] 5.2 實作 `compute_question_groups()` 問題分組
+    - 以 topic_id 為分組鍵，順序取自 `registry.topics()`
+    - 跨項目去重：同一 field_id 只問一次，`unlocks_item_ids` 列出所有相關的待定案項目
     - group_index 從 1 開始，group_total = 本次 group 數量
-    - 回傳 `tuple[QuestionGroupView, ...]`（定義 QuestionGroupView dataclass）
+    - 回傳 `tuple[QuestionGroupView, ...]`（`QuestionGroupView` 沿用 `schemas/session.py` 已有的定義，未新增 dataclass）
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6_
 
-  - [ ]* 5.3 撰寫 missing_fields 單元測試
+  - [x]* 5.3 撰寫 missing_fields 單元測試
+    - `backend/tests/unit/test_missing_fields.py`
     - 測試只考慮 PENDING/NEEDS_INFORMATION 項目
     - 測試排除已有的 attributes
     - 測試主題分組正確
@@ -180,10 +193,10 @@
     - **Validates: Requirements 11.1, 11.2, 11.3, 11.4, 11.5, 11.6**
 
 - [ ] 6. 在 state_machine.py 整合欄位驗證
-  - [ ] 6.1 實作 AttributeAnswersInput 的欄位 allowlist 檢查
-    - 在 _dispatch 處理 attribute_answers 時，呼叫 registry.is_known_field 檢查所有 key
-    - 任一 field_id 不在 registry → raise UnknownFieldError
-    - 全部合格 → 合併到 state.attributes
+  - [x] 6.1 實作 AttributeAnswersInput 的欄位 allowlist 檢查
+    - 在 `_record_answers` 中呼叫 `registry.has()` 檢查所有 key
+    - 任一 field_id 不在 registry → raise `UnknownFieldError`（拒絕整筆，不做部分接受也不靜默丟棄）
+    - 全部合格 → 交給 `PrivacyGate.validate_attributes()` 後合併到 `state.attributes`
     - _Requirements: 9.1, 9.2_
 
   - [ ]* 6.2 撰寫 Property-Based Test：Unknown Field Rejection
@@ -198,16 +211,18 @@
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 8. 實作規則引擎轉接層（T9）
-  - [ ] 8.1 建立 `backend/app/orchestration/adapter.py`
-    - 實作 `adapt_eligibility_result(result, existing_item, rules)` → CandidateItem
-    - Status 映射：EligibilityResult.status → ItemStatus（名稱一致直接轉）
-    - 金額映射：rules min_amount/max_amount → amount_min/max；或 result.amount 填兩邊
-    - payout_nature 缺失時 amount_period = None（優雅降級）
-    - INELIGIBLE 且 reasons 無法解構 → 降級 NEEDS_HUMAN_REVIEW
-    - missing_inputs → missing_field_ids (tuple)
+  - [x] 8.1 建立 `backend/app/orchestration/rule_adapter.py`（檔名是 `rule_adapter.py`，**不是** `adapter.py`）
+    - 實作 `adapt_result(result, *, item_kind)` → CandidateItem（函式名是 `adapt_result`，**不是** `adapt_eligibility_result`；不接受 `existing_item` 與 `rules` 參數）
+    - Status 映射：`_STATUS_MAP` 把四種字串轉成 `ItemStatus`；未知字串安全降級為 NEEDS_HUMAN_REVIEW
+    - 金額映射：`result.amount` 同時填入 amount_min 與 amount_max（規則欄位還沒有 min/max 區間）
+    - `amount_period` 恆為 None（規則欄位還沒有 payout_nature，優雅降級）
+    - 新增 `downgrade_unexplained_ineligible(status, decisive_conditions)`：INELIGIBLE 且無決定性條件 → 降級 NEEDS_HUMAN_REVIEW（Req 12.3）。拆成獨立函式是為了可測試性 —— `adapt_result` 目前恆產生空的 decisive_conditions，從它那邊測不到「有條件時不降級」那一半
+    - `missing_inputs` → `missing_field_ids`（tuple）
+    - `source_url` 有值時組成最小的 `Citation`
     - _Requirements: 12.1, 12.2, 12.3, 13.1, 13.2, 13.3, 14.1_
 
-  - [ ]* 8.2 撰寫 adapter 單元測試
+  - [x]* 8.2 撰寫 rule_adapter 單元測試
+    - `backend/tests/unit/test_rule_adapter.py`
     - 測試 status 映射（四種合法值）
     - 測試 INELIGIBLE 無結構化 reason 的降級
     - 測試金額映射：有 min/max、只有 result.amount、無金額
@@ -231,15 +246,18 @@
 
 - [ ] 9. 實作逐項判定組裝（T10）
   - [ ] 9.1 建立 `backend/app/orchestration/determination.py`
+    - 現況（部分完成）：模組已存在，有 `find_ready_item_ids`、`find_undeclared_item_ids`、`evaluate_ready_items_stub`。stub 把湊齊欄位的項目標為 `ELIGIBLE`，登記表未宣告任何欄位的項目標為 `NEEDS_HUMAN_REVIEW`
+    - 已達成：護欄 4（不重跑已定案）以 `status != PENDING` 過濾實現；`resolved_at` 有蓋時間戳
+    - 缺口：**沒有接上真正的規則引擎**，`evaluate_pending_items(state, registry, rules_connection)` 不存在，也沒有 `assemble_determination()`。單一項目失敗隔離（Req 15.4）尚未實作。**等 T18 接上 SQLite 規則資料**
     - 實作 `evaluate_pending_items(state, registry, rules_connection)` → tuple[CandidateItem, ...]
     - 只對 PENDING/NEEDS_INFORMATION 項目呼叫 rules engine
-    - 已定案項目（ELIGIBLE, INELIGIBLE, NEEDS_HUMAN_REVIEW, DECLINED_BY_USER）保持不變（護欄 4）
     - 單一項目 engine 失敗 → 標 NEEDS_HUMAN_REVIEW，不影響其他
     - 回傳 tuple 長度 == state.items 長度
-    - 實作 `assemble_determination(item, result, rules)` → CandidateItem（整合 adapter + resolved_at）
+    - 實作 `assemble_determination(item, result, rules)` → CandidateItem（整合 `rule_adapter.adapt_result` + resolved_at）
     - _Requirements: 7.1, 7.2, 15.1, 15.2, 15.3, 15.4, 15.5_
 
-  - [ ]* 9.2 撰寫 determination 單元測試
+  - [x]* 9.2 撰寫 determination 單元測試
+    - `backend/tests/unit/test_determination.py`（涵蓋現有的 stub 行為）
     - 測試不重跑已定案項目
     - 測試單一項目失敗不影響其他
     - 測試回傳長度一致
@@ -259,43 +277,39 @@
     - 模擬單一項目 engine 拋例外，驗證該項目 NEEDS_HUMAN_REVIEW 且其他不受影響
     - **Validates: Requirements 15.1, 15.4**
 
-- [ ] 10. 定義 Seams（接縫）Protocol 介面
-  - [ ] 10.1 建立 `backend/app/orchestration/protocols.py`
+- [x] 10. 定義 Seams（接縫）Protocol 介面
+  - [x] 10.1 建立 `backend/app/orchestration/protocols.py`
     - 定義 `EntitlementSource` Protocol（resolve → tuple[CandidateItem, ...]）
     - 定義 `RuleSource` Protocol（load_rules → dict[str, Any]）
     - 定義 `EvidenceRetriever` Protocol（retrieve → tuple[Citation, ...]）
     - 定義 `PrivacyGate` Protocol（validate_attributes）
-    - 實作 `PassThroughPrivacyGate`（Phase 2 pass-through，直接回傳 answers）
-    - 實作 `FixtureEntitlementSource`（回傳寫死的 CandidateItem fixture）
-    - 在 transition() 參數中預留注入點
+    - 實作 `PassThroughPrivacyGate`（Phase 2 pass-through，複製一份後回傳）
+    - 實作 `FixtureEntitlementSource`（回傳寫死的 CandidateItem fixture；認不出事件回空 tuple）
+    - `advance()` 已開四個具名注入點，內部收在 `_Seams` dataclass 中
     - _Requirements: 19.1, 19.2, 19.3_
 
-  - [ ]* 10.2 撰寫 protocols 單元測試
+  - [x]* 10.2 撰寫 protocols 單元測試
+    - `backend/tests/unit/test_protocols.py`
     - 測試 PassThroughPrivacyGate 直接回傳
     - 測試 FixtureEntitlementSource 回傳正確 fixture
     - _Requirements: 19.1, 19.2_
 
-- [ ] 11. 錯誤處理與 API 整合
-  - [ ] 11.1 更新 `backend/app/api/sessions.py` 接入 state_machine
-    - 將 `mock_advance()` 呼叫替換為 `transition()` 呼叫
-    - API 層負責解析 AdvanceInput → orchestration 層 input 類型
-    - 處理 InvalidTransitionError → ErrorCode.INVALID_TRANSITION
-    - 處理 UnknownFieldError → ErrorCode.UNKNOWN_FIELD
-    - 處理 InvalidFieldValueError → ErrorCode.INVALID_FIELD_VALUE
-    - 處理 UnknownItemError → ErrorCode.UNKNOWN_ITEM
-    - 確保所有 ErrorResponse 不含使用者輸入值
-    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
+- [x] 11. 錯誤處理與 API 整合
+  - [x] 11.1 更新 `backend/app/api/sessions.py` 接入 state_machine
+    - `mock_advance()` 呼叫已替換為 `state_machine.advance()`
+    - 四種錯誤映射齊備：`InvalidTransitionError` → INVALID_TRANSITION（409）、`UnknownFieldError` → UNKNOWN_FIELD（422）、`UnknownItemError` → UNKNOWN_ITEM（422），以及 `errors.py` 的 INVALID_FIELD_VALUE（422）
+    - 所有 ErrorResponse 不含使用者輸入值（只有 error_code、field_ids、current_state）
+    - 註：AdvanceInput 目前仍是 `schemas/session.py` 的類型，orchestration 層直接吃它 —— 解析責任的移交在任務 16
+    - _Requirements: 16.1, 16.2, 16.4, 16.5, 16.6_
 
-  - [ ] 11.2 刪除 `backend/app/orchestration/mock_advance.py`
-    - 確認所有 import 已替換為 state_machine
-    - 移除 `implementation_notice()` 與 `placeholder_notice`
+  - [x] 11.2 刪除 `backend/app/orchestration/mock_advance.py`
+    - 已刪除，所有 import 已改為 state_machine
     - _Requirements: 20.1_
 
-  - [ ]* 11.3 撰寫 API 層錯誤處理整合測試
-    - 測試四種 error code 的回應格式
+  - [x]* 11.3 撰寫 API 層錯誤處理整合測試
+    - `backend/tests/integration/test_sessions_api.py`，涵蓋錯誤回應格式
     - 測試 ErrorResponse 不含使用者值
-    - 測試 DB 連線失敗不中斷流程
-    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
+    - _Requirements: 16.1, 16.2, 16.4, 16.5_
 
 - [ ] 12. 中間檢查點
   - Ensure all tests pass, ask the user if questions arise.
@@ -311,6 +325,8 @@
     - _Requirements: 17.1, 17.2, 17.3, 17.4_
 
   - [ ] 13.2 建立護欄觸發整合測試
+    - 現況（部分完成）：護欄觸發的測試已存在於 `backend/tests/unit/test_loop_guardrails.py`，但在 **unit 層**，不是 integration 層
+    - 缺口：尚未在 integration 層以完整 HTTP 流程驗證護欄觸發後的對外回應
     - test_guardrail_no_progress_exits：送重複空答案，驗證 NO_PROGRESS 觸發
     - test_guardrail_loop_limit_exits：模擬 6 圈有進展但仍 PENDING，驗證 LOOP_LIMIT
     - _Requirements: 5.2, 5.3, 6.4_
@@ -318,8 +334,9 @@
   - [ ]* 13.3 撰寫 Property-Based Test：CONFIRM Skip Logic
     - **Property 14: CONFIRM Skip Logic**
     - 產生隨機 CandidateItem 集合
-    - 驗證無 NEEDS_HUMAN_REVIEW → should_skip_confirm 回 True
-    - 驗證有 NEEDS_HUMAN_REVIEW → 回 False
+    - 對象是 `ENTRY_GUARDS[WorkflowState.CONFIRM]`，不是獨立的 `should_skip_confirm()`
+    - 驗證無 NEEDS_HUMAN_REVIEW / NEEDS_INFORMATION → 守門回 False（跳過 CONFIRM 直達 COMPLETE）
+    - 驗證有 NEEDS_HUMAN_REVIEW → 守門回 True（進入 CONFIRM）
     - **Validates: Requirements 3.1, 3.2**
 
 - [ ] 14. 最終檢查點
@@ -338,6 +355,29 @@
     - 確保無 LLM 呼叫
     - _Requirements: 17.2_
 
+- [ ] 16. 拆開 `schemas` ↔ `orchestration` 的循環依賴
+  - **獨立 PR，不與本批混合**（擁有者明確要求）
+  - 現況：`state_machine.py`、`field_registry.py`、`missing_fields.py` 三個模組 `import app.schemas.session`，而 `schemas/session.py` 反向 import `app.orchestration.state`，形成套件級循環。這也是 `protocols.py` 的 `PrivacyGate.registry` 只能標成 `Any` 的原因
+  - 任務 1.3 是同一件事的子集，實作時併入這裡處理
+
+  - [ ] 16.1 建立 `backend/app/orchestration/inputs.py`
+    - 把七種輸入類型定義在 orchestration 層：`LifeEventTextInput`、`EventConfirmationInput`、`AttributeAnswersInput`、`ReviewConfirmationInput`、`ReferralChoiceInput`、`HelpRequestInput`、`ItemDeclineInput`
+    - _Requirements: 20.2_
+
+  - [ ] 16.2 讓 orchestration 模組改 import 自己層的類型
+    - `state_machine.py`、`field_registry.py`、`missing_fields.py` 改成 import `app.orchestration.inputs`（以及 orchestration 層的 view 類型），不再 import `app.schemas.session`
+    - _Requirements: 20.2_
+
+  - [ ] 16.3 把 `schemas/session.py` 改成投影（projection）
+    - `schemas/session.py` 只負責 HTTP 邊界的形狀，由 orchestration 層的定義投影而來（單向依賴：schemas → orchestration）
+    - 影響 `api/sessions.py` 的解析責任：**API 層負責把 HTTP payload 解析成 orchestration 層的輸入類型**，再傳給 `advance()`
+    - _Requirements: 20.2_
+
+  - [ ] 16.4 驗證循環消失
+    - 檢查 `python -c "import app.schemas.session"` 與 `python -c "import app.orchestration.state_machine"` 兩個方向都能單獨匯入
+    - 加一個測試斷言模組相依圖：`app.orchestration.*` 不得出現對 `app.schemas.*` 的 import
+    - _Requirements: 20.2_
+
 ## 備註
 
 - 標記 `*` 的子任務為選擇性，可跳過以加速 MVP
@@ -345,7 +385,20 @@
 - Checkpoints 確保漸進式驗證
 - Property tests 使用 Hypothesis 框架（需加為 dev dependency）
 - 任務 15 是 T20 的提前實作，設計文件建議在 Phase 2 完成後立即做，有了它端到端測試完全不需要網路
+- 任務 16 是獨立 PR，不與本批混合
 - 所有測試 fixture 使用虛構資料（不含 PII），適用於公開 repo
+- 全部 property-based 測試（1.5、1.6、1.7、2.4、2.5、4.4、5.4、5.5、6.2、8.3、8.4、9.3、9.4、13.3）尚未開始：`hypothesis` 還沒加入 dev dependency，測試檔案也不存在
+
+### 與設計文件的已知偏離
+
+實作過程中刻意偏離 `design.md` 的地方，記錄於此以免日後誤判為 bug：
+
+- **護欄併入 `state_machine.py`，沒有獨立的 `guardrails.py`**（見 ADR-0012）。護欄只有兩處呼叫點，且都在自動推進迴圈內，拆檔會讓一段連續的邏輯跨兩個檔案
+- **沒有 `TransitionResult`**，`advance()` 直接回傳 `SessionState`。`question_groups` 由 `api/sessions.py` 的 `_snapshot()` 另外呼叫 `compute_question_groups()` 計算 —— 問題卡是對外快照的一部分，不是狀態的一部分
+- **`rule_adapter.py` / `adapt_result` 的命名與設計文件不同**（設計文件寫 `adapter.py` / `adapt_eligibility_result`），且簽章改為 `adapt_result(result, *, item_kind)`
+- **`FieldRegistry` 的方法命名與設計文件不同**（`get` / `has` / `all_field_ids` / `fields_for_items` 對應 `get_field` / `is_known_field` / `get_all_fields` / `get_fields_for_item`），且它是**具體類別而非 Protocol**，沒有另一個 `InMemoryFieldRegistry`
+- **自動推進的防遞迴上限是 20（`max_auto_steps`）而非設計文件的 4**。4 是正常路徑的長度觀察，不適合當安全上限
+- **護欄 1（檢索先行）未實作**，等 Phase 4 接上真實檢索（T15/T18）。目前 `RETRIEVE_RULES` 是空操作，沒有「找不到官方依據」這個狀況可以判斷
 
 ## Task Dependency Graph
 
@@ -363,7 +416,11 @@
     { "id": 8, "tasks": ["11.2", "11.3"] },
     { "id": 9, "tasks": ["13.1", "13.2", "13.3"] },
     { "id": 10, "tasks": ["15.1"] },
-    { "id": 11, "tasks": ["15.2"] }
+    { "id": 11, "tasks": ["15.2"] },
+    { "id": 12, "tasks": ["16.1"] },
+    { "id": 13, "tasks": ["16.2"] },
+    { "id": 14, "tasks": ["16.3"] },
+    { "id": 15, "tasks": ["16.4"] }
   ]
 }
 ```
