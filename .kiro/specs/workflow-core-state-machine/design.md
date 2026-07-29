@@ -966,7 +966,7 @@ Phase 2 的 `transition()` 預留呼叫 `PrivacyGate` 的位置，但預設注�
 
 ### 硬約束
 
-- **不引入 AWS 依賴**：8/1 前不可使用 boto3 或任何 AWS SDK
+- **Phase 2 不引入 AWS 依賴**：這個 state-machine implementation phase 保持離線，不使用 boto3 或 AWS SDK；這是該階段的範圍，不是全 repository 的 AWS 禁令
 - **不呼叫 LLM**：Phase 2 全程離線，event extraction 用 placeholder
 - **LLM 與規則分離**：規則引擎不呼叫 LLM，LLM 不回傳資格判定
 - **不鎖定待決策項目**：D1–D5 記錄但不在程式中固化

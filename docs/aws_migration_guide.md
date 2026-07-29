@@ -1,24 +1,22 @@
 # AWS Migration Guide
 
-This is the **single source of truth** for transitioning from local mock
-implementations to live AWS services on August 1st.
+這份文件是 local mock 與 live AWS adapter 之間的**單一遷移資訊來源**。
 
-> **Status**: All features currently run on local mocks (SQLite, local files).
-> No AWS connections are active or required until the hackathon starts.
+> **Status**: 目前功能仍以 local mocks（SQLite、本機檔案）運作。依團隊規範可在 owner 核准後使用 live AWS 進行準備與驗證，但不得提交 credentials 或 account-specific secrets，且不得因 AWS integration 破壞 local test path。
 
 ## How to Use This Guide
 
-On August 1st, teammates should:
+When an AWS-backed path is approved and enabled, teammates should:
 
-1. Set up AWS credentials and fill in `.env` variables listed below.
-2. Follow each section to swap local mocks for live services.
-3. Test each feature after switching.
+1. Configure credentials outside Git and fill only the required `.env` variables.
+2. Follow the relevant section to swap or add adapters behind existing boundaries.
+3. Test both the AWS-backed path and the retained local path.
 
 ---
 
-## Environment Variables Needed on August 1st
+## Environment Variables for Approved AWS Paths
 
-Add these to your `.env` file when AWS access is available:
+Add only the variables required by an owner-approved integration to your local `.env`; never commit populated values:
 
 ```env
 # AWS General
@@ -28,8 +26,8 @@ AWS_ACCOUNT_ID=
 # S3 (document storage)
 # S3_BUCKET_NAME=
 
-# Database (if migrating from SQLite)
-# DATABASE_URL=
+# Data-layer service-specific variables are intentionally not named yet.
+# Define them only after a future service-selection ADR and owner approval.
 
 # Bedrock (LLM)
 # BEDROCK_MODEL_ID=
@@ -40,18 +38,53 @@ AWS_ACCOUNT_ID=
 
 ---
 
-## Feature: Government OID & Benefit Catalog Database
+## Feature: Data-layer Rule Engine
 
-| Item | Current (Local) | AWS Target |
-|------|----------------|------------|
-| Database | `data/local/government_oid.db` (SQLite) | TBD (DynamoDB or RDS) |
-| Files affected | `scripts/import_government_oid.py`, `backend/app/services/benefit_catalog.py` | — |
+The accepted local architecture is SQLite behind four storage-neutral ports.
+This section records future swap boundaries only; it does **not** select a
+production AWS database, queue, object store, LLM service, or deployment
+service, and it does not authorize changing the local path now.
 
-### Migration Steps
+| Concern | Current local default | Local modules used or planned |
+|------|--------------------------|-------------------------------|
+| Canonical data | `data/local/government_oid.db` SQLite last committed state | Used: `backend/app/services/benefit_catalog.py`; planned: `backend/app/adapters/sqlite/` and migrations |
+| Eligibility | Local deterministic engine over canonical Rule DSL | Used: `backend/app/rules/engine.py`; planned: `backend/app/application/eligibility_service.py`, `backend/app/rules/dsl.py`, `backend/app/rules/evaluator.py` |
+| Evidence/files | SQLite metadata plus `data/local/source_documents/` | Used: `backend/app/services/source_connector.py`; planned: `backend/app/adapters/sqlite/evidence_repository.py` |
+| Refresh | Local committed-data-first enqueue and local worker | Planned: `backend/app/adapters/sqlite/source_refresh_service.py`, `backend/app/curation/local_worker.py` |
+| Candidate extraction | Local parser and local/mock LLM only | Planned: `backend/app/curation/candidate_extractor.py`; crawler/LLM outputs remain unverified |
+| Wiring | FastAPI application composition root | Planned: `backend/app/application/composition.py`; workflow/state machine receive injected ports |
 
-1. TBD — database choice not yet decided.
-2. The SQLite schema in `benefit_catalog.py` defines the contract. Any AWS
-   adapter must preserve the same table relationships and constraints.
+### Future adapter swap points
+
+A later, separately approved migration may replace only these infrastructure
+implementations while preserving the shared contracts:
+
+1. Replace the SQLite implementations of `EntitlementGraphRepository`,
+   `EligibilityService`, `EvidenceRepository`, and `SourceRefreshService` with
+   implementations for the selected services.
+2. Replace local document writes behind the evidence/storage adapter; do not
+   change workflow or Rule DSL semantics.
+3. Replace the local refresh worker behind `SourceRefreshService`; preserve
+   current-data-first responses and same-day deduplication.
+4. Replace the local/mock LLM client only behind the candidate-extraction
+   boundary; it must still never verify data or decide eligibility.
+5. Change construction only in the FastAPI composition root. Workflow and state
+   machine must not receive service-specific SDK types, table names, or URLs.
+
+The SQLite adapters, local files, local background job, and local/mock LLM remain the default data-layer path until an owner-approved service-selection ADR and adapter migration replaces a boundary. Enabling an unrelated AWS integration does not implicitly replace these paths.
+
+### Environment variables after a future service decision
+
+Currently required shared baseline name already used by this repository:
+
+```env
+AWS_REGION=
+```
+
+Service-specific environment variable names are **TBD-after-ADR**. Do not add a
+placeholder such as a table, queue, bucket, endpoint, or database URL until an
+owner-approved service-selection ADR defines the exact service and exact names.
+At that time, update this section and `.env.example` in the same approved batch.
 
 ---
 
@@ -149,9 +182,7 @@ the main reason to do this migration rather than leave the mock in production.
 
 ## Feature: Storage-Neutral Data Layer Interfaces
 
-These are the seams the workflow uses to reach the data layer. Until August 1st
-every one of them has an offline implementation that needs no database at all,
-which is why the workflow test suite runs without SQLite.
+These are the seams the workflow uses to reach the data layer. Every interface keeps an offline implementation so the workflow test suite runs without SQLite or live AWS.
 
 | Item | Current (Local) | AWS Target |
 |------|----------------|------------|
@@ -164,15 +195,14 @@ which is why the workflow test suite runs without SQLite.
 
 ### What the swap has to preserve
 
-The four `Protocol` classes in `protocols.py` are the contract. Any SQLite or
-cloud adapter must keep the same method names and the same return types:
+The Protocol classes in `protocols.py` are the integration baseline. Contract changes require owner alignment and coordinated updates to implementations, consumers, tests, and this guide:
 
-| Interface | Methods that must not change |
-|-----------|------------------------------|
+| Interface | Required operations |
+|-----------|---------------------|
 | `EntitlementGraphRepository` | `expand_from_event`, `get_prerequisites`, `get_produces`, `get_programs_by_system` |
 | `EligibilityService` | `get_required_fields`, `evaluate`, `evaluate_many` |
-| `EvidenceRepository` | `get_citations` |
-| `SourceRefreshService` | `get_coverage_status`, `request_on_demand_refresh` |
+| `EvidenceRepository` | `get_citations`, plus source-reference citation lookup approved by the data-layer alignment |
+| `SourceRefreshService` | `get_coverage_status(CoverageScope) -> CoverageSnapshot`；`request_on_demand_refresh(RefreshRequest(event_id, source_ids, requested_at)) -> RefreshReceipt(job_id, accepted, deduplicated)` |
 
 Three constraints carry over and must survive the swap:
 
@@ -207,10 +237,11 @@ Three constraints carry over and must survive the swap:
 
 Migration steps:
 
-1. Remove the in-process list in `LocalSourceRefreshService` and publish a
-   message instead. Keep `request_on_demand_refresh` returning immediately: the
-   user's request must never wait for a crawl, attachment extraction, or LLM
-   call.
+1. Replace the in-process list in `LocalSourceRefreshService` with a publisher
+   behind the same protocol. Keep `CoverageScope` filtering and
+   `CoverageSnapshot` arithmetic in the adapter, and keep
+   `request_on_demand_refresh` returning immediately: the user's request must
+   never wait for a crawl, attachment extraction, or LLM call.
 2. Move the same-day dedup key to shared storage. The in-memory set only works
    in a single process, so today two workers would trigger the same source
    twice on the same day.
@@ -220,28 +251,20 @@ Migration steps:
 
 ### Environment variables
 
-```env
-# Data layer (fill in on August 1st)
-# ENTITLEMENT_DB_URL=
-# SOURCE_REFRESH_QUEUE_URL=
-# SOURCE_REFRESH_DEDUP_TABLE=
-```
+This contract-alignment change requires **no AWS environment variables**. The
+current implementation remains local and uses no AWS SDK or API connection.
+Queue, dedup-store, or cloud-database names remain `TBD-after-ADR`; once an
+owner-approved service-selection ADR exists, add the exact environment variable
+names here and in `.env.example` in that same migration batch rather than
+inventing generic placeholders now.
 
-### Open decision recorded here on purpose: `stale` behaviour
+### Settled decision: `stale` behaviour
 
-`stale` programs currently return `needs_human_review`. This is a **provisional**
-choice, not a settled decision. Section 12 of
-`tmp/sqlite-runtime-alignment-proposal.md` lists it as a joint decision that
-neither side may make silently, with two options:
-
-- Option A: serve the last-verified snapshot with an explicit warning.
-- Option B: always downgrade to `needs_human_review`.
-
-The backend took the safer end of the range for now, because treating expired
-data as current is the failure mode that sends someone to a counter for nothing.
-Once the owners decide, change `_STALE_FALLBACK_STATUS` in
-`backend/app/orchestration/determination.py` — that is the only place it lives.
-Do not read the current behaviour as Option B having been chosen.
+Owner selected Option B. A `stale` program remains visible so the API can show a
+warning, but it never runs full deterministic evaluation and always returns
+`needs_human_review`. Cloud adapters must preserve this gate; refresh success
+must not silently promote stale data or bypass human review. The canonical
+runtime constant and behavior live in `backend/app/orchestration/determination.py`.
 
 ---
 

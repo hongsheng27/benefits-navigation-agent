@@ -23,8 +23,8 @@ schema，也不是對外 API 契約。
 ## 為什麼用 frozen dataclass 而不是 Pydantic
 
 這些形狀是**跨層傳遞用的值物件**，不需要驗證外部輸入，也不需要序列化成 API 回應
-（那是 `app.schemas.session` 的責任）。提案第 7 節給的就是 `@dataclass(frozen=True)`，
-照抄可以讓兩邊對照時不必先在腦中做一次翻譯。
+（那是 `app.schemas.session` 的責任）。提案第 7 節給的就是
+`@dataclass(frozen=True, slots=True)`，照抄可以讓兩邊對照時不必先在腦中做一次翻譯。
 
 ## 提案第 7 節的契約規則
 
@@ -59,6 +59,16 @@ ProgramStatus = Literal[
 ]
 """資料治理狀態。決定 runtime 可以對這筆方案做到什麼程度（見 `determination.py`）。"""
 
+CrawlStatus = Literal["pending_crawl", "crawled", "error"]
+"""單一來源可回報的三種可量測抓取狀態。"""
+
+
+def _require_aware_datetime(value: datetime | None, field_name: str) -> None:
+    """拒絕沒有時區的時間，避免跨 adapter 後失去觀測時間的語意。"""
+    if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+        raise ValueError(f"{field_name} must be timezone-aware")
+
+
 EligibilityStatus = Literal[
     "eligible",
     "ineligible",
@@ -76,19 +86,20 @@ AmountPeriod = Literal["one_time", "monthly", "annual"]
 """
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class GraphRelation:
     """圖上的一條關係，例如「先辦死亡登記才能請領喪葬給付」。
 
-    `order` 用來讓資料層決定顯示與辦理順序；順序屬於資料，不該由 workflow 猜。
+    `canonical_order` 用來讓資料層決定顯示與辦理順序；順序屬於資料，不該由
+    workflow 猜。
     """
 
-    item_id: str
+    target_id: str
     display_name: str
-    order: int = 0
+    canonical_order: int = 0
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CandidateItem:
     """資料層交出來的一筆候選方案。
 
@@ -106,7 +117,7 @@ class CandidateItem:
     produces: tuple[GraphRelation, ...]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class StructuredReason:
     """造成某個結論的單一條件，拆成可以逐段顯示的結構。
 
@@ -126,7 +137,7 @@ class StructuredReason:
     source_reference: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class EligibilityDecision:
     """確定性規則引擎對某一項的判定結果。
 
@@ -140,10 +151,15 @@ class EligibilityDecision:
     amount_max: int | None
     amount_period: AmountPeriod | None
     amount_currency: str | None
+    missing_field_ids: tuple[str, ...]
     reasons: tuple[StructuredReason, ...]
 
+    def __post_init__(self) -> None:
+        stable_missing_ids = tuple(sorted(set(self.missing_field_ids)))
+        object.__setattr__(self, "missing_field_ids", stable_missing_ids)
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, slots=True)
 class Citation:
     """支撐一項判定的官方依據。
 
@@ -156,14 +172,18 @@ class Citation:
     document_id: str
     title: str
     publisher: str
-    published_at: str | None
-    effective_at: str | None
+    published_at: datetime | None
+    effective_at: datetime | None
     url: str
     excerpt: str
-    retrieved_at: str | None
+    retrieved_at: datetime | None
+
+    def __post_init__(self) -> None:
+        for field_name in ("published_at", "effective_at", "retrieved_at"):
+            _require_aware_datetime(getattr(self, field_name), field_name)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FieldRegistryEntry:
     """workflow 提問時的共同詞彙表的一筆。
 
@@ -179,7 +199,7 @@ class FieldRegistryEntry:
     pii_classification: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CoverageMetadata:
     """一個官方來源目前的抓取進度。
 
@@ -188,7 +208,16 @@ class CoverageMetadata:
     """
 
     source_id: str
-    crawl_status: str
+    crawl_status: CrawlStatus
     last_crawled_at: datetime | None
     indexed_document_count: int
     domain_tags: tuple[str, ...]
+    observed_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.crawl_status not in {"pending_crawl", "crawled", "error"}:
+            raise ValueError("unsupported crawl_status")
+        _require_aware_datetime(self.last_crawled_at, "last_crawled_at")
+        _require_aware_datetime(self.observed_at, "observed_at")
+        if self.indexed_document_count < 0:
+            raise ValueError("indexed_document_count must be non-negative")

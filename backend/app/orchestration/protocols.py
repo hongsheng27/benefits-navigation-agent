@@ -43,15 +43,16 @@ dataclass**，不得回傳 `sqlite3.Row`、SQL tuple 或未解碼的 `metadata_j
 回空，`FixtureEligibilityService` 對沒有已核准條件的項目回 `needs_human_review`。
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from app.orchestration.data_contracts import (
     CandidateItem,
     Citation,
     CoverageMetadata,
+    CrawlStatus,
     EligibilityDecision,
     FieldRegistryEntry,
     GraphRelation,
@@ -136,8 +137,83 @@ class EvidenceRepository(Protocol):
         """
         ...
 
+    def get_citations_for_references(
+        self,
+        item_id: str,
+        source_references: Sequence[str],
+    ) -> Sequence[Citation]:
+        """依實際評估的來源引用精確取回官方依據。"""
+        ...
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, slots=True)
+class CoverageScope:
+    """一次 coverage 快照的明確來源與領域範圍。"""
+
+    source_ids: tuple[str, ...]
+    domain_tags: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CoverageSnapshot:
+    """指定 scope 在同一觀測時間的可量測進度，不代表內容完整保證。"""
+
+    scope: CoverageScope
+    observed_at: datetime
+    registered_source_count: int
+    crawled_source_count: int
+    pending_crawl_source_count: int
+    error_source_count: int
+    indexed_document_count: int
+    sources: tuple[CoverageMetadata, ...]
+    gap_categories: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
+            raise ValueError("observed_at must be timezone-aware")
+
+        source_ids = tuple(source.source_id for source in self.sources)
+        if len(source_ids) != len(set(source_ids)):
+            raise ValueError("coverage sources must have unique source_ids")
+
+        scoped_source_ids = frozenset(self.scope.source_ids)
+        scoped_domain_tags = frozenset(self.scope.domain_tags)
+        for source in self.sources:
+            if scoped_source_ids and source.source_id not in scoped_source_ids:
+                raise ValueError("coverage source is outside scope source_ids")
+            if scoped_domain_tags and not (
+                scoped_domain_tags & frozenset(source.domain_tags)
+            ):
+                raise ValueError("coverage source is outside scope domain_tags")
+        if self.sources and not (scoped_source_ids or scoped_domain_tags):
+            raise ValueError("an empty coverage scope cannot contain sources")
+
+        counts = (
+            self.registered_source_count,
+            self.crawled_source_count,
+            self.pending_crawl_source_count,
+            self.error_source_count,
+            self.indexed_document_count,
+        )
+        if any(count < 0 for count in counts):
+            raise ValueError("coverage counts must be non-negative")
+        if self.registered_source_count != (
+            self.crawled_source_count
+            + self.pending_crawl_source_count
+            + self.error_source_count
+        ):
+            raise ValueError("registered source count must equal status counts")
+        if self.registered_source_count != len(self.sources):
+            raise ValueError("registered source count must equal source entries")
+        if self.indexed_document_count != sum(
+            source.indexed_document_count for source in self.sources
+        ):
+            raise ValueError("indexed document count must equal source totals")
+        if any(source.observed_at != self.observed_at for source in self.sources):
+            raise ValueError("all sources must share the snapshot observed_at")
+
+
+@dataclass(frozen=True, slots=True)
 class RefreshRequest:
     """一次 on-demand refresh 的請求。欄位照提案第 6 節。"""
 
@@ -146,7 +222,7 @@ class RefreshRequest:
     requested_at: datetime
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RefreshReceipt:
     """refresh 請求的收據。
 
@@ -167,8 +243,8 @@ class SourceRefreshService(Protocol):
     refresh。使用者請求不得等待 crawl、附件處理或 LLM 完成。
     """
 
-    def get_coverage_status(self, event_id: str) -> Sequence[CoverageMetadata]:
-        """查與這個事件相關的來源目前抓到什麼程度。"""
+    def get_coverage_status(self, scope: CoverageScope) -> CoverageSnapshot:
+        """查明確 scope 內的來源目前抓到什麼程度。"""
         ...
 
     def request_on_demand_refresh(self, request: RefreshRequest) -> RefreshReceipt:
@@ -227,9 +303,9 @@ class PassThroughPrivacyGate:
 # 有排序依據。`missing_field_ids` 留空，因為缺漏欄位是由欄位登記表算出來的
 # （見 `missing_fields.py`），不是資料層寫死的。
 _DEATH_REGISTRATION = GraphRelation(
-    item_id="death_registration",
+    target_id="death_registration",
     display_name="死亡登記",
-    order=0,
+    canonical_order=0,
 )
 
 _FIXTURE_ITEMS_BY_EVENT: dict[str, tuple[CandidateItem, ...]] = {
@@ -243,14 +319,14 @@ _FIXTURE_ITEMS_BY_EVENT: dict[str, tuple[CandidateItem, ...]] = {
             prerequisites=(),
             produces=(
                 GraphRelation(
-                    item_id="funeral_benefit",
+                    target_id="funeral_benefit",
                     display_name="喪葬給付",
-                    order=0,
+                    canonical_order=0,
                 ),
                 GraphRelation(
-                    item_id="survivor_pension",
+                    target_id="survivor_pension",
                     display_name="遺屬年金",
-                    order=1,
+                    canonical_order=1,
                 ),
             ),
         ),
@@ -386,6 +462,7 @@ class FixtureEligibilityService:
             amount_max=None,
             amount_period=None,
             amount_currency=None,
+            missing_field_ids=(),
             reasons=(),
         )
 
@@ -407,19 +484,44 @@ class FixtureEvidenceRepository:
     """離線用的 `EvidenceRepository`：依據由建構參數帶入。
 
     預設是空的。編造一份「官方依據」比沒有依據更糟：使用者會拿著它去問承辦人。
+    Source-reference 查詢只回明確登記在 `(item_id, source_reference)` 下的 citation，
+    不以同項目的其他依據替代。
     """
 
     def __init__(
         self,
         citations: Mapping[str, Sequence[Citation]] | None = None,
+        citations_by_reference: Mapping[tuple[str, str], Sequence[Citation]]
+        | None = None,
     ) -> None:
         self._citations = {
             item_id: tuple(entries) for item_id, entries in (citations or {}).items()
+        }
+        self._citations_by_reference = {
+            key: tuple(entries)
+            for key, entries in (citations_by_reference or {}).items()
         }
 
     def get_citations(self, item_id: str) -> tuple[Citation, ...]:
         """查官方依據。沒有的話回空 tuple，呼叫端應據此降級。"""
         return self._citations.get(item_id, ())
+
+    def get_citations_for_references(
+        self,
+        item_id: str,
+        source_references: Sequence[str],
+    ) -> tuple[Citation, ...]:
+        """依 caller 提供的 reference 順序回傳 citation，並穩定去重。"""
+        citations: list[Citation] = []
+        seen: set[Citation] = set()
+        for source_reference in source_references:
+            for citation in self._citations_by_reference.get(
+                (item_id, source_reference), ()
+            ):
+                if citation not in seen:
+                    seen.add(citation)
+                    citations.append(citation)
+        return tuple(citations)
 
 
 # ---------------------------------------------------------------------------
@@ -427,24 +529,37 @@ class FixtureEvidenceRepository:
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class LocalSourceRecord:
     """本機來源表的一列。
 
-    比 `CoverageMetadata` 多一個 `check_frequency_days`：「多久該重抓一次」是來源
-    自己的設定，不是可量測的抓取進度，所以提案第 7 節沒有把它放進 coverage 契約。
-    判斷到期因此屬於**持有來源表的 service**，不屬於拿到 coverage 的呼叫端。
+    比 `CoverageMetadata` 多 `check_frequency_days` 與 optional `gap_category`：前者是
+    來源本身的更新政策，後者記錄已知失敗類別；兩者都由持有來源表的 service 管理。
     """
 
     source_id: str
-    crawl_status: str
+    crawl_status: CrawlStatus
     domain_tags: tuple[str, ...]
     check_frequency_days: int
     last_crawled_at: datetime | None = None
     indexed_document_count: int = 0
+    gap_category: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.check_frequency_days < 0:
+            raise ValueError("check_frequency_days must be non-negative")
+        if self.indexed_document_count < 0:
+            raise ValueError("indexed_document_count must be non-negative")
+        if self.last_crawled_at is not None and (
+            self.last_crawled_at.tzinfo is None
+            or self.last_crawled_at.utcoffset() is None
+        ):
+            raise ValueError("last_crawled_at must be timezone-aware")
+        if self.crawl_status == "error" and not self.gap_category:
+            raise ValueError("error sources require a gap_category")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class LocalRefreshJob:
     """本機佇列裡的一筆 refresh 工作。
 
@@ -462,9 +577,8 @@ class LocalRefreshJob:
 class LocalSourceRefreshService:
     """離線用的 `SourceRefreshService`：本機來源表加一個同步佇列。
 
-    8/1 前不能建立 live AWS 資源，也不打算為此引入第三方任務佇列，所以「背景工作」
-    目前就是一個 list：`request_on_demand_refresh` 把工作記下來就回，不執行抓取。
-    這樣「使用者請求不等待 crawl」在結構上成立 —— 這裡沒有任何會等待的東西。
+    本機 implementation 保留可獨立測試的 list queue；若未來經 owner 核准替換成雲端
+    queue，仍必須保留相同 storage-neutral protocol 與 local test path。
 
     Same-day dedup 的鍵是 `source_id + event_id + 日期`（提案第 9 節第 4 項）：
     同一來源同一天不會因為多個請求重複觸發。
@@ -473,42 +587,78 @@ class LocalSourceRefreshService:
     def __init__(
         self,
         sources: Sequence[LocalSourceRecord] = (),
-        event_domain_tags: Mapping[str, Sequence[str]] | None = None,
+        *,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._sources = {record.source_id: record for record in sources}
-        self._event_domain_tags = {
-            event_id: frozenset(tags)
-            for event_id, tags in (event_domain_tags or {}).items()
-        }
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._triggered: set[tuple[str, str, str]] = set()
         self._queue: list[LocalRefreshJob] = []
 
-    def get_coverage_status(self, event_id: str) -> tuple[CoverageMetadata, ...]:
-        """回傳與這個事件的 `domain_tags` 相關的來源目前狀態。
+    def get_coverage_status(self, scope: CoverageScope) -> CoverageSnapshot:
+        """回傳明確 scope 內的 deterministic coverage snapshot。
 
-        依 `source_id` 排序，讓同一份來源表永遠得到同一個順序 —— 呼叫端與測試因此
-        不必去猜 dict 的迭代順序。事件沒有登記標籤時回空 tuple，不回全部來源：
-        「不知道相關的是哪些」不等於「全部都相關」。
+        `source_ids` 與 `domain_tags` 都有值時取交集；只提供其中一種時以該維度篩選。
+        兩者皆空時回空快照，不把「未指定」猜成「所有來源」。
         """
-        tags = self._event_domain_tags.get(event_id)
-        if not tags:
-            return ()
+        observed_at = self._clock()
+        if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            raise ValueError("coverage clock must return a timezone-aware datetime")
 
-        matched = [
-            record
-            for record in self._sources.values()
-            if tags & frozenset(record.domain_tags)
-        ]
+        requested_source_ids = frozenset(scope.source_ids)
+        requested_domain_tags = frozenset(scope.domain_tags)
+        matched = []
+        if requested_source_ids or requested_domain_tags:
+            for record in self._sources.values():
+                if (
+                    requested_source_ids
+                    and record.source_id not in requested_source_ids
+                ):
+                    continue
+                if requested_domain_tags and not (
+                    requested_domain_tags & frozenset(record.domain_tags)
+                ):
+                    continue
+                matched.append(record)
         matched.sort(key=lambda record: record.source_id)
-        return tuple(
+
+        sources = tuple(
             CoverageMetadata(
                 source_id=record.source_id,
                 crawl_status=record.crawl_status,
                 last_crawled_at=record.last_crawled_at,
                 indexed_document_count=record.indexed_document_count,
                 domain_tags=record.domain_tags,
+                observed_at=observed_at,
             )
             for record in matched
+        )
+        return CoverageSnapshot(
+            scope=scope,
+            observed_at=observed_at,
+            registered_source_count=len(sources),
+            crawled_source_count=sum(
+                source.crawl_status == "crawled" for source in sources
+            ),
+            pending_crawl_source_count=sum(
+                source.crawl_status == "pending_crawl" for source in sources
+            ),
+            error_source_count=sum(
+                source.crawl_status == "error" for source in sources
+            ),
+            indexed_document_count=sum(
+                source.indexed_document_count for source in sources
+            ),
+            sources=sources,
+            gap_categories=tuple(
+                sorted(
+                    {
+                        record.gap_category
+                        for record in matched
+                        if record.gap_category is not None
+                    }
+                )
+            ),
         )
 
     def request_on_demand_refresh(self, request: RefreshRequest) -> RefreshReceipt:
@@ -530,11 +680,11 @@ class LocalSourceRefreshService:
             for source_id in due
             if (source_id, request.event_id, day) not in self._triggered
         )
-        deduplicated = len(fresh) < len(due)
+        deduplicated = bool(due) and not fresh
 
         if not fresh:
-            # 沒有東西要排：可能是都不到期，也可能是今天已經跑過。兩者由
-            # `deduplicated` 區分。
+            # 沒有東西要排：可能是都不到期，也可能是整批來源今天都已經跑過。兩者由
+            # `deduplicated` 區分；只要本次仍排入任一新來源，receipt 就不是 dedup。
             return RefreshReceipt(
                 job_id=job_id,
                 accepted=False,

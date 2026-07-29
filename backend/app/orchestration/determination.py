@@ -17,18 +17,12 @@
 | `verified` | 執行完整確定性判定 |
 | `candidate`／`under_review` | 可以顯示，但不做完整判斷，一律回需人工協助 |
 | `rejected`／`inactive` | 隱藏，不進入候選結果，也不進入資格評估 |
-| `stale` | **暫行**回 `NEEDS_HUMAN_REVIEW`，見下方 |
+| `stale` | 顯示警示、**不執行完整判定**，固定回 `NEEDS_HUMAN_REVIEW`（方案 B） |
 
-`stale` 是提案第 12 節第 2 項明文列出的**待決策項目**，原文寫「任何一方都不得靜默
-選擇」。兩個候選方案是：
-
-- 方案 A：使用最後一次驗證過的快照，並顯示明確警告
-- 方案 B：一律降級為需人工協助
-
-這裡採用較安全的那一端（等同方案 B 的效果），但這是**暫行行為，不是已定案的決策**。
-選它的理由只有一個：兩個方案裡，把過期資料當成有效比降級更可能讓使用者白跑一趟。
-決策確定後改 `_STALE_FALLBACK_STATUS` 一處即可。同一段說明也記在
-`docs/aws_migration_guide.md`，讓兩邊 owner 看到的是同一份待決事項。
+`stale` 已由 owner 選定方案 B：保留在候選清單中，讓使用者知道這一項可能相關並看見
+資料已過期的警示；但過期規則不得進入完整確定性判定，也不得使用最後一次快照產生
+`eligible`／`ineligible`。這個邊界把「可見性」與「可判定性」分開，避免過期資料被
+誤當成仍有效的資格依據。
 
 ## 單一項目失敗不影響其他項目
 
@@ -71,8 +65,8 @@ HIDDEN_PROGRAM_STATUSES: frozenset[str] = frozenset({"rejected", "inactive"})
 FULL_EVALUATION_PROGRAM_STATUSES: frozenset[str] = frozenset({"verified"})
 """唯一可以執行完整確定性判定的資料治理狀態。"""
 
-_STALE_FALLBACK_STATUS: ItemStatus = ItemStatus.NEEDS_HUMAN_REVIEW
-"""`stale` 的暫行處理。待雙方 owner 在方案 A／方案 B 之間做出決定。"""
+_STALE_STATUS: ItemStatus = ItemStatus.NEEDS_HUMAN_REVIEW
+"""Owner 核准的 stale 方案 B：可見、有警示、不做完整判定、固定轉人工。"""
 
 
 def visible_items(items: tuple[CandidateItem, ...]) -> tuple[CandidateItem, ...]:
@@ -141,7 +135,7 @@ def gated_status(program_status: str) -> ItemStatus | None:
     if program_status in FULL_EVALUATION_PROGRAM_STATUSES:
         return None
     if program_status == "stale":
-        return _STALE_FALLBACK_STATUS
+        return _STALE_STATUS
     # candidate / under_review：可以顯示，但沒有二次確認過的資料不能給結論。
     return ItemStatus.NEEDS_HUMAN_REVIEW
 

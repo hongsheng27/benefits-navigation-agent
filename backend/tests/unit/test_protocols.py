@@ -9,13 +9,18 @@ fixture 真的只回它有資料的東西，而沒有資料時回空而不是編
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from app.orchestration.data_contracts import (
     Citation,
+    CoverageMetadata,
     EligibilityDecision,
     EligibilityStatus,
 )
 from app.orchestration.field_registry import FieldRegistry
 from app.orchestration.protocols import (
+    CoverageScope,
+    CoverageSnapshot,
     FixtureEligibilityService,
     FixtureEntitlementGraphRepository,
     FixtureEvidenceRepository,
@@ -37,6 +42,7 @@ def _decision(item_id: str, status: EligibilityStatus) -> EligibilityDecision:
         amount_max=None,
         amount_period=None,
         amount_currency=None,
+        missing_field_ids=(),
         reasons=(),
     )
 
@@ -121,8 +127,8 @@ def test_fixture_graph_answers_both_directions() -> None:
     prerequisites = repository.get_prerequisites("funeral_benefit")
     produces = repository.get_produces("death_registration")
 
-    assert [relation.item_id for relation in prerequisites] == ["death_registration"]
-    assert "funeral_benefit" in [relation.item_id for relation in produces]
+    assert [relation.target_id for relation in prerequisites] == ["death_registration"]
+    assert "funeral_benefit" in [relation.target_id for relation in produces]
 
 
 def test_fixture_graph_returns_nothing_for_an_unknown_item() -> None:
@@ -204,15 +210,41 @@ def test_fixture_evidence_repository_returns_the_supplied_citations() -> None:
         document_id="doc_1",
         title="〈條例名稱〉",
         publisher="〈機關〉",
-        published_at="2026-01-01",
-        effective_at="2026-02-01",
+        published_at=_NOW,
+        effective_at=_NOW,
         url="https://example.gov.tw/rule",
         excerpt="〈引用段落〉",
-        retrieved_at="2026-07-28",
+        retrieved_at=_NOW,
     )
     repository = FixtureEvidenceRepository(citations={"funeral_benefit": [citation]})
 
     assert repository.get_citations("funeral_benefit") == (citation,)
+
+
+def test_fixture_evidence_repository_resolves_only_exact_source_references() -> None:
+    citation = Citation(
+        document_id="doc_1",
+        title="〈條例名稱〉",
+        publisher="〈機關〉",
+        published_at=None,
+        effective_at=None,
+        url="https://example.gov.tw/rule",
+        excerpt="〈引用段落〉",
+        retrieved_at=_NOW,
+    )
+    repository = FixtureEvidenceRepository(
+        citations_by_reference={("funeral_benefit", "doc_1#section_2"): (citation,)}
+    )
+
+    assert repository.get_citations_for_references(
+        "funeral_benefit", ("doc_1#section_2",)
+    ) == (citation,)
+    assert (
+        repository.get_citations_for_references(
+            "funeral_benefit", ("doc_1#another_section",)
+        )
+        == ()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -245,20 +277,93 @@ def _service() -> LocalSourceRefreshService:
                 check_frequency_days=7,
             ),
         ),
-        event_domain_tags={"spouse_death": ("funeral",)},
+        clock=lambda: _NOW,
     )
 
 
-def test_coverage_is_filtered_by_the_event_domain_tags() -> None:
-    """只回與這個事件相關的來源，並依代號排序讓順序可預期。"""
-    coverage = _service().get_coverage_status("spouse_death")
+def test_coverage_is_filtered_by_the_explicit_scope() -> None:
+    """只回 scope 內的來源，並依代號排序讓順序可預期。"""
+    snapshot = _service().get_coverage_status(
+        CoverageScope(source_ids=(), domain_tags=("funeral",))
+    )
 
-    assert [entry.source_id for entry in coverage] == ["src_fresh", "src_pending"]
+    assert [entry.source_id for entry in snapshot.sources] == [
+        "src_fresh",
+        "src_pending",
+    ]
+    assert snapshot.scope == CoverageScope(source_ids=(), domain_tags=("funeral",))
+    assert snapshot.observed_at == _NOW
+    assert (
+        snapshot.registered_source_count,
+        snapshot.crawled_source_count,
+        snapshot.pending_crawl_source_count,
+        snapshot.error_source_count,
+        snapshot.indexed_document_count,
+    ) == (2, 1, 1, 0, 3)
+    assert all(source.observed_at == _NOW for source in snapshot.sources)
 
 
-def test_coverage_is_empty_for_an_event_without_tags() -> None:
+def test_coverage_is_empty_for_an_empty_scope() -> None:
     """「不知道相關的是哪些」不等於「全部都相關」。"""
-    assert _service().get_coverage_status("unmapped_event") == ()
+    snapshot = _service().get_coverage_status(
+        CoverageScope(source_ids=(), domain_tags=())
+    )
+
+    assert snapshot.registered_source_count == 0
+    assert snapshot.sources == ()
+
+
+def test_coverage_reports_sorted_gap_categories() -> None:
+    service = LocalSourceRefreshService(
+        sources=(
+            LocalSourceRecord(
+                source_id="src_error_b",
+                crawl_status="error",
+                domain_tags=("funeral",),
+                check_frequency_days=7,
+                gap_category="robots_policy",
+            ),
+            LocalSourceRecord(
+                source_id="src_error_a",
+                crawl_status="error",
+                domain_tags=("funeral",),
+                check_frequency_days=7,
+                gap_category="broken_link",
+            ),
+        ),
+        clock=lambda: _NOW,
+    )
+
+    snapshot = service.get_coverage_status(
+        CoverageScope(source_ids=(), domain_tags=("funeral",))
+    )
+
+    assert snapshot.error_source_count == 2
+    assert snapshot.gap_categories == ("broken_link", "robots_policy")
+
+
+def test_coverage_snapshot_rejects_duplicate_source_ids() -> None:
+    source = CoverageMetadata(
+        source_id="src_duplicate",
+        crawl_status="pending_crawl",
+        last_crawled_at=None,
+        indexed_document_count=0,
+        domain_tags=("funeral",),
+        observed_at=_NOW,
+    )
+
+    with pytest.raises(ValueError, match="unique source_ids"):
+        CoverageSnapshot(
+            scope=CoverageScope(source_ids=(), domain_tags=("funeral",)),
+            observed_at=_NOW,
+            registered_source_count=2,
+            crawled_source_count=0,
+            pending_crawl_source_count=2,
+            error_source_count=0,
+            indexed_document_count=0,
+            sources=(source, source),
+            gap_categories=(),
+        )
 
 
 def test_only_due_sources_are_queued() -> None:
@@ -363,6 +468,45 @@ def test_the_same_source_and_event_is_not_triggered_twice_in_a_day() -> None:
     assert len(service.pending_jobs()) == 1
 
 
+def test_a_partially_duplicate_batch_still_reports_a_new_acceptance() -> None:
+    """Batch 只要排入任一新來源，就不是「整批被去重」。"""
+    service = LocalSourceRefreshService(
+        sources=(
+            LocalSourceRecord(
+                source_id="src_a",
+                crawl_status="pending_crawl",
+                domain_tags=("funeral",),
+                check_frequency_days=7,
+            ),
+            LocalSourceRecord(
+                source_id="src_b",
+                crawl_status="pending_crawl",
+                domain_tags=("funeral",),
+                check_frequency_days=7,
+            ),
+        ),
+        clock=lambda: _NOW,
+    )
+    service.request_on_demand_refresh(
+        RefreshRequest(
+            event_id="spouse_death",
+            source_ids=("src_a",),
+            requested_at=_NOW,
+        )
+    )
+
+    receipt = service.request_on_demand_refresh(
+        RefreshRequest(
+            event_id="spouse_death",
+            source_ids=("src_a", "src_b"),
+            requested_at=_NOW,
+        )
+    )
+
+    assert (receipt.accepted, receipt.deduplicated) == (True, False)
+    assert [job.source_id for job in service.pending_jobs()] == ["src_a", "src_b"]
+
+
 def test_a_different_event_is_not_deduplicated() -> None:
     """dedup 的鍵包含事件，所以另一個事件仍然可以觸發同一個來源。"""
     service = LocalSourceRefreshService(
@@ -374,7 +518,7 @@ def test_a_different_event_is_not_deduplicated() -> None:
                 check_frequency_days=7,
             ),
         ),
-        event_domain_tags={"spouse_death": ("funeral",), "parent_death": ("funeral",)},
+        clock=lambda: _NOW,
     )
 
     for event_id in ("spouse_death", "parent_death"):

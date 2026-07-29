@@ -1,251 +1,363 @@
-# 需求文件：資料層與規則引擎補齊
+# Requirements Document
 
-## 簡介
+**資料層與規則引擎補齊**
 
-為「接住」福利導航 Agent 的 MVP 情境（配偶死亡）補齊資料層內容與規則引擎驗證機制。本需求採用**關聯式圖模型**（Entitlement Graph）取代靜態 JSON 檔案，以 SQLite `graph_nodes` 與 `graph_edges` 資料表儲存人生事件、保險體系、福利方案、機關與文件需求之間的關聯，支援雙向遍歷與條件式展開。提取管線升級為多層架構，涵蓋 HTML 擷取、附件偵測與下載、附件文本提取、LLM 完整分析、以及人工審查。未審查方案可顯示但須附免責聲明，僅已驗證方案才進入 Rule Engine 資格評估。
+## Introduction
 
-MVP 六項核心福利方案：
-1. 死亡登記（death_registration）
-2. 勞保喪葬給付（labor_funeral_grant）— 條件：insurance_type = labor_insurance
-3. 國保喪葬給付（national_pension_funeral_grant）— 條件：insurance_type = national_pension
-4. 勞保遺屬年金（labor_survivor_pension）— 條件：insurance_type = labor_insurance
-5. 國保遺屬年金（national_pension_survivor_pension）— 條件：insurance_type = national_pension
-6. 全民健康保險身分變更（nhi_status_change）
+本需求定義「接住」福利導航 Agent 目前的本機資料層、Entitlement Graph、確定性資格判斷、官方證據、來源更新與隱私邊界。SQLite 是本機資料策展與 runtime 的單一真相來源，直到另有 owner-approved storage migration ADR 與替代 adapter；FastAPI application composition root 建立 storage-neutral repositories 與 services，再注入 Workflow 與 state machine。Runtime 不要求 JSON，也不提供 JSON fallback；Workflow 不接觸 SQL 或 SQLite 專屬資料形狀，LLM 不決定資格或自動驗證規則。
 
-## 詞彙表
+MVP catalog 保留下列既有方案識別碼，實際資格條件、期限、金額與來源原文只可來自人工審查通過的官方資料，本文件不新增或推定任何福利事實：
 
-- **Entitlement_Graph**：以 SQLite `graph_nodes` 與 `graph_edges` 資料表儲存的關聯式圖模型，描述人生事件、保險體系、福利方案、機關與文件需求之間的有向關聯，支援雙向遍歷。
-- **Graph_Node**：`graph_nodes` 資料表中的一筆記錄，代表圖中一個實體節點，含 node_id、node_type、display_name、metadata_json。
-- **Graph_Edge**：`graph_edges` 資料表中的一筆記錄，代表兩個節點之間的有向關聯，含 from_node_id、to_node_id、edge_type、condition_json、order、metadata_json。
-- **Node_Type**：節點類型列舉值，合法值為 `life_event`（人生事件）、`insurance_system`（保險體系）、`benefit_program`（福利方案）、`agency`（機關）、`document_requirement`（文件需求）。
-- **Edge_Type**：邊類型列舉值，合法值為 `triggers`（觸發）、`belongs_to`（歸屬）、`requires`（前置需求）、`produces`（產出）、`administered_by`（承辦機關）。
-- **Condition_JSON**：邊上的條件式展開欄位（JSON 或 NULL），格式為 `{"attribute": "<使用者屬性名稱>", "value": "<該屬性須符合的值"}`。當使用者尚未提供該屬性時，遍歷所有邊；已提供時僅遍歷匹配邊。
-- **Rule_Engine**：通用資格判斷引擎（`backend/app/rules/engine.py`），讀取 `program_rule_fields` 資料表中的宣告式欄位進行確定性評估。僅對 program_status 為 `verified` 的方案執行完整資格判斷。
-- **Benefit_Catalog**：本機 SQLite 中 `benefit_programs`、`program_rule_fields`、`program_sources`、`program_organization_roles`、`graph_nodes`、`graph_edges` 等資料表的集合。
-- **Program_Rule_Fields**：`program_rule_fields` 資料表中每筆記錄，定義一項福利的單一規則欄位，含 field_name、field_type、field_value、source_excerpt 與 review_status。
-- **Source_Document**：`source_documents` 資料表中代表一份官方文件的記錄，含 canonical_url、title、document_type、jurisdiction_code 等 metadata。
-- **Document_Attachment**：`document_attachments` 資料表中代表一份來源文件附件的記錄，含 attachment_id、document_id、filename、file_type、download_url、extracted_text_available 等欄位。
-- **Evidence_Link**：`program_sources` 資料表中連結福利方案與來源文件的記錄，含 evidence_role 與 source_excerpt。
-- **Extraction_Confidence**：提取結果信心等級，合法值為 `partial`（僅 HTML，頁面指出有附件但尚未處理）、`high_from_html`（僅 HTML，頁面內容看起來完整）、`high_from_full`（HTML + 所有附件已提取並分析）、`partial_ocr_needed`（附件為掃描圖檔，需 OCR）。
-- **Validate_Rules_Script**：`scripts/validate_rules.py` 腳本，負責驗證所有已填入的 program_rule_fields 資料完整性與一致性。
-- **Evaluation_Case**：用於測試 Rule_Engine 資格判斷正確性的結構化測試案例，含使用者屬性輸入與預期判斷結果。
-- **Insurance_Type**：申請人或亡者的社會保險身分，MVP 區分為 `labor_insurance`（勞保）與 `national_pension`（國民年金）。
-- **Provenance**：資料來源追溯性，每筆規則欄位須附 source_excerpt 引用官方文件原文。
-- **Source_Monitor_Script**：`scripts/monitor_source_changes.py` 腳本，負責重新抓取來源文件並偵測內容變更。
-- **LLM_Extraction_Pipeline**：使用 Structural_Crawl 發現來源頁面，再透過 AI 分類與 Amazon Bedrock LLM 從來源頁面與附件提取結構化福利候選資料的多層管線（Layer 0: 結構性發現 → Layer 1: 頁面分類 → Layer 2: 附件偵測 → Layer 3: 附件文本提取 → Layer 4: LLM 完整分析 → Layer 5: 人工審查）。
-- **Check_Frequency**：來源監控頻率欄位，定義該機關官網應被重新爬取以發現新頁面的時間間隔（daily/weekly/monthly/manual）。
-- **Structural_Crawl**：從已登記機關的官方網站首頁出發，依網站結構（福利專區、申辦服務、公告等導覽連結）逐層發現子頁面的系統性爬取方式。不依賴搜尋引擎或關鍵字搜尋。支援三種觸發模式：On-demand（查詢時發現 pending_crawl 機關即時觸發）、Scheduled（依 check_frequency 定期爬取到期機關）、Manual（維護者指定強制重爬）。
-- **Coverage_Guarantee**：本系統的核心價值主張：透過 OID registry 窮舉所有公部門機關，再系統性掃描每個機關的官網，保證不遺漏任何公部門的福利資源。與 ChatGPT（依賴訓練資料，可能過時或遺漏方案）或 Google（SEO 排名，僅回傳排序靠前的結果，許多利基補助未被良好索引）不同，本系統從完整的機關清單出發進行窮舉式發現。
-- **Domain_Tags**：source_registry 中的業務領域標籤欄位，以 JSON 字串陣列格式記錄該機關涉及的人生事件相關業務領域（如 death、unemployment、birth 等），用於快速篩選某主題相關的所有機關。
+1. `death_registration`
+2. `labor_funeral_grant`
+3. `national_pension_funeral_grant`
+4. `labor_survivor_pension`
+5. `national_pension_survivor_pension`
+6. `nhi_status_change`
 
-## 需求
+## Glossary
 
-### 需求 1：Entitlement Graph 關聯模型
+- **System**：本需求涵蓋的福利導航後端系統。
+- **Local_Data_Platform**：以本機 SQLite 支援資料策展與 runtime 查詢的資料平台。
+- **Last_Successful_Committed_State**：最近一次成功完成 transaction commit 的 SQLite 狀態，不包含未提交或已 rollback 的變更。
+- **Benefit_Catalog**：儲存方案、狀態、規則、來源、證據與機關角色的 canonical SQLite catalog。
+- **Entitlement_Graph**：描述人生事件、保險體系、方案、機關與文件需求關聯的資料模型。
+- **Repository_Layer**：Entitlement_Graph_Repository、Evidence_Repository 與 Source_Refresh_Service 的 storage-neutral 集合查詢邊界。
+- **Entitlement_Graph_Repository**：以 storage-neutral domain contract 提供事件展開、前置需求、產出與體系反查的介面。
+- **Eligibility_Service**：提供必要欄位查詢、確定性資格評估與方案狀態安全閘門的 storage-neutral 介面。
+- **Evidence_Repository**：提供方案官方引用資料的 storage-neutral 介面。
+- **Source_Refresh_Service**：提供 coverage 狀態與非阻塞來源更新請求的 storage-neutral 介面。
+- **Application_Composition_Root**：FastAPI application 啟動時建立具體 adapters、repositories 與 services，並完成 dependency injection 的唯一組裝位置。
+- **Workflow**：控制 session、state、提問順序、停止與人工轉介條件的 application 流程；包含 state machine。
+- **SQLite_Adapter**：實作 storage-neutral 介面並封裝 SQLite 查詢、row mapping 與 connection lifecycle 的資料存取元件。
+- **Domain_Contract_Layer**：定義 backend 模組間共享、不依賴資料表欄名，且建立後不可變更的 immutable domain models。
+- **CandidateItem**：候選方案的 backend 共用 contract，包含 `item_id`、`display_name`、`program_status`、backend 內部 `relevance_score`、`missing_field_ids`、`prerequisites` 與 `produces`。
+- **EligibilityDecision**：資格判斷共用 contract，包含 `item_id`、`status`、金額上下限、發放週期、幣別、`missing_field_ids` 與結構化原因。
+- **StructuredReason**：結構化判斷原因，包含 `condition_id`、`field_id`、`operator`、`expected`、`actual`、`label` 與 `source_reference`。
+- **Citation**：官方證據 contract，包含文件識別、標題、發布者、發布時間、生效時間、URL、已核准引用段落與擷取時間。
+- **FieldRegistryEntry**：Workflow 提問使用的欄位定義，包含 `field_id`、資料型別、合法值、提問文字、需要原因與 PII 分類。
+- **CoverageMetadata**：單一已登記來源在指定觀測時間的進度 contract，包含 `source_id`、爬取狀態、最後成功爬取時間、已索引文件數、領域標籤與 `observed_at`；不代表內容完整保證。
+- **Coverage_Scope**：一次 coverage 統計納入的已登記 `source_id` 集合與 domain tags。
+- **Rule_DSL**：儲存在 SQLite 的 canonical、versioned、可巢狀 `all_of`／`any_of` 宣告式資格規則語言。
+- **Compatibility_Projection**：由 canonical Rule_DSL 自動產生的唯讀 `program_rule_fields` 相容檢視或等價投影。
+- **Compatibility_Projection_Generator**：將 Rule_DSL 轉換為 Compatibility_Projection，並可重建語意等價 Rule_DSL 的 deterministic、lossless converter。
+- **Rule_Engine**：只執行已核准 Rule_DSL 的確定性資格判斷元件。
+- **Program_Status**：方案治理狀態，合法值為 `candidate`、`under_review`、`verified`、`stale`、`rejected`、`inactive`。
+- **Eligibility_Status**：資格結果，合法值為 `eligible`、`ineligible`、`needs_information`、`needs_human_review`。
+- **Relevance_Score**：只供 backend 排序使用的有限數值 metadata，不代表資格機率或符合程度；本需求不指定數值範圍。
+- **Privacy_Sanitizer**：集中且遞迴移除 Raw_User_Text 與實際資格值的隱私過濾元件。
+- **Requesting_User**：通過目前請求的身分驗證與授權檢查，且可接收該請求結果的使用者。
+- **API_Response_Mapper**：將 backend domain contracts 映射為 Requesting_User 或 frontend-facing API response 的元件。
+- **LLM_Integration**：負責語言理解、白話解釋、頁面分類與結構化候選提取的生成式模型邊界。
+- **Observability_Pipeline**：產生 log、trace、metric、exception 與 audit event 的所有後端輸出路徑。
+- **Raw_User_Text**：使用者輸入的未結構化原始文字。
+- **Source_Curation_Pipeline**：來源發現、下載、附件處理、候選提取與人工審查流程。
+- **Coverage_Tracker**：以已登記來源與爬取結果計算 CoverageMetadata 的元件。
+- **Application_Timezone**：application configuration 明確指定、用來換算 refresh calendar date 的時區。
+- **Refresh_Job**：在背景執行來源爬取、附件處理或候選提取的本機工作。
+- **JSON_Exporter**：從 SQLite 單向產生測試 fixture 或 release snapshot 的非 runtime 工具。
+- **Validation_Suite**：檢查 schema、規則、投影、狀態閘門、隱私與 lifecycle 的自動化驗證集合。
+- **Synthetic_Validation_Data**：只供 Validation_Suite 使用，且與正式福利事實、Official_Source、Citation 及 canonical catalog 隔離的合成資料。
+- **Official_Source**：經登記且由資料維護者確認的官方政府來源。
+- **Human_Reviewer**：有權核准來源、證據、規則版本與方案治理狀態的人員。
 
-**User Story:** 身為 orchestration 模組，我需要透過關聯式圖模型查詢人生事件對應的保險體系、福利方案、文件需求與承辦機關，且支援雙向遍歷與條件式展開，以便動態展開候選福利而不需硬編碼任何事件特定邏輯。
+## Requirements
 
-#### 驗收條件
+### 需求 1：SQLite 單一真相來源
 
-1. THE Benefit_Catalog SHALL 包含 `graph_nodes` 資料表，schema 為：node_id（TEXT PRIMARY KEY）、node_type（TEXT NOT NULL，CHECK 約束限制為 `life_event`、`insurance_system`、`benefit_program`、`agency`、`document_requirement`）、display_name（TEXT NOT NULL）、metadata_json（TEXT，可為 NULL）、created_at（TEXT NOT NULL）、updated_at（TEXT NOT NULL）。
-2. THE Benefit_Catalog SHALL 包含 `graph_edges` 資料表，schema 為：from_node_id（TEXT NOT NULL，外鍵參照 graph_nodes）、to_node_id（TEXT NOT NULL，外鍵參照 graph_nodes）、edge_type（TEXT NOT NULL，CHECK 約束限制為 `triggers`、`belongs_to`、`requires`、`produces`、`administered_by`）、condition_json（TEXT，可為 NULL）、order（INTEGER NOT NULL DEFAULT 0）、metadata_json（TEXT，可為 NULL）、created_at（TEXT NOT NULL），主鍵為 (from_node_id, to_node_id, edge_type)。
-3. THE `graph_edges` 資料表 SHALL 支援雙向查詢：透過 `SELECT * FROM graph_edges WHERE from_node_id = ?` 查詢正向關聯（如從 life_event 找到所有 triggers 的 insurance_system），以及透過 `SELECT * FROM graph_edges WHERE to_node_id = ?` 查詢反向關聯（如從 insurance_system 找到所有觸發它的 life_event）。
-4. WHEN Condition_JSON 為非 NULL 時，THE Graph_Edge SHALL 包含格式為 `{"attribute": "<屬性名稱>", "value": "<屬性值>"}` 的條件物件；WHEN orchestration 模組遍歷該邊時，IF 使用者已提供該 attribute 且值不匹配，SHALL 跳過該邊；IF 使用者尚未提供該 attribute，SHALL 遍歷該邊（保守策略）。
-5. THE `graph_edges` 資料表 SHALL 設定外鍵約束：from_node_id 參照 `graph_nodes(node_id)` ON DELETE RESTRICT、to_node_id 參照 `graph_nodes(node_id)` ON DELETE RESTRICT，確保不會出現指向不存在節點的邊。
-6. WHEN 新增一個人生事件時，THE 系統 SHALL 僅需：（a）新增對應的 graph_nodes 記錄（life_event 類型）、（b）新增該事件觸發的 graph_edges 記錄、（c）新增對應的 benefit_programs 與 program_rule_fields 資料 — 不需修改任何 Python 程式碼。
-7. THE `graph_nodes` 與 `graph_edges` 資料表 SHALL 建立適當索引：graph_nodes 上的 node_type 索引、graph_edges 上的 from_node_id 索引、graph_edges 上的 to_node_id 索引、graph_edges 上的 edge_type 索引。
-
-### 需求 2：MVP 福利方案基本資料
-
-**User Story:** 身為 Rule_Engine，我需要從 `benefit_programs` 資料表讀取每項 MVP 福利的基本識別資訊與分類，並透過 graph_nodes 與 graph_edges 記錄表示其在 Entitlement Graph 中的位置，以便正確載入對應的規則欄位進行評估。
-
-#### 驗收條件
-
-1. THE Benefit_Catalog SHALL 包含 6 筆 `benefit_programs` 記錄，其 program_id 分別為：`death_registration`、`labor_funeral_grant`、`national_pension_funeral_grant`、`labor_survivor_pension`、`national_pension_survivor_pension`、`nhi_status_change`。
-2. THE `benefit_programs` 記錄中每筆 SHALL 填入 canonical_name（繁體中文福利名稱）、summary（50 字以內的用途摘要）、support_purpose、program_basis、delivery_form、jurisdiction_code，且所有欄位值 SHALL 符合 `benefit_programs` 資料表定義的 CHECK 約束。
-3. WHEN program_id 為 `death_registration`，THE 記錄 SHALL 設定 support_purpose 為 NULL（行政程序非福利給付）、program_basis 為 NULL、delivery_form 為 NULL、jurisdiction_code 為 `TW`。
-4. WHEN program_id 為 `labor_funeral_grant`，THE 記錄 SHALL 設定 support_purpose 為 `funeral_cost`、program_basis 為 `social_insurance`、delivery_form 為 `cash_once`、jurisdiction_code 為 `TW`。
-5. WHEN program_id 為 `national_pension_funeral_grant`，THE 記錄 SHALL 設定 support_purpose 為 `funeral_cost`、program_basis 為 `social_insurance`、delivery_form 為 `cash_once`、jurisdiction_code 為 `TW`。
-6. WHEN program_id 為 `labor_survivor_pension`，THE 記錄 SHALL 設定 support_purpose 為 `survivor_livelihood`、program_basis 為 `social_insurance`、delivery_form 為 `cash_recurring`、jurisdiction_code 為 `TW`。
-7. WHEN program_id 為 `national_pension_survivor_pension`，THE 記錄 SHALL 設定 support_purpose 為 `survivor_livelihood`、program_basis 為 `social_insurance`、delivery_form 為 `cash_recurring`、jurisdiction_code 為 `TW`。
-8. WHEN program_id 為 `nhi_status_change`，THE 記錄 SHALL 設定 support_purpose 為 NULL（行政程序非福利給付）、program_basis 為 NULL、delivery_form 為 NULL、jurisdiction_code 為 `TW`。
-9. THE `benefit_programs` 記錄在初始填入時 SHALL 將 program_status 設為 `under_review`，不得設為 `verified`，因為尚未完成證據連結與人工審查流程。
-10. THE Entitlement_Graph SHALL 為配偶死亡情境包含以下 Graph_Node 記錄：`spouse_death`（node_type: life_event）、`labor_insurance`（node_type: insurance_system）、`national_pension`（node_type: insurance_system）、`nhi`（node_type: insurance_system）、`household_registration`（node_type: agency）、`death_certificate`（node_type: document_requirement），以及 6 筆 benefit_program 類型節點對應 6 項 MVP 福利。
-11. THE Entitlement_Graph SHALL 為配偶死亡情境包含以下 Graph_Edge 記錄：`spouse_death` --triggers--> `labor_insurance`、`spouse_death` --triggers--> `national_pension`、`spouse_death` --triggers--> `nhi`、`spouse_death` --triggers--> `household_registration`、`labor_insurance` --belongs_to--> `labor_funeral_grant`、`labor_insurance` --belongs_to--> `labor_survivor_pension`、`national_pension` --belongs_to--> `national_pension_funeral_grant`、`national_pension` --belongs_to--> `national_pension_survivor_pension`、`nhi` --belongs_to--> `nhi_status_change`、`household_registration` --belongs_to--> `death_registration`、`death_registration` --produces--> `death_certificate`、`labor_funeral_grant` --requires--> `death_certificate`、`labor_survivor_pension` --requires--> `death_certificate`。
-12. THE `spouse_death` --triggers--> `labor_insurance` 邊 SHALL 設定 condition_json 為 `{"attribute": "insurance_type", "value": "labor_insurance"}`；`spouse_death` --triggers--> `national_pension` 邊 SHALL 設定 condition_json 為 `{"attribute": "insurance_type", "value": "national_pension"}`；其餘 triggers 邊的 condition_json SHALL 為 NULL。
-
-### 需求 3：MVP 規則欄位（6 項核心）
-
-**User Story:** 身為 Rule_Engine，我需要從 `program_rule_fields` 資料表讀取 6 項核心 MVP 福利的宣告式規則（含必要屬性、資格條件、金額計算、期限），以便僅靠資料驅動的方式評估資格。
+**User Story:** 身為 backend 維護者，我需要資料策展與 runtime 共用單一 SQLite 真相來源，以便避免人工維護兩份互相矛盾的資料。
 
 #### 驗收條件
 
-1. WHEN program_id 為 `death_registration`，THE Program_Rule_Fields SHALL 定義以下規則欄位：required_attributes（json 型別，值為需要的使用者屬性名稱清單，至少包含 `death_date` 與 `relationship_to_deceased`）、application_deadline_days（integer 型別，值為 30，代表死亡後 30 日內須辦理）、deadline_starts_from（text 型別，值為 `death_date`）。
-2. WHEN program_id 為 `labor_funeral_grant`，THE Program_Rule_Fields SHALL 定義以下規則欄位：required_attributes（json 型別，至少包含 `insurance_type`、`insurance_months`、`death_date`、`relationship_to_deceased`）、eligible_insurance_types（json 型別，值包含 `labor_insurance`）、min_insurance_months（integer 型別）、application_deadline_days（integer 型別）、deadline_starts_from（text 型別）、min_amount（integer 型別）、max_amount（integer 型別）、amount_conditions（json 型別，定義依投保薪資級距或月數計算的金額條件）。
-3. WHEN program_id 為 `national_pension_funeral_grant`，THE Program_Rule_Fields SHALL 定義以下規則欄位：required_attributes（json 型別，至少包含 `insurance_type`、`insurance_months`、`death_date`、`relationship_to_deceased`）、eligible_insurance_types（json 型別，值包含 `national_pension`）、application_deadline_days（integer 型別）、deadline_starts_from（text 型別）、min_amount（integer 型別）、max_amount（integer 型別）。
-4. WHEN program_id 為 `labor_survivor_pension`，THE Program_Rule_Fields SHALL 定義以下規則欄位：required_attributes（json 型別，至少包含 `insurance_type`、`insurance_months`、`death_date`、`relationship_to_deceased`、`applicant_age`）、eligible_insurance_types（json 型別，值包含 `labor_insurance`）、eligible_relationships（json 型別，定義可申請的親屬關係清單）、application_deadline_days（integer 型別）、deadline_starts_from（text 型別）。
-5. WHEN program_id 為 `national_pension_survivor_pension`，THE Program_Rule_Fields SHALL 定義以下規則欄位：required_attributes（json 型別，至少包含 `insurance_type`、`insurance_months`、`death_date`、`relationship_to_deceased`、`applicant_age`）、eligible_insurance_types（json 型別，值包含 `national_pension`）、eligible_relationships（json 型別，定義可申請的親屬關係清單）、application_deadline_days（integer 型別）、deadline_starts_from（text 型別）。
-6. WHEN program_id 為 `nhi_status_change`，THE Program_Rule_Fields SHALL 定義以下規則欄位：required_attributes（json 型別，至少包含 `death_date`、`applicant_nhi_dependent_status`）、application_deadline_days（integer 型別）、deadline_starts_from（text 型別）。
-7. THE Program_Rule_Fields 中每筆記錄 SHALL 包含非空白的 source_excerpt 欄位，引用該規則所依據的官方文件原文片段（至少 10 個字元），以確保規則資料具備 Provenance。
-8. THE Program_Rule_Fields 中每筆記錄的 review_status SHALL 初始設為 `pending`，待人工確認後才可更新為 `verified`。
-9. THE Program_Rule_Fields 中 field_type 欄位 SHALL 僅使用 `program_rule_fields` 資料表定義的合法值之一：text、integer、number、boolean、json、date。
-10. THE 規則欄位 schema SHALL 定義通用的欄位模式（field patterns），包含但不限於：required_attributes、eligible_insurance_types、min_insurance_months、eligible_relationships、application_deadline_days、deadline_starts_from、min_amount、max_amount、amount_conditions、requires_city_registration、eligible_remains_types。其他方案（非核心 6 項）的具體 rule_fields 資料透過 LLM_Extraction_Pipeline 提取並經人工審查後填入。
+1. WHILE 尚未有 owner-approved storage migration ADR 與替代 adapter，THE Local_Data_Platform SHALL 使用本機 SQLite 儲存與讀取來源、Entitlement Graph、方案、規則、證據、coverage metadata 與審查狀態。
+2. WHEN runtime 查詢候選方案、規則、證據或 coverage 資料時，THE Local_Data_Platform SHALL 從 Last_Successful_Committed_State 提供資料。
+3. THE System SHALL 在不載入任何 runtime JSON 檔案的情況下完成 application 啟動與本機查詢。
+4. IF SQLite schema 版本不受目前 application 支援，THEN THE Local_Data_Platform SHALL 拒絕啟動資料服務並回報不含使用者資料的 schema version error。
+5. THE Local_Data_Platform SHALL 將資料庫 schema version 與每筆 canonical Rule_DSL version 保存為可查詢值。
+6. THE Benefit_Catalog SHALL 排除 Raw_User_Text、direct identifiers、credentials 與 session 對話內容。
+7. WHEN 已成功完成的 runtime 查詢沒有符合條件的資料時，THE Local_Data_Platform SHALL 回傳該查詢 contract 所定義的空結果。
+8. IF SQLite 無法開啟、無法讀取或查詢未成功完成，THEN THE Local_Data_Platform SHALL 拒絕 application 啟動或受影響的查詢並回報不含使用者資料的 SQLite unavailable 或 query failure error。
+9. IF SQLite 無法開啟、無法讀取或查詢未成功完成，THEN THE System SHALL 保持 Last_Successful_Committed_State 不變且不切換至 JSON fallback。
 
-### 需求 4：官方來源文件證據
+### 需求 2：Storage-neutral 邊界與 composition-root 注入
 
-**User Story:** 身為審查人員，我需要每項 MVP 福利都有對應的官方來源文件 metadata 與證據連結，以便追溯規則的依據並確認資料正確性。
-
-#### 驗收條件
-
-1. THE Source_Document 資料表 SHALL 至少包含 6 筆記錄，分別對應 6 項 MVP 福利步驟的主要官方法規或說明頁面，每筆記錄的 canonical_url 須為 HTTPS 臺灣政府網域（.gov.tw）。
-2. THE Source_Document 記錄 SHALL 填入 title（繁體中文文件標題）、document_type（benefit_page 或 legal_text）、jurisdiction_code（TW）、publisher_name（發布機關名稱），且 review_status 初始設為 `candidate`。
-3. THE Evidence_Link 資料表 SHALL 為每項 MVP 福利至少建立 1 筆 `program_sources` 記錄，連結該福利的 program_id 與對應 Source_Document 的 document_id，evidence_role 設為 `eligibility` 或 `legal_basis`。
-4. THE Evidence_Link 記錄 SHALL 包含非空白的 source_excerpt（至少 10 個字元），引用來源文件中與該福利資格條件相關的原文片段。
-5. IF 某項 MVP 福利的 Evidence_Link 尚未建立或 source_excerpt 為空白，THEN THE Benefit_Catalog SHALL 不允許該福利的 program_status 更新為 `verified`（由既有 CHECK 約束保證）。
-
-### 需求 5：規則驗證腳本
-
-**User Story:** 身為開發者，我需要一個驗證腳本來檢查所有已填入的 program_rule_fields 資料是否完整、格式正確且與 benefit_programs 記錄一致，以便在資料填入後快速發現錯誤。
+**User Story:** 身為 Workflow 開發者，我需要透過 storage-neutral repositories 與 services 取得資料，以便更換儲存 adapter 時不重寫流程邏輯。
 
 #### 驗收條件
 
-1. THE Validate_Rules_Script SHALL 存放於 `scripts/validate_rules.py`，可透過 `python3 scripts/validate_rules.py` 執行，不需額外命令列參數即可使用預設資料庫路徑（`data/local/government_oid.db`）。
-2. WHEN 執行驗證時，THE Validate_Rules_Script SHALL 檢查以下條件：（a）每個在 `benefit_programs` 中 program_status 為 `under_review` 或 `verified` 的 program_id，在 `program_rule_fields` 中至少有 1 筆記錄；（b）每筆 program_rule_fields 的 field_type 為合法值；（c）field_type 為 json 的欄位其 field_value 可被 `json.loads()` 正確解析；（d）field_type 為 integer 的欄位其 field_value 可被 `int()` 正確轉換。
-3. WHEN 執行驗證時，THE Validate_Rules_Script SHALL 檢查每筆 program_rule_fields 的 source_excerpt 是否為非空白字串（長度至少 10 個字元）；若為空白或長度不足，SHALL 標記為警告（warning）。
-4. WHEN 驗證完成，THE Validate_Rules_Script SHALL 輸出摘要報告，包含：檢查的 program 數量、通過驗證的 program 數量、有警告的 program 數量、有錯誤的 program 數量，以及每個錯誤或警告的具體 program_id、field_name 與問題描述。
-5. IF 驗證發現任何錯誤（非警告），THEN THE Validate_Rules_Script SHALL 以非零 exit code 結束執行，以便 CI 環境偵測失敗。
-6. IF 驗證未發現任何錯誤，THEN THE Validate_Rules_Script SHALL 以 exit code 0 結束執行，並輸出「所有規則驗證通過」的成功訊息。
+1. THE Entitlement_Graph_Repository SHALL 提供事件展開、前置需求查詢、產出查詢與體系反查操作，並回傳 Domain_Contract_Layer models。
+2. THE Eligibility_Service SHALL 提供必要欄位查詢、單一方案評估與多方案評估操作，並回傳 FieldRegistryEntry 或 EligibilityDecision。
+3. THE Evidence_Repository SHALL 依 `item_id` 回傳 Citation 集合，並提供依 `item_id` 與實際評估的 `source_references` 回傳對應 Citation 集合的操作。
+4. THE Source_Refresh_Service SHALL 以 `CoverageScope(source_ids, domain_tags)` 提供 `CoverageSnapshot` coverage 狀態查詢，並以 `RefreshRequest(event_id, source_ids, requested_at)` 接受 batch on-demand refresh，回傳 `RefreshReceipt(job_id, accepted, deduplicated)`。
+5. WHEN FastAPI application 啟動且未提供替代 implementation 時，THE Application_Composition_Root SHALL 建立 SQLite_Adapter implementations 並注入 Workflow 與 state machine。
+6. THE Workflow SHALL 只依賴 Entitlement_Graph_Repository、Eligibility_Service、Evidence_Repository、Source_Refresh_Service 與 Domain_Contract_Layer。
+7. THE Workflow SHALL 排除 SQL statement、SQLite connection、`sqlite3.Row`、SQL tuple、資料表名稱與 SQLite 欄名。
+8. WHEN Workflow tests 提供 fake implementations 時，THE Application_Composition_Root SHALL 將 fake implementations 注入 Workflow 與 state machine。
+9. WHILE fake implementations 已注入 Workflow tests，THE Application_Composition_Root SHALL 排除建立 SQLite_Adapter 或開啟 SQLite connection 的行為。
+10. IF FastAPI application 啟動驗證缺少任一必要 dependency，THEN THE Application_Composition_Root SHALL 在接受任何使用者請求前中止啟動並回報指出 dependency 類別的 configuration error。
+11. WHEN 任一 repository 的集合查詢成功但沒有符合條件的資料時，THE Repository_Layer SHALL 回傳對應 contract 的空集合而非 repository failure。
+12. IF 任一 repository 查詢未成功完成，THEN THE Repository_Layer SHALL 回報 storage-neutral repository error 而非空集合。
 
-### 需求 6：評測案例
+### 需求 3：共享 domain contracts
 
-**User Story:** 身為測試人員，我需要結構化的測試案例來驗證 Rule_Engine 對 6 項 MVP 福利的資格判斷是否正確，涵蓋正常、邊界與不符合資格的情境。
-
-#### 驗收條件
-
-1. THE Evaluation_Case 集合 SHALL 以 JSON 檔案存放於 `data/evaluations/mvp_eligibility.v0.1.json`，且符合 JSON 語法規範。
-2. THE Evaluation_Case 集合 SHALL 包含至少 18 筆測試案例，涵蓋 6 項 MVP 福利步驟各自至少 3 種情境：正常符合資格（eligible）、邊界條件（如剛好在期限內或期限當天）、不符合資格（ineligible）。
-3. THE Evaluation_Case 中每筆案例 SHALL 包含以下欄位：case_id（唯一字串識別碼）、title（繁體中文案例名稱）、program_id（對應的福利 program_id）、user_attributes（模擬使用者的 Eligibility_Attributes 字典）、expected_status（eligible、ineligible、needs_information 之一）、expected_reasons（預期回傳的原因清單，可為空陣列）。
-4. THE Evaluation_Case 集合 SHALL 包含至少 2 筆 needs_information 情境的案例，模擬使用者尚未提供必要屬性（如缺少 insurance_type 或 insurance_months），且 expected_missing_inputs 欄位列出預期的缺漏欄位名稱。
-5. THE Evaluation_Case 集合 SHALL 包含至少 4 筆測試案例覆蓋 Insurance_Type 分支：勞保喪葬給付、國保喪葬給付、勞保遺屬年金、國保遺屬年金各至少 1 筆，驗證 Rule_Engine 依投保身分正確區分適用方案。
-6. THE Evaluation_Case 集合 SHALL 包含 schema_version 欄位與 notes 陣列（說明案例用途與限制），格式與 `data/evaluations/death_benefit_discovery.v0.2.json` 一致。
-
-### 需求 7：Rule Engine 擴充
-
-**User Story:** 身為 Rule_Engine，我需要支援依使用者投保身分（勞保或國保）、投保月數與親屬關係判斷是否適用特定福利，以便正確區分勞保與國保的喪葬給付及遺屬年金。
+**User Story:** 身為跨模組開發者，我需要穩定且 storage-neutral 的資料 contracts，以便 data layer、rule engine、Workflow 與 API mapping 使用相同語意。
 
 #### 驗收條件
 
-1. WHEN program_rule_fields 包含 `eligible_insurance_types` 欄位（json 型別，值為保險類型字串陣列），THE Rule_Engine SHALL 檢查使用者的 `insurance_type` 屬性是否在該陣列中；若不在陣列中，SHALL 回傳 status 為 `ineligible` 且 reasons 包含說明投保身分不符的中文訊息。
-2. IF 使用者未提供 `insurance_type` 屬性且該福利定義了 `eligible_insurance_types` 欄位，THEN THE Rule_Engine SHALL 回傳 status 為 `needs_information` 且 missing_inputs 包含 `insurance_type`。
-3. WHEN program_rule_fields 包含 `min_insurance_months` 欄位（integer 型別），THE Rule_Engine SHALL 檢查使用者的 `insurance_months` 屬性是否大於或等於該值；若不足，SHALL 回傳 status 為 `ineligible` 且 reasons 包含說明投保月數不足的中文訊息。
-4. IF 使用者未提供 `insurance_months` 屬性且該福利定義了 `min_insurance_months` 欄位，THEN THE Rule_Engine SHALL 回傳 status 為 `needs_information` 且 missing_inputs 包含 `insurance_months`。
-5. WHEN program_rule_fields 包含 `eligible_relationships` 欄位（json 型別，值為親屬關係字串陣列），THE Rule_Engine SHALL 檢查使用者的 `relationship_to_deceased` 屬性是否在該陣列中；若不在陣列中，SHALL 回傳 status 為 `ineligible` 且 reasons 包含說明申請人與亡者關係不符的中文訊息。
-6. THE Rule_Engine 的新增檢查邏輯 SHALL 與既有檢查（城市設籍、骨灰類型、環保葬、期限等）以相同模式整合，遵循「先檢查是否缺少輸入、再判斷是否符合條件」的順序。
+1. THE Domain_Contract_Layer SHALL 定義 immutable CandidateItem、EligibilityDecision、StructuredReason、Citation、FieldRegistryEntry 與 CoverageMetadata contracts。
+2. THE Domain_Contract_Layer SHALL 拒絕 contract 建立後的欄位重新指派與 collection 內容變更。
+3. THE CandidateItem SHALL 提供 `item_id`、`display_name`、`program_status`、`relevance_score`、`missing_field_ids`、`prerequisites` 與 `produces`。
+4. THE EligibilityDecision SHALL 提供 `item_id`、Eligibility_Status、`amount_min`、`amount_max`、`amount_period`、`amount_currency`、已去重且穩定排序的 `missing_field_ids` 與 StructuredReason 集合。
+5. THE StructuredReason SHALL 提供 `condition_id`、`field_id`、`operator`、`expected`、`actual`、`label` 與 `source_reference`。
+6. THE Citation SHALL 提供必填的 `document_id`、`title`、`publisher`、`url` 與 `excerpt`，以及可為空值且有值時必須為 timezone-aware `datetime` 的 `published_at`、`effective_at` 與 `retrieved_at`。
+7. THE FieldRegistryEntry SHALL 提供 `field_id`、`data_type`、`allowed_values`、`prompt_label`、`why_needed` 與 `pii_classification`。
+8. THE CoverageMetadata SHALL 提供 `source_id`、`crawl_status`、`last_crawled_at`、`indexed_document_count`、`domain_tags` 與 `observed_at`。
+9. THE Domain_Contract_Layer SHALL 將所有 collection fields 定義為不可為空值、允許零個項目且建立後不可變更的 collections。
+10. WHEN SQLite_Adapter 讀取資料列時，THE SQLite_Adapter SHALL 將 SQLite 欄名與 encoded values 映射為 Domain_Contract_Layer fields。
+11. THE Domain_Contract_Layer SHALL 使用 `item_id` 與 `field_id` 作為跨層識別名稱，不要求 Workflow 使用 `program_id`、`field_name` 或其他資料庫欄名。
+12. IF adapter 無法建立符合 contract 的 model，THEN THE SQLite_Adapter SHALL 終止該次 mapping、回報不含原始資料列內容的 mapping error 且不回傳部分 model。
+13. WHEN EligibilityDecision 表示已核准的金額資料時，THE Domain_Contract_Layer SHALL 要求 `amount_min` 小於或等於 `amount_max`，並要求 `amount_period` 與 `amount_currency` 同時有值。
+14. WHEN EligibilityDecision 沒有已核准的金額資料時，THE Domain_Contract_Layer SHALL 將 `amount_min`、`amount_max`、`amount_period` 與 `amount_currency` 全部保留為空值。
+15. IF 已核准的結構化資料未提供金額欄位，THEN THE SQLite_Adapter SHALL 排除從 Citation、標題、摘錄或其他文字推定金額值的行為。
 
-### 需求 8：資料種子腳本
+### 需求 4：Entitlement Graph 查詢
 
-**User Story:** 身為開發者，我需要一個可重複執行的腳本，能將 MVP 的福利方案、規則欄位、來源證據與 Graph 節點/邊填入本機 SQLite，以便團隊成員能從零重建完整的 MVP 資料環境。
-
-#### 驗收條件
-
-1. THE 資料填入機制 SHALL 以結構化 JSON 種子檔案存放於 `data/benefits/` 目錄下，與程式碼分離，每項 MVP 福利對應一個 JSON 檔案或集中於一個檔案。
-2. THE 資料填入機制 SHALL 提供一個腳本（建議為 `scripts/load_mvp_benefits.py`），讀取種子檔案並將資料寫入 `benefit_programs`、`program_rule_fields`、`source_documents`、`program_sources`、`graph_nodes`、`graph_edges` 資料表。
-3. WHEN 腳本重複執行時，THE 資料填入腳本 SHALL 採用 INSERT OR REPLACE 或等效的冪等策略，不產生重複記錄，且既有手動更新的 review_status 或 program_status 不被覆寫。
-4. WHEN 腳本執行完成，THE 資料填入腳本 SHALL 輸出摘要：新增的 benefit_programs 數量、新增的 program_rule_fields 數量、新增的 source_documents 數量、新增的 program_sources 數量、新增的 graph_nodes 數量、新增的 graph_edges 數量。
-5. THE 種子檔案中每項福利的規則欄位 SHALL 包含 source_excerpt，引用官方文件原文；source_excerpt 不得為佔位符號或虛構內容。
-6. IF 種子檔案中任一必要欄位（program_id、canonical_name、field_name、field_type）缺失或為空白，THEN THE 資料填入腳本 SHALL 拒絕該筆記錄並輸出錯誤訊息，不中斷其餘記錄的處理。
-7. THE 種子檔案 SHALL 包含配偶死亡情境的完整 graph_nodes 與 graph_edges 定義（如需求 2 驗收條件 10-12 所述），確保執行一次腳本即可建立完整的 MVP 圖資料。
-
-### 需求 9：Graph 查詢與展開邏輯
-
-**User Story:** 身為 orchestration 模組，我需要一套 Graph 查詢 API，能從人生事件節點出發逐層展開關聯的保險體系與福利方案，支援條件式過濾與排序，以便動態產生候選福利清單。
+**User Story:** 身為 Workflow，我需要透過 Entitlement_Graph_Repository 從人生事件展開相關方案與辦理關係，以便在不硬編碼個別事件流程的情況下建立候選清單。
 
 #### 驗收條件
 
-1. THE Graph 查詢模組 SHALL 提供 `expand_from_event(event_id, user_attributes)` 函式，接受人生事件 node_id 與使用者屬性字典，回傳該事件觸發的所有 benefit_program 節點清單（經條件式過濾後）。
-2. WHEN 展開流程執行時，THE Graph 查詢模組 SHALL 依以下順序遍歷：（a）從 life_event 節點出發，找到所有 edge_type 為 `triggers` 的目標節點（insurance_system 或 agency）；（b）對每個目標節點，找到所有 edge_type 為 `belongs_to` 的 benefit_program 節點；（c）回傳完整的 benefit_program 清單。
-3. WHEN 遍歷 triggers 類型的邊時，IF 邊的 condition_json 非 NULL 且使用者已提供該 attribute，THE Graph 查詢模組 SHALL 僅遍歷 condition 匹配的邊；IF 使用者尚未提供該 attribute，SHALL 遍歷所有 triggers 邊（保守策略，不遺漏潛在適用方案）。
-4. THE Graph 查詢模組 SHALL 提供 `get_prerequisites(program_node_id)` 函式，回傳該 benefit_program 的所有 edge_type 為 `requires` 的前置 document_requirement 節點，以供 orchestration 判斷申請順序。
-5. THE Graph 查詢模組 SHALL 提供 `get_produces(program_node_id)` 函式，回傳該 benefit_program 完成後產出的所有 edge_type 為 `produces` 的 document_requirement 節點。
-6. THE Graph 查詢模組 SHALL 依 graph_edges 的 order 欄位排序回傳結果，確保展開順序穩定且可預測。
-7. THE Graph 查詢模組 SHALL 支援反向查詢：給定任一 insurance_system 節點，能查詢所有 belongs_to 該系統的 benefit_program，不限於特定人生事件。
+1. THE Entitlement_Graph SHALL 表示人生事件、保險體系、方案、機關與文件需求之間具有唯一 node ID 的 typed nodes 與 directed edges。
+2. THE Entitlement_Graph SHALL 支援 `triggers`、`belongs_to`、`requires`、`produces` 與 `administered_by` edge types。
+3. WHEN Entitlement_Graph_Repository 取得有效 event ID 與使用者屬性時，THE Entitlement_Graph_Repository SHALL 為每個可由至少一條未被排除的 path 到達的方案回傳一筆不重複 CandidateItem。
+4. IF 使用者尚未提供任一 path condition 所需的 field ID，THEN THE Entitlement_Graph_Repository SHALL 保留該 path 並將所有未被排除 paths 缺少的 field IDs 去重後加入對應 CandidateItem 的 `missing_field_ids`。
+5. WHEN Entitlement_Graph_Repository 建立 `missing_field_ids` 時，THE Entitlement_Graph_Repository SHALL 依 `field_id` 升冪回傳穩定順序。
+6. IF 使用者提供的 field ID 值不符合任一 path condition，THEN THE Entitlement_Graph_Repository SHALL 僅排除包含該 condition 的 path。
+7. IF 同一方案的所有 paths 均被排除，THEN THE Entitlement_Graph_Repository SHALL 排除對應 CandidateItem。
+8. WHEN Entitlement_Graph_Repository 回傳 prerequisites 或 produces relations 時，THE Entitlement_Graph_Repository SHALL 先依 canonical order 排序，再以 relation target ID 升冪作為穩定 secondary ordering。
+9. WHEN 相同資料版本、event ID 與使用者屬性重複查詢時，THE Entitlement_Graph_Repository SHALL 回傳相同內容與順序。
+10. IF graph 資料變更包含不存在的 edge endpoint、方案 ID、field ID 或 relation target，THEN THE Local_Data_Platform SHALL 原子拒絕整筆變更並回報不含原始資料內容的 referential integrity error。
+11. IF event ID 不存在或不是人生事件 node，THEN THE Entitlement_Graph_Repository SHALL 回報 invalid event ID error 而非成功的空 CandidateItem 集合。
+12. WHEN event ID 有效但沒有任何未被排除的方案 path 時，THE Entitlement_Graph_Repository SHALL 回傳成功的空 CandidateItem 集合。
 
-### 需求 10：未審查方案呈現規則
+### 需求 5：Canonical versioned Rule DSL
 
-**User Story:** 身為使用者，我希望看到系統已發現但尚未完成二次驗證的福利方案，並清楚知道其審查狀態，以便不遺漏可能相關的福利，同時了解資訊可能不完整。
-
-#### 驗收條件
-
-1. WHEN benefit_programs 中某方案的 program_status 為 `candidate` 或 `under_review`，THE 系統 SHALL 將該方案納入查詢結果中呈現給使用者，不因未驗證而完全隱藏。
-2. WHEN 呈現 program_status 為 `candidate` 或 `under_review` 的方案時，THE 系統 SHALL 於結果中附加明確的免責標記文字「尚未二次確認」，使用者可辨識該方案的審查狀態。
-3. WHEN program_status 為 `candidate` 或 `under_review` 時，THE Rule_Engine SHALL 不對該方案執行完整的資格判斷邏輯，而是回傳 status 為 `needs_human_review` 且 reasons 包含「可能相關，建議洽詢承辦機關」的中文提示。
-4. WHEN program_status 為 `verified` 時，THE Rule_Engine SHALL 對該方案執行完整的資格判斷邏輯（檢查 insurance_type、insurance_months、relationships、deadline 等所有規則欄位）。
-5. THE 系統 SHALL 在排序結果時將 `verified` 方案排在 `candidate` 與 `under_review` 方案之前，確保已驗證的資訊優先呈現。
-6. IF 某方案由 `candidate` 或 `under_review` 更新為 `verified`，THEN THE Rule_Engine SHALL 自動對該方案啟用完整資格判斷，不需額外設定。
-
-### 需求 11：來源監控與變更偵測
-
-**User Story:** 身為資料維護者，我需要偵測官方來源文件的內容是否已變更，以便及時標記需要人工重新審查的規則欄位，確保系統中的資格規則與現行法規一致。
+**User Story:** 身為規則維護者，我需要唯一且有版本的 `all_of`／`any_of` Rule DSL，以便表達可稽核的巢狀資格條件而不維護相互競爭的規則格式。
 
 #### 驗收條件
 
-1. THE Source_Monitor_Script SHALL 存放於 `scripts/monitor_source_changes.py`，可透過 `python3 scripts/monitor_source_changes.py` 執行，不需互動式輸入（cron-friendly）。
-2. WHEN 執行時，THE Source_Monitor_Script SHALL 重新抓取所有 `source_documents` 中 review_status 為 `verified` 或 `candidate` 的文件的 canonical_url 內容。
-3. WHEN 抓取完成後，THE Source_Monitor_Script SHALL 計算新內容的 content_hash 並與 `source_documents.current_content_hash` 比較；IF hash 不同，SHALL 更新 `last_changed_at` 為當前時間戳、將 `review_status` 更新為 `stale`、並記錄變更事件至日誌。
-4. WHEN 執行完成，THE Source_Monitor_Script SHALL 輸出變更報告，列出所有偵測到內容變更的文件的 document_id、title 與 canonical_url。
-5. THE Source_Monitor_Script SHALL 不自動更新 program_rule_fields — 來源變更僅標記文件為 `stale`，實際規則更新需人工審查。
-6. THE Source_Monitor_Script SHALL 將每次執行結果記錄至 `source_sync_runs` 資料表，包含 started_at、completed_at、status、changed_document_count，以建立稽核軌跡。
-7. IF 執行過程中遇到網路錯誤或 HTTP 非 200 回應，THEN THE Source_Monitor_Script SHALL 記錄該文件的錯誤訊息但繼續處理其餘文件，最終以非零 exit code 結束（若有任何錯誤）。
-8. THE Source_Monitor_Script SHALL 支援 `--dry-run` 參數，僅輸出將會檢查的文件清單而不實際抓取，方便測試。
+1. THE Rule_DSL SHALL 是 SQLite 中資格規則的唯一 canonical representation。
+2. THE Rule_DSL SHALL 為每個規則保存 `rule_id`、`item_id`、`version`、`required_field_ids`、`logic` 與 source references。
+3. THE Rule_DSL SHALL 以可遞迴巢狀的 `all_of` 與 `any_of` nodes 表示條件組合。
+4. WHEN Rule_DSL 評估 `all_of` node 時，THE Rule_DSL SHALL 只在所有 children 遞迴成立時將該 node 判定為成立。
+5. WHEN Rule_DSL 評估 `any_of` node 時，THE Rule_DSL SHALL 只在至少一個 child 遞迴成立時將該 node 判定為成立。
+6. THE Rule_DSL SHALL 為每個 leaf condition 保存 `condition_id`、`field_id`、`operator`、expected value、`label` 與 `source_reference`。
+7. THE Rule_DSL SHALL 將合法 operators 限制為 version 所定義的 allowlist。
+8. WHEN Human_Reviewer 核准規則內容變更時，THE Benefit_Catalog SHALL 建立新的 Rule_DSL version 並保留先前 versions 的稽核識別資料。
+9. IF Rule_DSL version、operator、node shape、field reference 或 source reference 無效，THEN THE Local_Data_Platform SHALL 拒絕將該規則標記為 `verified`。
+10. WHEN Program_Status 為 `verified` 的方案進入評估時，THE Eligibility_Service SHALL 要求該方案恰有一個目前有效且經 Human_Reviewer 核准的 Rule_DSL version。
+11. WHEN Rule_Engine 評估方案時，THE Rule_Engine SHALL 只使用該方案目前唯一有效且已核准的 canonical Rule_DSL version。
+12. IF verified 方案沒有目前有效的已核准 Rule_DSL version 或存在多個目前有效的已核准 Rule_DSL versions，THEN THE Eligibility_Service SHALL 不執行 Rule_Engine 並回傳 `needs_human_review`。
+13. THE Rule_Engine SHALL 排除硬編碼於 Python control flow 的個別方案門檻、期限、金額與適用條件。
 
-### 需求 12：多層提取管線（含結構性發現與附件）
+### 需求 6：唯讀相容投影與 lossless converter
 
-**User Story:** 身為資料擴充人員，我需要使用多層提取管線，從 source_registry 中已登記的公部門機關官網出發，系統性爬取其網站結構以發現所有福利相關頁面，再從這些頁面與其附件（PDF、Word、ODS 等）自動提取結構化福利候選資料，以實現 Coverage_Guarantee（不遺漏任何已登記機關的福利資源），同時確保所有提取結果都經過人工審查才正式納入。
-
-#### 驗收條件
-
-1. THE Benefit_Catalog SHALL 包含 `document_attachments` 資料表，schema 為：attachment_id（TEXT PRIMARY KEY）、document_id（TEXT NOT NULL，外鍵參照 source_documents）、filename（TEXT NOT NULL）、file_type（TEXT NOT NULL，CHECK 約束限制為 `pdf`、`docx`、`odt`、`xlsx`、`other`）、download_url（TEXT NOT NULL）、storage_ref（TEXT）、content_hash（TEXT）、extracted_text_available（INTEGER NOT NULL DEFAULT 0）、extraction_method（TEXT）、extracted_at（TEXT）、created_at（TEXT NOT NULL）。
-2. THE LLM_Extraction_Pipeline SHALL 實作以下六層提取流程：Layer 0（Structural_Crawl — 結構性發現）從 source_registry 中每個已登記機關的官方網站入口頁出發，依網站結構（如福利專區、申辦服務、最新公告等導覽連結）逐層發現子頁面，將所有發現的 URL 記錄至 `source_documents` 資料表，不依賴搜尋引擎或關鍵字搜尋；Layer 1（頁面分類）AI 對 Layer 0 發現的每個 URL 進行分類判斷：該頁面是否為福利方案頁面（yes/no/maybe），僅將分類為 yes 或 maybe 的頁面送入後續提取層；Layer 2（附件偵測與下載）掃描已分類頁面中的 .pdf/.doc/.docx/.odt/.xlsx 連結，下載至 `data/local/attachments/` 目錄，並將 metadata 記錄至 `document_attachments` 資料表；Layer 3（附件文本提取）使用 pdfplumber（PDF）或 python-docx（Word）提取附件文字內容，並更新 extracted_text_available 為 1；Layer 4（LLM 完整分析）結合 HTML 內容與附件文本，透過 Amazon Bedrock LLM 產生完整的結構化候選，提取 rule_fields；Layer 5（人工審查）所有候選以 `candidate` 狀態等待人工 approve/reject/modify。
-3. THE LLM_Extraction_Pipeline SHALL 為每筆候選標記 Extraction_Confidence 等級：`partial`（僅 HTML，頁面指出有附件但尚未處理）、`high_from_html`（僅 HTML，頁面內容看起來完整）、`high_from_full`（HTML + 所有附件已提取並分析）、`partial_ocr_needed`（附件為掃描圖檔，需 OCR 但目前不支援）。
-4. THE LLM_Extraction_Pipeline SHALL 提供一個腳本（建議為 `scripts/extract_benefit_candidates.py`），支援以下模式：單文件模式（指定 document_id）與批次模式（`--batch` 參數，處理所有尚未提取的 source_documents）。
-5. WHEN Layer 1 分類一份來源頁面時，THE LLM_Extraction_Pipeline SHALL 使用 LLM 判斷該頁面是否描述一項福利或補助方案（分類為 yes/no/maybe）；WHEN 分類為 yes 或 maybe 且進入 Layer 4 時，SHALL 提取以下結構化欄位：canonical_name、support_purpose、program_basis、delivery_form、eligibility_text、amount_text、deadline_text、required_documents、accepting_agency。
-6. THE LLM_Extraction_Pipeline 的提取結果 SHALL 一律設定 review_status 為 `candidate`，存放於 `data/benefit_discovery/` 目錄，永遠不自動插入為 `verified` 狀態的資料。
-7. THE LLM_Extraction_Pipeline SHALL 使用 Amazon Bedrock 模型（hackathon 技術需求），模型呼叫透過 boto3 bedrock-runtime client 執行。
-8. THE LLM_Extraction_Pipeline 的提取 prompt 與輸出 schema SHALL 存放於可審查的檔案中（建議 `data/extraction_prompts/benefit_extraction.prompt.md` 與 `data/extraction_prompts/benefit_schema.json`），不得硬編碼於 Python 程式碼中。
-9. IF LLM 回應無法解析為有效的候選 JSON 格式，THEN THE LLM_Extraction_Pipeline SHALL 記錄該文件的解析錯誤並繼續處理其餘文件，不中斷批次流程。
-10. IF 附件下載失敗或文本提取失敗，THEN THE LLM_Extraction_Pipeline SHALL 記錄錯誤、將 extraction_confidence 設為 `partial`、並繼續以 HTML 內容進行 Layer 4 分析，不中斷整體流程。
-11. THE Structural_Crawl（Layer 0）SHALL 以 source_registry 中已登記的公部門機關清單為爬取範圍的母體，該機關清單源自 OID registry；Structural_Crawl 的角色僅為發現頁面 URL，AI 的角色僅在後續 Layer 1 進行分類與過濾，不用於「搜尋」或「找到」來源頁面。
-12. THE Structural_Crawl SHALL 從每個機關的官方網站入口頁出發，依網站結構（如福利專區、申辦服務、最新公告等導覽連結）逐層發現子頁面，而非以關鍵字搜尋方式找頁面；發現的所有 URL SHALL 記錄至 `source_documents` 資料表並標記 review_status 為 `candidate`，等待 Layer 1 分類。
-13. THE Structural_Crawl SHALL 支援三種觸發模式：（a）On-demand — 當系統查詢某主題相關機關時，發現 crawl_status 為 `pending_crawl` 的機關，立即觸發該機關的爬取；（b）Scheduled — 依 check_frequency 定期檢查所有到期需重爬的機關；（c）Manual — 維護者指定特定機關強制重爬，不受 check_frequency 或 last_crawled_at 限制。
-14. THE Structural_Crawl 腳本 SHALL 支援以下命令列介面：`--topic <event_id>`（On-demand 模式，爬取所有 domain_tags 包含該主題但 crawl_status 為 pending_crawl 的機關）、`--scheduled`（Scheduled 模式，爬取所有到期需重爬的機關）、`--source-id <source_id>`（Manual 模式，強制重爬指定機關）。
-15. WHEN Layer 4（LLM 完整分析）產出結構化候選時，THE LLM_Extraction_Pipeline SHALL 同時為該 source_document 標記 domain_tags（JSON 字串陣列），記錄該文件實際涉及的業務領域（可能與機關的 domain_tags 不同或更精確）；`source_documents` 資料表 SHALL 新增 `domain_tags` 欄位（TEXT 型別，預設值為 `'[]'`），支援文件層級的多標籤查詢。
-
-### 需求 13：資料擷取策略與來源優先序
-
-**User Story:** 身為資料維護者，我需要明確的系統性來源發現策略與重新爬取頻率設定，以 OID registry 中已登記的完整公部門機關清單為母體，保證窮舉式發現所有機關的福利頁面（Coverage_Guarantee），並在資源有限的情況下以適當頻率重新爬取各機關官網以發現新增頁面。
+**User Story:** 身為舊有整合的維護者，我需要從 canonical Rule DSL 自動產生 `program_rule_fields` 相容投影，以便在遷移期間保留讀取相容性而不建立第二份真相。
 
 #### 驗收條件
 
-1. THE `source_registry` 資料表 SHALL 新增 `check_frequency` 欄位（TEXT 型別），合法值為 `daily`、`weekly`、`monthly`、`manual`，預設值為 `manual`；此欄位定義多久重新爬取該機關官網以發現新頁面。
-2. THE 系統 SHALL 以 OID registry 中已登記的公部門機關清單為搜尋範圍的母體，不依賴外部搜尋引擎或 SEO 排名來發現來源；source_registry 中的每筆機關記錄源自 OID registry 的完整機關清單。
-3. THE Structural_Crawl SHALL 從每個機關的官方網站入口頁出發，依網站結構（如福利專區、申辦服務、最新公告等導覽連結）逐層發現子頁面，而非以關鍵字搜尋方式找頁面。
-4. THE 來源發現完整流程 SHALL 遵循以下順序：（a）OID registry 提供完整公部門機關清單；（b）機關清單匯入 source_registry；（c）Structural_Crawl 從每個機關的官方網站入口頁爬取福利/服務相關區塊；（d）所有發現的 URL 記錄至 source_documents；（e）AI（Layer 1）分類哪些頁面為福利方案頁面；（f）人工審核確認。
-5. THE 來源重新爬取頻率策略 SHALL 定義以下分級：Priority 1（daily）為中央政府福利索引（如我的E政府、勞動部、衛福部主要入口頁）；Priority 2（weekly）為直轄市/縣市政府福利頁面；Priority 3（monthly）為特定機關方案頁面。check_frequency 決定多久重新爬取該機關官網以發現新增或異動的頁面。
-6. WHEN Source_Monitor_Script 執行時，THE 腳本 SHALL 依據 `check_frequency` 欄位判斷是否需要重新爬取：僅爬取上次檢查時間早於其頻率間隔的機關官網（例如 daily 來源需 last_seen_at 超過 24 小時才重新爬取）。
-7. THE MVP 階段所有來源的 check_frequency SHALL 初始設為 `manual`，表示不會自動排程爬取；check_frequency 欄位為未來自動化排程預留。
-8. THE 系統 SHALL 保證 Coverage_Guarantee：OID registry 中每個已登記的公部門機關最終都應有其福利頁面被索引（indexed）；未爬取的機關應被追蹤為「pending_crawl」狀態。
-9. WHEN 新增機關至 source_registry 時，THE 資料維護者 SHALL 設定適當的 check_frequency 值，依據機關的重要性與福利頁面更新頻率選擇分級。
+1. WHEN Compatibility_Projection_Generator 接收有效的 canonical Rule_DSL version 時，THE Compatibility_Projection_Generator SHALL 在不修改輸入 Rule_DSL 的情況下產生完整 Compatibility_Projection。
+2. THE Compatibility_Projection SHALL 對 application 與維護工具只提供讀取存取。
+3. IF 任一操作嘗試直接新增、更新或刪除 Compatibility_Projection 資料，THEN THE Local_Data_Platform SHALL 拒絕該操作並保持 Compatibility_Projection 與 Rule_DSL 不變。
+4. WHILE Compatibility_Projection_Generator 正在產生投影，THE Local_Data_Platform SHALL 只向讀取者提供產生前最後一份完整投影。
+5. WHEN 相同 Rule_DSL version 與相同 converter version 重複產生投影時，THE Compatibility_Projection_Generator SHALL 產生 byte-equivalent canonical serialization 與穩定順序。
+6. WHEN 有效 Rule_DSL 完成 canonical-to-projection-to-canonical round trip 時，THE Compatibility_Projection_Generator SHALL 保留規則版本、required field IDs、巢狀布林語意、condition IDs、field IDs、operators、expected values、labels 與 source references。
+7. WHEN 原始 Rule_DSL 與 round trip 後的 Rule_DSL 接收相同合法輸入時，THE Compatibility_Projection_Generator SHALL 確保兩者產生相同 Eligibility_Status、缺少的 field IDs 與 StructuredReason condition IDs。
+8. IF Rule_DSL 包含 Compatibility_Projection_Generator 無法無損表示的內容，THEN THE Compatibility_Projection_Generator SHALL 拒絕整次投影產生並回報 converter version error。
+9. IF Compatibility_Projection 產生失敗，THEN THE Local_Data_Platform SHALL 不提供任何部分產出並保留產生前最後一份完整投影。
+10. THE Benefit_Catalog SHALL 排除人工分別新增、更新或同步維護 Rule_DSL 與 `program_rule_fields` 的流程。
 
+### 需求 7：確定性資格判斷與方案狀態閘門
 
-### 需求 14：來源機關業務標籤與分階段匯入
-
-**User Story:** 身為資料維護者，我需要從 OID registry 的完整機關清單中，依業務相關性分批篩選並匯入 source_registry，且每個機關標注其相關業務領域，以便在探索新人生事件主題時能快速找到應爬取的機關清單。
+**User Story:** 身為使用者，我需要系統依方案治理狀態採取一致且保守的資格行為，以便過期或未審查規則不會產生完整結論。
 
 #### 驗收條件
 
-1. THE source_registry 資料表 SHALL 新增 `domain_tags` 欄位（TEXT 型別，儲存 JSON 字串陣列），記錄該機關相關的業務領域標籤；合法標籤值至少包含 `death`、`unemployment`、`retirement`、`birth`、`childcare`、`disability`、`poverty`、`housing`、`medical`、`education`、`long_term_care`。
-2. WHEN 查詢某人生事件主題相關的機關時，THE 系統 SHALL 支援以 domain_tags 過濾 source_registry，回傳所有業務領域包含該主題標籤的機關清單（例如查詢 `death` 標籤即可取得勞保局、國保局、健保署、戶政司等所有跟死亡事件相關的機關）。
-3. THE 系統 SHALL 提供 OID 篩選腳本（建議為 `scripts/filter_oid_for_benefits.py`），從 OID registry 的 ~8000 個機關中，依據機關層級（中央二級機關、直轄市/縣市一級機關）與業務屬性關鍵字（社會、勞動、衛生、民政、教育等）自動篩選出福利相關候選機關，產出待審核清單。
-4. THE OID 篩選腳本產出的候選清單 SHALL 以 JSON 格式儲存（建議路徑 `data/source_registry/oid_candidates.json`），每筆候選包含 oid、organization_name、suggested_domain_tags（腳本依業務屬性建議的標籤）、review_status（`pending`），待人工確認後才匯入 source_registry。
-5. THE 分階段匯入策略 SHALL 定義以下優先序：Priority 1（MVP 核心，手動列入 ~10-15 個機關：勞保局、健保署、戶政司、衛福部社家署等）→ Priority 2（中央福利主管機關與執行機關 ~30 個）→ Priority 3（直轄市/縣市社會局/處 ~22 個）→ Priority 4（區公所/鄉鎮市公所等基層窗口，依需求逐步新增）。
-6. THE MVP 階段 SHALL 僅需手動列入 10-15 個核心機關至 source_registry（含 domain_tags），不需執行完整的 OID 自動篩選流程；OID 篩選腳本為後續擴充階段使用。
-7. WHEN 新增人生事件至 Entitlement Graph 時，THE 資料維護者 SHALL 能透過 `SELECT source_id, name, entry_url FROM source_registry WHERE domain_tags LIKE ?` 查詢已登記且標記該業務領域的機關清單，以此決定 Structural Crawl 的爬取範圍。
+1. WHEN Program_Status 為 `verified` 且方案具有唯一有效的已核准 Rule_DSL version 與完整 Citation mapping 時，THE Eligibility_Service SHALL 執行 Rule_Engine 並回傳完整 EligibilityDecision。
+2. WHEN Program_Status 為 `candidate` 或 `under_review` 時，THE Eligibility_Service SHALL 不執行 Rule_Engine 並回傳 `needs_human_review`。
+3. WHEN Program_Status 為 `candidate` 或 `under_review` 時，THE Entitlement_Graph_Repository SHALL 保留 CandidateItem 並提供對應 Program_Status 供 API 顯示「尚未二次確認」。
+4. WHEN Program_Status 為 `stale` 時，THE Entitlement_Graph_Repository SHALL 保留 CandidateItem 並提供 `stale` Program_Status 供 API 顯示警示。
+5. WHEN Program_Status 為 `stale` 時，THE Eligibility_Service SHALL 不執行 Rule_Engine 並回傳 `needs_human_review`。
+6. WHEN Program_Status 為 `rejected` 或 `inactive` 時，THE Entitlement_Graph_Repository SHALL 從候選結果排除該方案。
+7. WHEN Program_Status 為 `rejected` 或 `inactive` 時，THE Eligibility_Service SHALL 不執行 Rule_Engine 且回傳 non-evaluable status error。
+8. IF verified 方案缺少唯一有效的已核准 Rule_DSL version 或任一必要 Citation，THEN THE Eligibility_Service SHALL 不執行 Rule_Engine 並回傳 `needs_human_review`。
+9. IF Rule_Engine 缺少必要使用者欄位，THEN THE Eligibility_Service SHALL 回傳 `needs_information` 並列出已去重且穩定排序的 field IDs。
+10. WHEN Rule_Engine 產生判斷原因時，THE Eligibility_Service SHALL 回傳 StructuredReason 而非只有展示文字。
+11. THE Validation_Suite SHALL 對每個 Program_Status 與 verified 資料缺漏案例驗證 Eligibility_Status 及 Rule_Engine 執行次數。
+
+### 需求 8：Relevance score 僅供 backend 排序
+
+**User Story:** 身為使用者，我需要相關候選以一致順序呈現且不看到容易被誤解的分數，以便不將相關性誤認為資格機率。
+
+#### 驗收條件
+
+1. THE Relevance_Score SHALL 只接受有限數值或空值，且只作為 backend 內部排序 metadata。
+2. THE Relevance_Score SHALL 排除本需求未核准的固定數值範圍。
+3. WHEN CandidateItem 集合需要排序時，THE System SHALL 依 `verified`、`stale`、`under_review`、`candidate` 的 Program_Status safety ordering 建立群組。
+4. WHEN 同一 Program_Status 群組內的 CandidateItem 具有有效 Relevance_Score 時，THE System SHALL 依 Relevance_Score 降冪排序並以 `item_id` 升冪作為分數相同時的 secondary key。
+5. IF CandidateItem 缺少 Relevance_Score，THEN THE System SHALL 將 CandidateItem 排在同一 Program_Status 群組內所有有效分數之後並以 `item_id` 升冪排序。
+6. IF CandidateItem 的 Relevance_Score 為非數值、NaN 或無限值，THEN THE System SHALL 將該分數視為無效排序值、排在同一群組的有效分數之後並記錄不含候選內容的 data-quality error。
+7. THE API_Response_Mapper SHALL 排除 `relevance_score` 欄位。
+8. THE API_Response_Mapper SHALL 排除 Relevance_Score 的數值、區間與衍生百分比。
+9. THE Eligibility_Service SHALL 排除以 Relevance_Score 的存在、缺漏、有效性或數值決定或修改 Eligibility_Status 的行為。
+10. THE StructuredReason SHALL 排除將 Relevance_Score 描述為資格機率、符合程度或法定判斷依據的內容。
+11. WHEN 相同資料與使用者屬性重複排序時，THE System SHALL 產生相同候選順序。
+
+### 需求 9：StructuredReason 與 raw user text 隱私
+
+**User Story:** 身為使用者，我需要實際資格值只在我的回應中用於解釋，且不進入可觀測性與稽核資料，以便降低個人情境外洩風險。
+
+#### 驗收條件
+
+1. WHERE response 接收者是 Requesting_User，THE API_Response_Mapper SHALL 只在目前請求的 EligibilityDecision response 中回傳必要的 `StructuredReason.actual`。
+2. IF response 接收者不是 Requesting_User，THEN THE API_Response_Mapper SHALL 從 response 移除所有 `StructuredReason.actual` values。
+3. THE Privacy_Sanitizer SHALL 從 log、trace、metric、exception 與 audit payload 移除所有 `StructuredReason.actual` values。
+4. THE Privacy_Sanitizer SHALL 從 log、trace、metric、exception 與 audit payload 移除所有 Raw_User_Text。
+5. WHEN observability payload 進入輸出路徑時，THE Observability_Pipeline SHALL 在任何 serialization 與 emission 前將完整 payload 集中交由 Privacy_Sanitizer 處理。
+6. IF payload 在頂層、巢狀物件、陣列元素或字串化內容中包含 `StructuredReason.actual` values 或 Raw_User_Text，THEN THE Privacy_Sanitizer SHALL 在 emission 前遞迴移除每一處對應內容。
+7. WHEN exception handler 接收包含使用者值或 Raw_User_Text 的 exception 時，THE Privacy_Sanitizer SHALL 只保留 error type、safe code 與不含使用者值的 context IDs。
+8. WHEN audit event 記錄資格操作時，THE Privacy_Sanitizer SHALL 只保留 item ID、rule version、Eligibility_Status、時間與不含使用者值的 actor/session pseudonymous ID。
+9. WHILE Workflow 使用 Raw_User_Text 進行結構化屬性提取，THE Workflow SHALL 將 Raw_User_Text 限於目前請求的暫時處理範圍。
+10. WHEN 結構化屬性提取成功、失敗或取消時，THE Workflow SHALL 在 response 或後續 state transition 前丟棄 server-side Raw_User_Text。
+11. WHEN 結構化屬性提取成功時，THE Workflow SHALL 只保留 allowlisted attributes。
+12. IF Privacy_Sanitizer 失敗或無法確認完整 payload 已完成 sanitization，THEN THE Observability_Pipeline SHALL 取消原始 payload 的 serialization 與 emission 並只產生不含原始 payload 衍生內容的 sanitization failure indication。
+13. THE Validation_Suite SHALL 使用 Synthetic_Validation_Data 驗證 authorization、遞迴 sanitization、Raw_User_Text lifecycle 與 fail-closed observability 行為。
+
+### 需求 10：官方證據與 citations
+
+**User Story:** 身為使用者與審查人員，我需要資格結論連結完整且可追溯的官方證據，以便查核規則依據而不依賴虛構或截斷資訊。
+
+#### 驗收條件
+
+1. THE Evidence_Repository SHALL 只從 Benefit_Catalog 中已登記的 Official_Source 建立 Citation。
+2. WHEN Evidence_Repository 建立 Citation 時，THE Evidence_Repository SHALL 將已核准來源記錄的 `document_id`、`title`、`publisher`、`url` 與 `excerpt` 完整映射至 Citation。
+3. WHERE Official_Source 明確提供 `published_at`、`effective_at` 或成功擷取記錄提供 `retrieved_at`，THE Evidence_Repository SHALL 將對應值映射至 Citation。
+4. IF 已核准來源記錄未提供任一 optional 日期值，THEN THE Evidence_Repository SHALL 將對應 Citation 欄位保留為空值而不推定替代值。
+5. WHEN Eligibility_Service 準備回傳 `eligible` 或 `ineligible` 時，THE Evidence_Repository SHALL 為 Rule_Engine 實際評估的每個 distinct `source_reference` 提供至少一筆可追溯 Citation。
+6. IF 任一已評估的 `source_reference` 無法解析為包含必填欄位的 Citation，THEN THE Eligibility_Service SHALL 將結果降級為 `needs_human_review` 且不以其他 Citation 替代。
+7. THE Source_Curation_Pipeline SHALL 拒絕將 placeholder、AI 生成內容、未核對文字或推定 metadata 保存為已核准 Citation 證據。
+8. THE Evidence_Repository SHALL 排除自行補寫、推定或改寫 Official_Source 的標題、發布者、日期與引用段落。
+9. THE Benefit_Catalog SHALL 保留 Rule_DSL version、每個 `source_reference`、對應 Citation 與 Human_Reviewer 核准紀錄之間的可追溯關聯。
+10. IF Citation 的 optional 日期欄位為空值，THEN THE Eligibility_Service SHALL 不僅因該空值而降級 Eligibility_Status。
+
+### 需求 11：非阻塞且同日去重的 on-demand refresh
+
+**User Story:** 身為使用者，我需要系統先使用目前資料回應，再於背景更新到期來源，以便網路或提取作業不阻塞目前請求。
+
+#### 驗收條件
+
+1. WHEN 使用者請求候選方案時，THE System SHALL 先使用請求開始時的 Last_Successful_Committed_State 建立回應。
+2. WHEN Source_Refresh_Service 發現相關來源為 `pending_crawl` 或已超過設定更新頻率時，THE Source_Refresh_Service SHALL 排入受同日去重規則約束的本機 Refresh_Job。
+3. WHEN refresh request 建立至少一個新的 Refresh_Job 時，THE Source_Refresh_Service SHALL 在等待爬取、附件處理或候選提取完成前回傳 `accepted=true` 且 `deduplicated=false` 的 refresh receipt；若沒有任何來源排入則回傳 `accepted=false`。
+4. THE Source_Refresh_Service SHALL 以 `source_id`、event/topic 與 request time 依 Application_Timezone 換算的 calendar date 組成 deterministic deduplication key。
+5. IF 相同 deduplication key 已有 Refresh_Job，THEN THE Source_Refresh_Service SHALL 回傳 `deduplicated=true` 的 refresh receipt 且不建立第二個 Refresh_Job。
+6. WHEN 相同 deduplication key 的 refresh requests 並行執行時，THE Source_Refresh_Service SHALL 以 concurrency-safe atomic operation 只建立一個 Refresh_Job。
+7. WHEN 並行 refresh requests 共用相同 deduplication key 時，THE Source_Refresh_Service SHALL 向一個 request 回傳 `deduplicated=false` 並向其他 requests 回傳 `deduplicated=true`。
+8. IF Refresh_Job 失敗，THEN THE System SHALL 保留原始回應與 Last_Successful_Committed_State。
+9. WHEN Refresh_Job 產生新頁面、附件或規則候選時，THE Source_Curation_Pipeline SHALL 將產出保存為 `candidate` 或 `under_review`。
+10. THE Source_Refresh_Service SHALL 排除在使用者 request lifecycle 內同步執行網路爬取或 LLM 分析。
+
+### 需求 12：可量測 coverage status
+
+**User Story:** 身為資料維護者，我需要量測來源爬取與索引進度，以便辨識缺口而不宣稱無法證明的完整覆蓋。
+
+#### 驗收條件
+
+1. WHEN coverage status 被請求時，THE Coverage_Tracker SHALL 回報 Coverage_Scope 與該次快照的 `observed_at`。
+2. WHEN coverage status 被請求時，THE Coverage_Tracker SHALL 回報 scope 內的已登記來源數、`crawled` 來源數、`pending_crawl` 來源數、`error` 來源數與已索引文件數。
+3. WHEN Coverage_Tracker 建立 coverage 快照時，THE Coverage_Tracker SHALL 為 scope 內每個已登記來源回報 `source_id`、`crawl_status`、`last_crawled_at`、`indexed_document_count`、domain tags 與相同的 `observed_at`。
+4. THE CoverageMetadata SHALL 將 `crawl_status` 限制為 `pending_crawl`、`crawled` 或 `error`。
+5. THE CoverageMetadata SHALL 將 `indexed_document_count` 表示為非負整數。
+6. WHEN 來源因 robots policy、登入限制、JavaScript-only content、失效連結、掃描附件或連線錯誤無法處理時，THE Coverage_Tracker SHALL 將來源標記為 `error` 並記錄可識別的 coverage gap category。
+7. THE CoverageMetadata SHALL 只表達指定 Coverage_Scope 在 `observed_at` 時觀測到的進度與缺口。
+8. THE API_Response_Mapper SHALL 排除法律內容完整性、網站內容完整性、scope 外覆蓋、「零遺漏」、「完整保證」與「所有福利均已索引」的主張。
+9. WHEN 來源成功完成爬取時，THE Coverage_Tracker SHALL 將 `crawl_status` 設為 `crawled` 並更新 `last_crawled_at` 與 `indexed_document_count`。
+10. IF 來源爬取失敗且存在最近一次成功 metadata，THEN THE Coverage_Tracker SHALL 將 `crawl_status` 設為 `error` 並保留最近一次成功的 `last_crawled_at` 與 `indexed_document_count`。
+11. IF 來源爬取失敗且不存在成功 metadata，THEN THE Coverage_Tracker SHALL 將 `crawl_status` 設為 `error`、將 `last_crawled_at` 保留為空值並將 `indexed_document_count` 設為 0。
+12. WHEN Coverage_Tracker 回報 coverage 快照時，THE Coverage_Tracker SHALL 使已登記來源數等於 `pending_crawl`、`crawled` 與 `error` 來源數之和。
+13. WHEN Coverage_Tracker 回報 coverage 快照時，THE Coverage_Tracker SHALL 使 aggregate 已索引文件數等於所有 per-source `indexed_document_count` 之和。
+
+### 需求 13：SQLite connection lifecycle
+
+**User Story:** 身為 backend 維護者，我需要每條 SQLite connection 路徑明確關閉資源，以便避免測試與 runtime 發生 connection leak 或 file lock。
+
+#### 驗收條件
+
+1. WHEN SQLite_Adapter 建立 SQLite connection 時，THE SQLite_Adapter SHALL 使用 `contextlib.closing` 或在所有路徑明確呼叫 `close()` 的等價 lifecycle wrapper。
+2. WHEN transaction scope 的主要操作與 commit 均成功時，THE SQLite_Adapter SHALL 先完成 commit、再關閉 connection、最後回傳操作結果。
+3. IF transaction scope 的主要操作或 commit 失敗，THEN THE SQLite_Adapter SHALL 先嘗試 rollback、再嘗試關閉 connection、最後回報 sanitized error。
+4. WHEN 唯讀 SQLite operation 成功完成時，THE SQLite_Adapter SHALL 在回傳查詢結果前關閉 connection。
+5. IF 唯讀 SQLite operation 失敗，THEN THE SQLite_Adapter SHALL 在回報 sanitized error 前嘗試關閉 connection。
+6. IF rollback 失敗，THEN THE SQLite_Adapter SHALL 仍嘗試關閉 connection 並只回報 sanitized lifecycle error。
+7. IF close 失敗，THEN THE SQLite_Adapter SHALL 不回傳操作結果並只回報 sanitized lifecycle error。
+8. THE SQLite_Adapter SHALL 從 lifecycle error 排除 SQL、原始資料列內容、Raw_User_Text、`StructuredReason.actual` 與其他使用者資料。
+9. WHEN Validation_Suite 注入主要操作、commit、rollback 或 close failure 時，THE Validation_Suite SHALL 驗證 commit、rollback 與 close 的執行順序及 sanitized error 行為。
+10. WHEN Validation_Suite 執行 transaction 與唯讀操作的成功及失敗案例時，THE Validation_Suite SHALL 驗證未注入 close failure 的每個 SQLite connection 已關閉。
+11. THE SQLite_Adapter SHALL 排除只依賴 `with sqlite3.connect(...)` 來保證 connection closure 的實作。
+
+### 需求 14：JSON 僅供自動產生的測試或 release snapshot
+
+**User Story:** 身為 release 與測試維護者，我需要可重現的 JSON snapshots 而不讓 JSON 成為 runtime truth，以便進行 fixture 測試與版本差異檢視。
+
+#### 驗收條件
+
+1. WHERE tests 需要 fixture，THE JSON_Exporter SHALL 從指定 SQLite schema 與資料版本自動產生 JSON。
+2. WHERE release 流程需要 snapshot，THE JSON_Exporter SHALL 從指定 SQLite schema 與資料版本自動產生 versioned JSON。
+3. WHEN 相同 SQLite schema version、資料版本、Rule_DSL versions 與 export timestamp 重複匯出時，THE JSON_Exporter SHALL 以 canonical field ordering 與 stable collection ordering 產生 byte-equivalent output。
+4. THE JSON_Exporter SHALL 在 snapshot metadata 中包含 schema version、export timestamp 與來源 Rule_DSL versions。
+5. THE System SHALL 將 JSON_Exporter 執行與 JSON snapshot 讀取限制於 tests 或 release 流程。
+6. THE System SHALL 排除 runtime request lifecycle 使用 JSON_Exporter 或 JSON snapshot 的行為。
+7. IF JSON_Exporter 無法開啟 SQLite 或讀取指定 schema 與資料版本，THEN THE JSON_Exporter SHALL 回報明確 SQLite error 且不讀取或產生 JSON fallback。
+8. WHEN JSON export 成功時，THE JSON_Exporter SHALL 以 atomic replacement 只讓單一完整 snapshot 成為可觀察結果。
+9. IF JSON export 失敗，THEN THE JSON_Exporter SHALL 不建立 partial output 並保留既有完整 snapshot 不變。
+10. THE System SHALL 排除從 JSON snapshot 回寫 canonical SQLite 資料的 runtime 路徑。
+11. THE Source_Curation_Pipeline SHALL 排除人工同時維護 SQLite 與 JSON 內容的工作流程。
+
+### 需求 15：MVP catalog、來源與驗證
+
+**User Story:** 身為資料維護者，我需要可驗證的 MVP catalog 與測試資料，以便確認資料形狀、狀態閘門與 deterministic rule behavior，而不在需求文件中臆測福利事實。
+
+#### 驗收條件
+
+1. THE Benefit_Catalog SHALL 支援簡介所列六個既有 MVP program IDs。
+2. WHEN 任一 MVP 方案缺少人工核准的資格事實、期限、金額或來源摘錄時，THE Benefit_Catalog SHALL 保留未知值或未審查狀態而不建立推定值。
+3. THE Source_Curation_Pipeline SHALL 只接受人工核准的 Official_Source metadata 與 source excerpts 作為 verified evidence。
+4. WHEN Human_Reviewer 核准方案、Rule_DSL 或 Citation 時，THE Benefit_Catalog SHALL 記錄 reviewer identity reference、review timestamp 與核准 version。
+5. THE Validation_Suite SHALL 驗證 Rule_DSL schema、operator allowlist、required field references、Citation references、referential integrity 與 Program_Status gates。
+6. THE Validation_Suite SHALL 驗證 EligibilityDecision 的 amount field consistency。
+7. THE Validation_Suite SHALL 驗證 Compatibility_Projection 的 deterministic output 與 round-trip semantic equivalence。
+8. THE Validation_Suite SHALL 以正常、邊界、缺少資訊、未審查、stale、rejected 與 inactive cases 驗證 Eligibility_Status 行為。
+9. WHEN Validation_Suite 使用 Synthetic_Validation_Data 時，THE Validation_Suite SHALL 將合成規則、來源內容與資格值隔離於 Benefit_Catalog、Official_Source metadata、verified evidence 與正式 Citation 之外。
+10. WHEN Synthetic_Validation_Data 驗證完成時，THE Validation_Suite SHALL 確認 canonical catalog 未包含任何合成資料。
+11. IF validation 發現錯誤，THEN THE Validation_Suite SHALL 以非零 exit status 結束並指出 item ID、rule version、error code 與不含敏感值的描述。
+12. IF validation 未發現錯誤，THEN THE Validation_Suite SHALL 以零 exit status 結束並輸出受檢項目數量。
+
+### 需求 16：技術治理、AWS safety 與人工核准邊界
+
+**User Story:** 身為專案 owner，我需要 MVP 在核准的技術與責任邊界內運作，以便安全驗證雲端整合，同時避免 secrets 外洩或讓生成式模型控制資格與資料驗證。
+
+#### 驗收條件
+
+1. WHILE data-layer 尚未有 owner-approved storage migration ADR 與替代 adapter，THE System SHALL 以本機 SQLite、本機檔案與本機 Refresh_Job implementations 作為預設且可測試的資料儲存、檔案處理與 background job path。
+2. WHEN owner 核准 live AWS integration，THE System SHALL 從 Git 外部取得 credentials、排除將 credentials 或 account-specific secrets 寫入 repository，保留不需要 live AWS 的 local test path，並在同一批次更新 `docs/aws_migration_guide.md`。
+3. WHEN Eligibility_Status 為 `eligible` 或 `ineligible` 時，THE Eligibility_Service SHALL 只使用 Rule_Engine 的確定性評估結果產生該狀態。
+4. WHEN 方案狀態閘門或必要欄位檢查阻止完整評估時，THE Eligibility_Service SHALL 依需求 7 產生 `needs_human_review` 或 `needs_information` 而不執行完整規則判斷。
+5. THE LLM_Integration SHALL 排除產生、覆寫或升級 Eligibility_Status 的權限。
+6. THE LLM_Integration SHALL 排除請求、核准或執行任何將方案、Rule_DSL、Citation 或 source excerpt 標記為 `verified` 的狀態轉換。
+7. WHEN LLM_Integration、crawler 或 importer 產生頁面分類或結構化提取結果時，THE Source_Curation_Pipeline SHALL 將結果保存為 `candidate` 或 `under_review`。
+8. THE Source_Curation_Pipeline SHALL 排除 crawler、importer、Compatibility_Projection_Generator 與 JSON_Exporter 將資料標記為 `verified` 的操作。
+9. WHEN Human_Reviewer 將 `candidate` 轉為 `under_review` 時，THE Benefit_Catalog SHALL 記錄 reviewer identity reference、review timestamp、原狀態與新狀態。
+10. WHEN Human_Reviewer 將 `candidate`、`under_review` 或 `stale` 轉為 `verified` 時，THE Benefit_Catalog SHALL 只在目標 version 具有已核准 Rule_DSL、Citation 與 source excerpt 時套用轉換並記錄審查資料。
+11. WHEN Human_Reviewer 將 `candidate`、`under_review` 或 `stale` 轉為 `rejected` 或 `inactive` 時，THE Benefit_Catalog SHALL 套用明確目標狀態並記錄審查資料。
+12. WHEN Human_Reviewer 將 `verified` 轉為 `stale` 或 `inactive` 時，THE Benefit_Catalog SHALL 套用明確目標狀態並記錄審查資料。
+13. IF Human_Reviewer 以外的 actor 要求將資料轉為 `verified`、`rejected` 或 `inactive`，THEN THE Benefit_Catalog SHALL 拒絕轉換並保留目前狀態。
+14. IF 已核准規則或證據不足以產生完整資格結論，THEN THE Eligibility_Service SHALL 回傳 `needs_human_review`。

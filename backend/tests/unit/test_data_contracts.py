@@ -27,7 +27,7 @@ _NOW = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
 
 
 def _relation() -> GraphRelation:
-    return GraphRelation(item_id="death_registration", display_name="死亡登記")
+    return GraphRelation(target_id="death_registration", display_name="死亡登記")
 
 
 def _candidate() -> CandidateItem:
@@ -62,6 +62,7 @@ def _decision() -> EligibilityDecision:
         amount_max=10000,
         amount_period="one_time",
         amount_currency="TWD",
+        missing_field_ids=(),
         reasons=(_reason(),),
     )
 
@@ -71,11 +72,11 @@ def _citation() -> Citation:
         document_id="doc_1",
         title="〈條例名稱〉",
         publisher="〈機關〉",
-        published_at="2026-01-01",
-        effective_at="2026-02-01",
+        published_at=_NOW,
+        effective_at=_NOW,
         url="https://example.gov.tw/rule",
         excerpt="〈引用段落〉",
-        retrieved_at="2026-07-28",
+        retrieved_at=_NOW,
     )
 
 
@@ -97,11 +98,15 @@ def _coverage() -> CoverageMetadata:
         last_crawled_at=None,
         indexed_document_count=0,
         domain_tags=("funeral",),
+        observed_at=_NOW,
     )
 
 
-def test_a_graph_relation_defaults_to_order_zero() -> None:
-    assert _relation().order == 0
+def test_a_graph_relation_defaults_to_canonical_order_zero() -> None:
+    relation = _relation()
+
+    assert relation.target_id == "death_registration"
+    assert relation.canonical_order == 0
 
 
 def test_a_candidate_item_carries_governance_state_not_a_verdict() -> None:
@@ -135,6 +140,7 @@ def test_a_decision_keeps_the_amount_split_into_four_fields() -> None:
     assert (decision.amount_min, decision.amount_max) == (10000, 10000)
     assert decision.amount_period == "one_time"
     assert decision.amount_currency == "TWD"
+    assert decision.missing_field_ids == ()
 
 
 def test_a_decision_carries_structured_reasons_not_display_text() -> None:
@@ -144,13 +150,28 @@ def test_a_decision_carries_structured_reasons_not_display_text() -> None:
     assert decision.reasons[0].operator == "equals"
 
 
+def test_a_decision_normalizes_missing_field_ids() -> None:
+    decision = dataclasses.replace(
+        _decision(),
+        status="needs_information",
+        missing_field_ids=("field_b", "field_a", "field_b"),
+    )
+
+    assert decision.missing_field_ids == ("field_a", "field_b")
+
+
 def test_a_citation_keeps_all_eight_fields() -> None:
     """Citation 不得退化成單一 source_url。"""
     citation = _citation()
 
     assert citation.publisher == "〈機關〉"
-    assert citation.effective_at == "2026-02-01"
-    assert citation.retrieved_at == "2026-07-28"
+    assert citation.effective_at == _NOW
+    assert citation.retrieved_at == _NOW
+
+
+def test_a_citation_rejects_a_naive_datetime() -> None:
+    with pytest.raises(ValueError, match="published_at must be timezone-aware"):
+        dataclasses.replace(_citation(), published_at=datetime(2026, 1, 1))
 
 
 def test_a_field_registry_entry_records_why_it_is_needed() -> None:
@@ -167,6 +188,7 @@ def test_coverage_metadata_reports_measurable_progress() -> None:
     assert coverage.crawl_status == "pending_crawl"
     assert coverage.last_crawled_at is None
     assert coverage.indexed_document_count == 0
+    assert coverage.observed_at == _NOW
 
 
 @pytest.mark.parametrize(

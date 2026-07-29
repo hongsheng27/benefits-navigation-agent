@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from app.orchestration.determination import evaluate_ready_items, visible_items
 from app.orchestration.field_registry import FieldRegistry
 from app.orchestration.protocols import (
+    CoverageScope,
     EligibilityService,
     EntitlementGraphRepository,
     EvidenceRepository,
@@ -223,6 +224,7 @@ class _Seams:
     privacy_gate: PrivacyGate
     eligibility_service: EligibilityService
     source_refresh_service: SourceRefreshService
+    coverage_scope: CoverageScope
     # 官方依據的檢索還沒接上（`RETRIEVE_RULES` 仍是空操作）。保留欄位是為了讓資料層
     # 交出 repository 時只需改 `_do_retrieve_rules`，不必再動 `advance()` 的簽章。
     evidence_repository: EvidenceRepository | None = None
@@ -237,6 +239,7 @@ def advance(
     privacy_gate: PrivacyGate | None = None,
     eligibility_service: EligibilityService | None = None,
     source_refresh_service: SourceRefreshService | None = None,
+    coverage_scope: CoverageScope | None = None,
     evidence_repository: EvidenceRepository | None = None,
 ) -> SessionState:
     """依輸入推進狀態，並自動走完不需要使用者的中間步驟。
@@ -244,8 +247,14 @@ def advance(
     回傳的是一個新的 `SessionState`，不修改傳入的。
 
     所有接縫都是具名參數且可以省略，預設值是不需要 SQLite 的離線實作。資料層交出
-    SQLite repository 後逐個換掉即可，這個模組不用改（Req 19）。
+    SQLite repository 後逐個換掉即可，這個模組不用改（Req 19）。顯式注入 refresh
+    service 時也必須提供 coverage scope，避免服務看似啟用卻因空 scope 靜默不工作。
     """
+    if source_refresh_service is not None and coverage_scope is None:
+        raise ValueError(
+            "coverage_scope is required when source_refresh_service is provided"
+        )
+
     seams = _Seams(
         registry=registry if registry is not None else default_registry(),
         entitlement_repository=(
@@ -269,6 +278,12 @@ def advance(
             source_refresh_service
             if source_refresh_service is not None
             else LocalSourceRefreshService()
+        ),
+        # Scope 必須由 composition/caller 明確提供；預設空 scope 不猜所有來源都相關。
+        coverage_scope=(
+            coverage_scope
+            if coverage_scope is not None
+            else CoverageScope(source_ids=(), domain_tags=())
         ),
         evidence_repository=evidence_repository,
     )
@@ -659,7 +674,11 @@ def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState
 
     # coverage 目前只用來決定要不要排 refresh。把它露給前端需要新的對外欄位，
     # 那屬於還沒開始的前端契約那一批。
-    refresh_after_response(seams.source_refresh_service, state.life_event)
+    refresh_after_response(
+        seams.source_refresh_service,
+        state.life_event,
+        seams.coverage_scope,
+    )
 
     if not items:
         return state

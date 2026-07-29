@@ -148,8 +148,9 @@ def apply_decision(
 ) -> CandidateItem:
     """把一筆判定結果套回既有的項目。
 
-    回傳新的項目，不修改傳入的那一個。`kind`、`program_status` 與既有的缺漏欄位都
-    保留 —— 判定結果不會改變「這一項是什麼」，也不會改變資料層對它的治理狀態。
+    回傳新的項目，不修改傳入的那一個。`kind` 與 `program_status` 保留；判定結果不會
+    改變「這一項是什麼」，也不會改變資料層對它的治理狀態。缺漏欄位則以這次
+    decision 的 `missing_field_ids` 為準，避免 `needs_information` 沿用過期清單。
 
     未知的 status 字串安全降級為需人工協助：那代表資料層送來了我們不認識的結論，
     猜它的意思比說「需要人看一下」危險。
@@ -163,6 +164,7 @@ def apply_decision(
     return item.model_copy(
         update={
             "status": status,
+            "missing_field_ids": decision.missing_field_ids,
             "decisive_conditions": decisive_conditions,
             "amount_min": decision.amount_min,
             "amount_max": decision.amount_max,

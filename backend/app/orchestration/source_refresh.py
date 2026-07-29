@@ -17,10 +17,10 @@
 吞掉不等於不留痕跡：失敗會記一筆紀錄，但只有事件代號、來源數量與例外**類別**。
 例外訊息可能引用值，所以走 `exc_info` 由格式器只取類別與堆疊。
 
-## 8/1 前沒有真正的背景工作
+## 本機與雲端邊界
 
-`LocalSourceRefreshService` 的「佇列」就是一個 list。這一批只做介面加本機同步佇列，
-沒有引入任何第三方任務佇列，也沒有建立任何 AWS 資源。換成雲端佇列的步驟寫在
+`LocalSourceRefreshService` 的「佇列」是一個可離線測試的 list。若未來經 owner 核准
+換成雲端 queue，storage-neutral protocol 與 local test path 仍維持不變；遷移步驟集中在
 `docs/aws_migration_guide.md`。
 """
 
@@ -28,8 +28,9 @@ import logging
 from datetime import UTC, datetime
 
 from app.observability.logging import log_event
-from app.orchestration.data_contracts import CoverageMetadata
 from app.orchestration.protocols import (
+    CoverageScope,
+    CoverageSnapshot,
     RefreshReceipt,
     RefreshRequest,
     SourceRefreshService,
@@ -39,24 +40,25 @@ from app.orchestration.protocols import (
 def refresh_after_response(
     service: SourceRefreshService,
     event_id: str,
+    coverage_scope: CoverageScope,
     *,
     now: datetime | None = None,
-) -> tuple[tuple[CoverageMetadata, ...], RefreshReceipt | None]:
-    """回報目前 coverage 狀態，並以非阻塞方式排入 refresh。
+) -> tuple[CoverageSnapshot, RefreshReceipt | None]:
+    """回報目前 coverage snapshot，並以非阻塞方式排入 refresh。
 
-    回傳 `(coverage, receipt)`。`receipt` 為 `None` 表示沒有送出請求（沒有相關來源）
-    或請求失敗 —— 兩種情況都不影響已經取得的 coverage。
+    回傳 `(snapshot, receipt)`。`receipt` 為 `None` 表示沒有送出請求（scope 內沒有來源）
+    或請求失敗；兩種情況都不影響已經取得的 snapshot。
     """
     requested_at = now if now is not None else datetime.now(UTC)
 
-    coverage = tuple(service.get_coverage_status(event_id))
-    if not coverage:
-        # 沒有登記相關來源就沒有東西可以刷新。不猜「全部來源都相關」。
-        return coverage, None
+    snapshot = service.get_coverage_status(coverage_scope)
+    if not snapshot.sources:
+        # scope 內沒有登記來源就沒有東西可以刷新。不猜「全部來源都相關」。
+        return snapshot, None
 
     request = RefreshRequest(
         event_id=event_id,
-        source_ids=tuple(entry.source_id for entry in coverage),
+        source_ids=tuple(entry.source_id for entry in snapshot.sources),
         requested_at=requested_at,
     )
 
@@ -68,14 +70,14 @@ def refresh_after_response(
             level=logging.WARNING,
             exc_info=True,
             life_event=event_id,
-            source_count=len(coverage),
+            source_count=len(snapshot.sources),
         )
-        return coverage, None
+        return snapshot, None
 
     log_event(
         "source_refresh_requested",
         life_event=event_id,
-        source_count=len(coverage),
+        source_count=len(snapshot.sources),
         outcome="accepted" if receipt.accepted else "skipped",
     )
-    return coverage, receipt
+    return snapshot, receipt

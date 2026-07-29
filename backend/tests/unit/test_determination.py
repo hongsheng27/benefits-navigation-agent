@@ -49,6 +49,7 @@ def _eligible_service(*item_ids: str) -> FixtureEligibilityService:
                 amount_max=None,
                 amount_period=None,
                 amount_currency=None,
+                missing_field_ids=(),
                 reasons=(),
             )
             for item_id in item_ids

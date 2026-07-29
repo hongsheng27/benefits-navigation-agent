@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app.orchestration.protocols import LocalSourceRefreshService
 from app.orchestration.state import (
     CandidateItem,
     ExitReason,
@@ -52,6 +53,16 @@ def _state(
         updated_at=_NOW,
         expires_at=_NOW + timedelta(hours=2),
     )
+
+
+def test_an_injected_refresh_service_requires_an_explicit_coverage_scope() -> None:
+    """避免 service 已注入，卻因預設空 scope 靜默不查詢也不排工作。"""
+    with pytest.raises(ValueError, match="coverage_scope is required"):
+        advance(
+            _state(),
+            HelpRequestInput(),
+            source_refresh_service=LocalSourceRefreshService(),
+        )
 
 
 # ---------------------------------------------------------------------------

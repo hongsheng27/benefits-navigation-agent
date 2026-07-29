@@ -1,249 +1,176 @@
-# 資料格式
+# 資料模型
 
-這份文件說明 `data/` 底下每個資料夾放什麼、欄位怎麼填。
+這份文件說明資料層的高階模型、runtime 邊界與治理語意，不是完整 SQL migration 清單。詳細的 proposed schema、constraints、indexes、migration 與 rollback 設計見 [data-layer-rule-engine design](../.kiro/specs/data-layer-rule-engine/design.md)。架構決策見 [ADR-0013: Use SQLite Runtime Behind Repositories](decisions/0013-use-sqlite-runtime-behind-repositories.md)。
 
-背後的決定見 [ADR-0008](decisions/0008-curate-in-sql-serve-from-json.md):
-蒐集與審核在 SQL 進行,**已確認**的記錄匯出成這裡的 JSON,系統執行時只讀 JSON。
+> 目前狀態：requirements、design 與 ADR 已核准；程式碼 migration、repositories、Rule DSL 與 runtime wiring 尚未完成。以下描述目標架構，不代表每個 model 已存在。
 
-## 用一本手冊來想
+## Runtime 真相與存取路徑
 
+本機 SQLite 是目前資料策展與 runtime 的單一真相來源，直到另有 owner-approved storage migration ADR 與替代 adapter。Runtime 讀取最近一次成功 commit 的完整狀態，且不載入 JSON catalog、不使用 JSON fallback。
+
+```text
+SQLite canonical catalog
+    ↓ SQLite adapters
+Storage-neutral repositories / services
+    ├── EntitlementGraphRepository
+    ├── EligibilityService
+    ├── EvidenceRepository
+    └── SourceRefreshService
+    ↓
+Workflow / state machine
+    ↓
+API response mapper
 ```
-entitlement_graph/   手冊最前面的流程圖    「發生這件事,要辦哪些」
-benefits/            每項福利的介紹頁      「這是什麼、去哪辦、帶什麼」
-rules/               介紹頁上的申請資格欄   「誰可以申請」
-provisions/          手冊最後的法條附錄     「法規原文怎麼寫」
-evaluations/         校對用的範例與答案     「怎麼知道規則寫對了」
-```
 
-由粗到細:**發生什麼事 → 要辦哪些 → 誰能辦 → 法條怎麼寫的。**
+FastAPI application composition root 建立具體 adapters 並注入 workflow。Workflow 與 state machine 只使用 immutable domain contracts，不接觸 SQL、SQLite connections、rows、tuples、table names 或 column names。
 
-## 填寫順序
+## 1. Catalog、方案與治理狀態
 
-前三層**不管走哪條路線都需要**,先做這三個:
+方案 model 保存穩定的 `item_id`、顯示名稱、治理狀態、結構化金額（若已核准）、目前資料版本與 review metadata。資料庫內既有 `program_id` 只在 adapter boundary 映射成跨層 `item_id`。
 
-1. `entitlement_graph/` — 一個人生事件一個檔
-2. `benefits/` — 一項福利一個檔
-3. `provisions/` — 一條法條一個檔
+合法治理狀態與 runtime 行為：
 
-`rules/` 只有選定要做深度判定的那 1–2 項才需要,見
-[hackathon-plan.md](hackathon-plan.md) 的範圍決定。
+| 狀態 | Runtime 行為 |
+| --- | --- |
+| `verified` | 規則與 citations 完整時可做完整確定性判斷；缺漏時為 `needs_human_review`。 |
+| `candidate`／`under_review` | 可見並帶尚未二次確認警告；不做完整判斷。 |
+| `stale` | 可見並帶 stale 警告；一律 `needs_human_review`。 |
+| `rejected`／`inactive` | 隱藏且不可評估。 |
 
----
+狀態轉換另存 history 與 reviewer reference。Crawler、importer、converter、exporter 或 LLM 都不能把資料標記為 `verified`。
 
-## 1. `entitlement_graph/` — 流程圖
+## 2. Entitlement Graph
 
-一個人生事件一個檔,描述牽動哪些事項與先後順序。
+Entitlement Graph 以唯一 ID 的 typed nodes 與 directed edges 表示人生事件、體系、方案、機關與文件需求。高階 node types 包含：
+
+- life event
+- system
+- benefit program／administrative item
+- agency
+- document requirement
+
+高階 edge types 包含 `triggers`、`belongs_to`、`requires`、`produces` 與 `administered_by`。Edge 可有以 field registry ID 表示的 path conditions。
+
+Graph repository 負責事件展開、前置需求、產出、體系反查與穩定排序。未知的 path condition 欄位會保留仍可能成立的 path 並回報缺漏欄位；已知不符只排除該 path。Graph 只判斷「是否仍可能相關」，不取代 EligibilityService 的資格判斷。
+
+## 3. Field Registry
+
+Field registry 是資料層、workflow 與規則引擎共用的資格欄位詞彙表。每筆至少描述：
+
+- `field_id`
+- data type
+- allowed values
+- prompt label
+- why needed
+- PII classification
+- active/version metadata
+
+Rule DSL、graph conditions 與 workflow 問題卡都引用相同 `field_id`。欄位型別或合法值不能由 frontend 或自由文字臨時推定。
+
+## 4. Canonical versioned Rule DSL
+
+SQLite 中 versioned、可巢狀的 Rule DSL 是唯一 canonical 資格規則。每個 rule version 至少保存：
+
+- `rule_id`、`item_id`、rule version 與 DSL version
+- required field IDs
+- 唯一 root 的遞迴 `all_of`／`any_of` tree
+- leaf condition 的 ID、field、operator、expected value、label 與 source reference
+- review／approval metadata
 
 ```json
 {
-  "life_event": "spouse_death",
-  "label": "配偶死亡",
-  "steps": [
-    { "benefit_id": "death_registration", "order": 1,
-      "produces": ["除戶謄本"] },
-    { "benefit_id": "nhi_status_change", "order": 2,
-      "requires": ["除戶謄本"] },
-    { "benefit_id": "labor_funeral_grant", "order": 2,
-      "requires": ["除戶謄本"] },
-    { "benefit_id": "survivor_pension", "order": 3,
-      "requires": ["除戶謄本"] }
-  ]
-}
-```
-
-| 欄位 | 說明 |
-|---|---|
-| `life_event` | 事件代號,LLM 萃取時只能吐出這裡有的值 |
-| `order` | 第幾順位辦理。同數字表示可並行 |
-| `produces` | 辦完會拿到什麼(後續項目會用到) |
-| `requires` | 需要先取得什麼才能辦 |
-
-## 2. `benefits/` — 福利介紹頁
-
-一項福利一個檔。**這一層不放資格條件。**
-
-以審查介面裡的「新北市環保葬鼓勵金」為例:
-
-```json
-{
-  "benefit_id": "nwt_eco_burial_grant",
-  "name": "新北市環保葬鼓勵金",
-  "summary": "為提高設施使用效率、減少建設費用支出、逐步推動公墓禁葬事宜訂定之鼓勵金發放計畫。",
-
-  "county": "NWT",
-  "purpose": "funeral_cost",
-  "basis": "government_subsidy_or_relief",
-  "payment_form": "cash_once",
-
-  "agency": { "role": "application_contact",
-              "name": "新北市政府殯葬管理處" },
-
-  "applicant_note": "申請人及亡者不限新北市民",
-  "deadline_note": "自本市公立納骨塔遷出或自本市公墓起掘骨灰(骸)次日起 1 年內完成環保葬;完成環保葬次日起 1 個月內臨櫃申辦",
-  "exclusions": null,
-
-  "documents_required": [],
-  "notes": "頁面未詳列應備文件,僅提供委託書、申請書、領據下載連結。實際應備文件可能需查閱申請書內容或致電確認。",
-
-  "rule_id": null,
-  "provision_ids": ["nwt-eco-01"],
-
-  "source": {
-    "url": "https://…",
-    "publisher": "新北市政府殯葬管理處",
-    "published_at": "2024-11-01",
-    "retrieved_at": "2026-07-26"
-  },
-  "verified_by": "…",
-  "verified_at": "2026-07-26"
-}
-```
-
-### 幾個要注意的欄位
-
-**`county`、`purpose`、`basis`、`payment_form` 是 enum。**
-只能填已定義的值。這些同時是 LLM 萃取時的**輸出詞彙表**——模型只能吐出這些值,吐別的會被程式拒絕。
-
-**`exclusions`(互斥條件)不確定時填 `null`,不要留空字串。**
-`null` 代表「尚未查證」,程式會在輸出加上提醒;空字串會被當成「查證過,沒有互斥條件」。這兩件事差很多。
-
-**`published_at` 和 `retrieved_at` 是兩件事。**
-前者是法規生效日(判斷適不適用),後者是你查到它的日期(判斷資料新不新)。兩個都要。
-
-**`rule_id` 沒有做深度判定的項目就填 `null`。**
-系統會把這一項當成導航資訊呈現,並標示「未經資格判定」。
-
-## 3. `rules/` — 申請資格
-
-只有要做深度判定的項目需要。條件必須拆解到程式可以比對。
-
-```json
-{
-  "rule_id": "NWT-ECO-001",
-  "benefit_id": "nwt_eco_burial_grant",
-  "version": "2026-07",
-  "source": {
-    "url": "https://…",
-    "provision_ids": ["nwt-eco-01"],
-    "retrieved_at": "2026-07-26"
-  },
-  "required_attributes": [
-    "origin_facility_county",
-    "days_since_exhumation",
-    "days_since_eco_burial"
-  ],
+  "rule_id": "synthetic-rule",
+  "item_id": "synthetic-item",
+  "version": "v1",
+  "required_field_ids": ["synthetic-field"],
   "logic": {
     "all_of": [
-      { "id": "c1", "label": "骨灰自新北市公立納骨塔或公墓起掘",
-        "field": "origin_facility_county", "op": "==", "value": "NWT" },
-      { "id": "c2", "label": "起掘次日起 1 年內完成環保葬",
-        "field": "days_since_exhumation", "op": "<=", "value": 365 },
-      { "id": "c3", "label": "完成環保葬次日起 1 個月內臨櫃申辦",
-        "field": "days_since_eco_burial", "op": "<=", "value": 30 }
+      {
+        "condition_id": "synthetic-condition",
+        "field_id": "synthetic-field",
+        "operator": "==",
+        "expected": "synthetic-value",
+        "label": "合成測試條件",
+        "source_reference": "synthetic-source-ref"
+      }
     ]
-  },
-  "notes": "申請人與亡者不限新北市民,因此不需詢問戶籍"
+  }
 }
 ```
 
-> 以上條件為依審查介面內容整理的**示意**,實際條號與門檻以官方文件為準。
+以上只有資料形狀示意，不包含福利事實。Rule Engine 只執行目前唯一、有效且人工核准的 canonical version；不得在 Python control flow 硬編碼個別方案門檻。
 
-### 為什麼要 `label` 和 `id`
+### 唯讀 compatibility projection
 
-判定結果會回報「差在哪一條」,靠的就是這兩個欄位。使用者看到的
-「您未滿 55 歲」就是某個條件的 `label`。
+`program_rule_fields` 不再是另一份人工維護的規則。它是由 canonical Rule DSL 透過 deterministic、lossless converter 產生的唯讀 compatibility projection：
 
-### `required_attributes` 決定系統要問什麼
+- 同一 rule/converter version 產生穩定順序與等價 serialization。
+- Canonical → projection → canonical round trip 必須保留 nested boolean semantics、conditions、fields、operators、values、labels 與 source references。
+- 無法無損表示時整次拒絕，不產生部分 projection。
+- Direct insert、update、delete 必須被拒絕。
 
-系統從這裡反推該向使用者詢問哪些欄位。**沒列進來的欄位不會被問**,
-所以漏了會導致該問的沒問。
+Legacy writable rows 只供遷移盤點與人工核對，不能與 canonical Rule DSL 雙寫。
 
-拆解過程也會告訴你**哪些不用問**——例如上例的「不限新北市民」代表
-戶籍這題不必問,寫在 `notes` 讓後續維護的人知道這不是漏掉。
+## 5. Evidence 與 Citations
 
-### 支援的運算子
+Evidence model 將 registered official source、document metadata、人工核准 excerpt、方案關聯與 rule source reference 分開保存。跨層 `Citation` 至少包含：
 
-`==`、`!=`、`>=`、`<=`、`>`、`<`、`in`、`not_in`
+- `document_id`
+- title、publisher、URL、excerpt
+- optional `published_at`、`effective_at`、`retrieved_at`
 
-組合器:`all_of`(全部成立)、`any_of`(其一成立),可以巢狀。
+Optional 日期缺失時維持空值，不推定替代日期；有值時使用 timezone-aware `datetime`，
+不得用無時區字串跨越 adapter boundary。完整 `eligible`／`ineligible` 結論必須讓實際評估過的每個 distinct source reference 都可解析到已核准 citation；缺漏時降級為 `needs_human_review`。
 
-## 4. `provisions/` — 法條原文
+## 6. Shared domain contracts
 
-**一條一個檔。不要按字數切。**
+Storage-neutral 邊界使用 immutable contracts，而不是 SQLite rows。高階 contracts 包含：
 
-```json
-{
-  "provision_id": "nwt-eco-01",
-  "law": "新北市環保葬鼓勵金發放計畫",
-  "article": "三、申請條件",
-  "text": "〔完整原文,不要截斷〕",
-  "version": "2026-07",
-  "url": "https://…",
-  "publisher": "新北市政府殯葬管理處",
-  "retrieved_at": "2026-07-26",
-  "note": "申請條件與期限"
-}
-```
+| Contract | 用途 |
+| --- | --- |
+| `CandidateItem` | 候選 ID、顯示名稱、治理狀態、backend-only relevance metadata、缺漏欄位與 graph relations。 |
+| `EligibilityDecision` | eligibility status、結構化金額、缺漏欄位與 structured reasons。 |
+| `StructuredReason` | condition、field、operator、expected、actual、label 與 source reference。 |
+| `Citation` | 可追溯的已核准官方證據。 |
+| `FieldRegistryEntry` | workflow 提問與資料驗證的共用詞彙。 |
+| `CoverageMetadata`／`CoverageSnapshot` | 指定 scope 與觀測時間的來源進度及 gaps。 |
+| `RefreshRequest`／`RefreshReceipt` | 非阻塞更新與同日去重結果。 |
 
-按字數機械切分會把「符合下列條件之一:一、… 二、… 三、…」從中間切斷,
-造成判定時只看到前兩款而不知道有第三款。按「條」或「款」切,語意才完整。
+`relevance_score` 只留在 backend contract 供 deterministic sorting；API 與 frontend 不得收到該欄位或任何衍生數值。
 
-**排除規定、但書、擇一條款要各自建檔**,並列進對應福利的 `provision_ids`。
-這些最容易被漏掉,而漏掉不會有任何錯誤訊息。
+`StructuredReason.actual` 只可回傳給當次 Requesting User。Raw user text 與 actual values 必須在輸出 logs、traces、metrics、exceptions 或 audit 前遞迴移除；sanitization 無法確認時 observability fail closed。
 
-## 5. `evaluations/` — 測試案例
+## 7. Coverage 與 Refresh
 
-每個做了規則的福利,至少三個案例:符合、不符合、邊界。
+Coverage model 保存 registered source scope、crawl status、最近成功時間、已索引文件數、domain tags、觀測時間與 gap categories。`CoverageScope(source_ids, domain_tags)` 明確限定查詢範圍，`CoverageSnapshot` 的所有 per-source metadata 共用同一個 timezone-aware `observed_at`，且 registered/status/indexed aggregate counts 必須與 sources 相等。它只描述可量測進度與已知缺口，不保證法律內容完整、網站完整、零遺漏或所有福利均已索引。
 
-```json
-[
-  { "case_id": "nwt-eco-01", "note": "期限內,符合",
-    "attributes": { "origin_facility_county": "NWT",
-                    "days_since_exhumation": 200,
-                    "days_since_eco_burial": 12 },
-    "expect": { "status": "eligible" } },
+Owner 核准的混合 refresh contract 是
+`RefreshRequest(event_id, source_ids, requested_at)` 與
+`RefreshReceipt(job_id, accepted, deduplicated)`。`event_id` 作為 job 與同日去重 context；
+coverage 範圍仍由 explicit `CoverageScope` 決定，不能以 event ID 隱式猜測。On-demand refresh 的資料模型包含 source、event、application timezone calendar date、dedup key、job status 與安全錯誤碼。請求流程：
 
-  { "case_id": "nwt-eco-02", "note": "超過申辦期限",
-    "attributes": { "origin_facility_county": "NWT",
-                    "days_since_exhumation": 200,
-                    "days_since_eco_burial": 45 },
-    "expect": { "status": "ineligible", "failed": ["c3"] } },
+1. 先從 request 開始時已 commit 的 SQLite 狀態建立回應。
+2. 再以本機背景工作 enqueue 到期來源。
+3. 相同 source＋event/topic＋日期只建立一個 job。
+4. Worker 失敗不改變已建立的回應或 last successful committed state。
+5. 新資料只能進入 `candidate`／`under_review`，等待人工審查。
 
-  { "case_id": "nwt-eco-03", "note": "邊界:剛好第 30 天",
-    "attributes": { "origin_facility_county": "NWT",
-                    "days_since_exhumation": 200,
-                    "days_since_eco_burial": 30 },
-    "expect": { "status": "eligible" } }
-]
-```
+## 8. JSON Snapshot
 
-**邊界案例最重要**——`<=` 和 `<` 寫錯只有邊界案例抓得到。
+JSON 只可由 SQLite 單向、deterministic、atomic 產生，供 tests fixture 或 release snapshot 使用。Snapshot 應包含 schema、data、Rule DSL versions 與 export timestamp。
 
-## 系統執行時怎麼用這些檔案
+JSON 不是 runtime input、startup requirement、fallback 或 SQLite import source；不得人工同步維護 SQLite 與 JSON 兩份內容。
 
-啟動時全部載入記憶體,查詢就是過濾:
+## 9. SQLite Lifecycle 與資料邊界
 
-```python
-candidates = [
-    b for b in BENEFITS
-    if b["purpose"] == "funeral_cost"
-    and b["county"] in ("NWT", None)      # None = 全國適用
-]
-```
+每條 SQLite connection 都要以 `contextlib.closing` 或等價 `finally: close()` 明確關閉。Read path 必須在 close 前 materialize/map 完成；transaction failure 先嘗試 rollback，再 close，最後只回安全錯誤。不能只依賴 `with sqlite3.connect(...)`。
 
-法條是**直接查表**取得,不是語意搜尋:
-
-```python
-texts = [PROVISIONS[pid] for pid in benefit["provision_ids"]]
-```
-
-這是完整性的保證來源——要看哪幾條是事先對應好的,不由相似度排序決定。
-
-語意搜尋只用在一種情況:使用者描述模糊,系統要判斷他講的是哪一項福利。
+Canonical catalog 明確排除 raw user text、direct identifiers、credentials 與 session 對話。Local SQLite、local files、local jobs 與 local/mock LLM 保持預設且可測試；owner 核准後可加入 live AWS adapter，但本資料模型不選定 production AWS service，且任何 secrets 都不得進入 repository。
 
 ## 相關文件
 
-- [ADR-0008](decisions/0008-curate-in-sql-serve-from-json.md) — 為什麼這樣分工
-- [ADR-0007](decisions/0007-limit-data-retention-and-egress.md) — 隱私邊界
-- [hackathon-plan.md](hackathon-plan.md) — 範圍與交付順序
-- [positioning.md](positioning.md) — 為什麼需要可稽核的資料
+- [ADR-0013: Use SQLite Runtime Behind Repositories](decisions/0013-use-sqlite-runtime-behind-repositories.md)
+- [被取代的 ADR-0008](decisions/0008-curate-in-sql-serve-from-json.md)
+- [SQLite runtime alignment proposal](back_database_doc/sqlite-runtime-alignment-proposal.md)
+- [Requirements](../.kiro/specs/data-layer-rule-engine/requirements.md)
+- [Detailed proposed design/schema](../.kiro/specs/data-layer-rule-engine/design.md)

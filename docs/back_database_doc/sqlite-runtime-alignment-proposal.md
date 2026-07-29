@@ -1,346 +1,166 @@
 # SQLite Runtime Alignment Proposal
 
-> **文件狀態：跨團隊交接提案，非規格階段文件，也不是最終 ADR。** 目標讀者為 Yuan Lin 與 Yuan's AI。本文件不自行修改或取代任何既有決策；涉及架構、契約或資料模型的變更，必須先由相關 owner 共同核准。
+> **文件狀態：提案已由專案 reviewer 與 owner 共同接受。** 原預定以 ADR-0012 正式記錄，但該編號已由 state machine 決策使用；目前由 [ADR-0013: Use SQLite Runtime Behind Repositories](../decisions/0013-use-sqlite-runtime-behind-repositories.md) 正式記錄，且該 Accepted ADR 為權威來源。本文保留交接背景、歷史檢查清單與 requested response format，不取代 ADR 或 finalized spec。
 
 ## 1. 文件目的與使用方式
 
-本文件用來對齊後端 workflow、資料層與規則引擎在 SQLite runtime 上的責任、介面與資料形狀，讓雙方在改程式前先找出衝突。
+本文件用來對齊 backend workflow、資料層與 Rule Engine 在 SQLite runtime 上的責任、介面與遷移檢查。Accepted ADR 與 finalized requirements/design 描述目標行為；程式碼描述目前實作。兩者不一致時要回報 implementation gap，不能把文件目標當成已完成，也不能因 legacy code 存在而忽略 accepted architecture。
 
-Yuan／Yuan's AI 必須依以下順序進行：
+Yuan／Yuan's AI 的歷史交接順序仍有效：
 
-1. 先檢查目前 backend 程式碼與測試，確認實際存在的 models、dependency injection、adapter、logging 與 SQLite 使用方式。
-2. 將程式碼與本文件、已核准 contracts、ADR 及資料層規格逐項比較。
-3. 先依第 13 節格式回報一致處、衝突與影響範圍，**不得直接編輯程式碼**。
-4. 等 owner 核准契約、遷移方式與待決策項目後，才提出或執行實作計畫。
+1. 先檢查 backend 程式碼與測試，確認目前 models、dependency injection、adapters、logging 與 SQLite lifecycle。
+2. 將程式碼與 Accepted ADR、finalized spec 及共同 contracts 比較。
+3. 先依第 11 節格式回報一致處、衝突與影響範圍，不直接進行未核准的 code migration。
+4. 依 tasks 中的 owner checkpoints 分批核准 migration、compatibility cutover、dependency 與 network work。
 
-判讀原則：
+## 2. 接受本提案的原因
 
-- **程式碼描述目前實作。** 文件若聲稱某功能已存在，但程式碼沒有，應以程式碼為準並回報落差。
-- **已核准的 contracts 與 ADR 描述預期行為。** 程式碼若違反已核准治理要求，不能因「目前就是這樣」而視為正確。
-- 本文件只是提案，不得凌駕 accepted ADR，也不得被當成已核准的實作指令。
+[ADR-0008](../decisions/0008-curate-in-sql-serve-from-json.md) 的成立前提是：資料只有個位數到低十位數、runtime 唯讀、已驗證資料從 SQL 匯出成 JSON，application 啟動時載入 JSON。這對固定、離線、低資料量 demo 是合理設計。
 
-## 2. 為什麼需要對齊
+資料層現在需要支援：
 
-ADR-0008 的成立前提是：MVP 資料只有個位數到十幾筆、runtime 唯讀、已驗證資料由 SQL 匯出成 JSON，application 啟動時將 JSON 載入記憶體，runtime 不查 SQL。這個做法適合小型、固定、需要離線存活的初版 demo。
+- relational Entitlement Graph 與雙向關係查詢
+- versioned nested Rule DSL 與人工審查狀態
+- `candidate`、`under_review`、`verified`、`stale`、`rejected`、`inactive` gates
+- 官方 evidence、coverage metadata 與 source refresh
+- current-data-first 回應與 same-day deduplicated background work
 
-新的資料層範圍已擴大，包含：
+若 runtime 仍只讀 JSON，SQL 與 JSON 會成為延遲同步的雙重真相。共同決策因此改為 SQLite curation/runtime single source of truth behind storage-neutral repositories，並由新 ADR 取代 ADR-0008。
 
-- 關聯式 Entitlement Graph nodes／edges 與雙向遍歷；
-- 依需求觸發的結構性爬取；
-- `candidate`／`under_review` 方案的受控可見性；
-- 官方來源更新、coverage metadata 與 `stale` 狀態；
-- PDF、Word 等附件下載與文字提取；
-- LLM 候選提取與人工審查；
-- 明顯可能超出低十位數的資料量。
+## 3. 已接受的架構
 
-因此，ADR-0008 的「runtime 只讀 JSON、永不查 SQL」與新規格的動態圖查詢、來源刷新、審查狀態及較大資料集互相衝突。**修訂或取代 ADR-0008 前，必須由後端與資料層 owner 共同核准。** 在正式決策完成前，ADR-0008 仍是現行 accepted ADR，本提案不能自行宣告它失效。
-
-## 3. 提議決策
-
-1. **2026 年 8 月 1 日前，以 SQLite 作為 curation 與 runtime 的本機單一資料真相來源。** 來源、graph、規則、證據與審查狀態都以 SQLite 為準。
-2. Runtime 只透過 **storage-neutral repository／service interfaces** 取用資料；workflow 與 state machine 不得出現臨時 SQL，也不得依賴 SQLite connection、row 或資料表欄名。
-3. JSON 為選配且由 SQLite **自動產生**，用途只限 snapshot、測試 fixture、audit diff 或離線 fallback。JSON 不得成為人工維護的重複真相，也不是 runtime 的必要輸入。
-4. **8 月 1 日前不得連線或建立 live AWS 資源。** 先使用本機 SQLite 與本機背景工作替代方案。
-5. 未來若採用其他儲存服務，新的 storage adapter 必須維持相同 interfaces，避免 workflow 因儲存技術改變而重寫。
-6. 本節仍是待核准提案。核准後應另行修訂／取代 ADR-0008，而不是把本文件當作最終 ADR。
-
-## 4. Mermaid 目標架構
+1. **目前 local profile 的 SQLite 是 curation 與 runtime 的單一真相來源。** Runtime 只讀 last successful committed state；替換 storage 需要另立 owner-approved ADR 與 adapter migration。
+2. **四個 storage-neutral ports**：`EntitlementGraphRepository`、`EligibilityService`、`EvidenceRepository`、`SourceRefreshService`。
+3. **FastAPI composition root 注入**具體 implementations；workflow/state machine 不接觸 SQL、SQLite connection、rows、tuples、table/column names。
+4. **Canonical rule** 是 SQLite 中 versioned nested `all_of`／`any_of` DSL。`program_rule_fields` 是 deterministic、lossless、read-only compatibility projection，不能雙寫。
+5. **JSON 非 runtime input 或 fallback。** 只可由 SQLite 單向產生 optional tests/release snapshots。
+6. **AWS development policy**：local SQLite、files、background job 與 mock LLM 保持預設且可測試；owner 核准後可加入 live AWS／network／LLM adapter，但不得提交 secrets，且須同步 migration guide。
+7. **實作狀態**：這是 architecture/document approval，不表示 repositories、schema migration、privacy、refresh 或 runtime wiring 已完成。
 
 ```mermaid
 flowchart LR
-    OID[OID Registry] --> CRAWL[Structural Crawlers]
-    CRAWL --> ATTACH[Attachments<br/>下載與文字提取]
-    ATTACH --> LLM[LLM Candidates<br/>分類與候選提取]
-    LLM --> REVIEW[Human Review]
-    REVIEW --> DB[(SQLite<br/>本機單一真相來源)]
-
-    DB --> REPOS[Storage-neutral<br/>Repositories / Services]
-    REPOS --> SM[State Machine / Workflow]
-    SM --> API[FastAPI / API Mapping]
-
-    DB -. 選配、自動產生 .-> JSON[JSON Snapshot<br/>fixture / audit / offline fallback]
+    CURATION[Local curation / human review] --> DB[(SQLite canonical truth)]
+    DB --> PORTS[Storage-neutral repositories / services]
+    PORTS --> WF[Workflow / State Machine]
+    WF --> API[FastAPI API mapping]
+    DB -. deterministic one-way; tests/release only .-> JSON[Optional JSON snapshot]
+    LOCAL[Local files / local job / mock LLM] --> CURATION
 ```
 
-資料流的核心限制是：crawler 與 LLM 只能建立候選資料，人工審查後的 SQLite 狀態才可控制 runtime 行為；workflow 只看 domain contracts，不看資料表。
-
-## 5. Ownership boundaries
+## 4. Ownership boundaries
 
 | 邊界 | 負責內容 | 明確不負責 |
 | --- | --- | --- |
-| Data layer | 官方來源、graph、規則資料、證據、審查狀態、coverage metadata、repository adapters | Session 流程、API 呈現、以自然語言猜資格 |
-| Rule Engine | 根據已核准的宣告式規則進行確定性 eligibility 判斷 | 爬網、LLM 判定、自行修改 workflow 狀態 |
-| Workflow | Session、state、問題順序、停止／轉介條件、repository 注入、API mapping | 臨時 SQL、硬編碼個別福利門檻、重做 eligibility 判斷 |
-| LLM | 語言理解、白話解釋、頁面分類、結構化**候選**提取 | eligibility 判斷、自動驗證、自動覆寫 verified 規則 |
+| Data layer | sources、graph、canonical rules、evidence、review statuses、coverage、SQLite adapters | Session 流程、API 文案、自然語言猜資格 |
+| EligibilityService／Rule Engine | status gates、required fields、人工核准 DSL 的 deterministic evaluation | Crawl、LLM 判定、自動 verify |
+| Workflow／state machine | Session、問題順序、停止／轉介條件、呼叫四個 ports | Ad-hoc SQL、SQLite shapes、個別方案門檻 |
+| FastAPI composition root | 建立／驗證／注入 implementations 或 fakes | Route 內自行建立 adapter |
+| LLM／crawler | 語言理解、分類、結構化 candidate 提取 | Eligibility、protected status transition、auto-verify |
+| API／privacy／observability | Requesting User mapping、score omission、recursive sanitization | 改寫 deterministic decision |
 
-資格結論必須由 deterministic Rule Engine 產生。LLM 不得決定或覆寫 `eligible`、`ineligible`、`needs_information`、`needs_human_review`。
+## 5. Storage-neutral interfaces 與 shared contracts
 
-## 6. Storage-neutral interface contracts
+四個 interfaces 的責任：
 
-以下是提議的 Python contracts，用來討論跨層形狀；它們不是已核准程式碼。實際 module path、同步／非同步方式與 dependency injection 位置，需由 Yuan's AI 檢查現況後回報。
+| Interface | Operations |
+| --- | --- |
+| `EntitlementGraphRepository` | event expansion、prerequisites、produces、system lookup |
+| `EligibilityService` | required fields、single evaluation、batch evaluation、status gates |
+| `EvidenceRepository` | item citations、evaluated source-reference citations |
+| `SourceRefreshService` | coverage snapshot、non-blocking on-demand refresh receipt |
 
-```python
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Protocol
+Interfaces 回傳 immutable domain contracts，不回 `sqlite3.Row`、SQL tuple 或 encoded metadata。共同 contracts 包含 `CandidateItem`、`GraphRelation`、`EligibilityDecision`、`StructuredReason`、`Citation`、`FieldRegistryEntry`、`CoverageMetadata`／`CoverageSnapshot`、`RefreshRequest`／`RefreshReceipt`。
 
-UserAttributes = Mapping[str, Any]
+Owner 核准的 refresh／coverage 混合契約保留 rich
+`get_coverage_status(CoverageScope) -> CoverageSnapshot`，並沿用 batch
+`RefreshRequest(event_id, source_ids, requested_at)` 與
+`RefreshReceipt(job_id, accepted, deduplicated)`。Coverage scope 由 caller 明確提供；
+service 不從 `event_id` 隱式猜 domain tags。
 
+Yuan legacy mappings 依 [backend/data-layer handoff](README.md) 漸進處理：DB `program_id` 在 adapter 映射為 `item_id`；legacy single amount、text reasons、single source URL 不得被當成新 canonical contract，也不得由文字反推結構化值。
 
-class EntitlementGraphRepository(Protocol):
-    def expand_from_event(
-        self,
-        event_id: str,
-        user_attributes: UserAttributes,
-    ) -> Sequence["CandidateItem"]: ...
+## 6. 已解決的 owner decisions
 
-    def get_prerequisites(self, item_id: str) -> Sequence["GraphRelation"]: ...
+原第 12 節列出的 open decisions 已解決。前六項是這次 owner alignment 的主要 blocking decisions，後兩項也一併由 finalized spec 明確化：
 
-    def get_produces(self, item_id: str) -> Sequence["GraphRelation"]: ...
+| 原 open decision | 已接受結果 |
+| --- | --- |
+| 1. ADR-0008 修訂或取代 | **已解決**：ADR-0008 標為 Superseded；ADR-0013 取代它。 |
+| 2. `stale` 行為 | **已解決**：可見並帶警告，但一律 `needs_human_review`，不做完整 evaluation。 |
+| 3. Frontend 是否看見 `relevance_score` | **已解決**：只供 backend sorting；API/frontend 完全省略。 |
+| 4. `actual` 傳輸與記錄邊界 | **已解決**：只可回給當次 Requesting User；與 raw user text 一起從 logs/traces/metrics/exceptions/audit 遞迴移除。Observability fail closed。 |
+| 5. Adapter wiring | **已解決**：FastAPI application composition root 建立並注入四個 implementations；workflow/state machine 只依賴 ports/contracts。 |
+| 6. JSON fallback | **已解決**：沒有 runtime JSON 或 fallback；JSON 只可單向產生供 tests/release snapshot。 |
+| 7. Canonical rule representation | **已解決**：versioned nested Rule DSL 是唯一真相；`program_rule_fields` 是 deterministic/lossless/read-only projection。 |
+| 8. Coverage 說法 | **已解決**：只回報 measurable status、counts 與 gaps；不得宣稱零遺漏或完整保證。 |
+| 9. Refresh／coverage API shape | **已解決**：rich scope/snapshot coverage 搭配 batch event/source refresh request，receipt 保留 `accepted` 與 `deduplicated`。 |
 
-    def get_programs_by_system(self, system_id: str) -> Sequence["CandidateItem"]: ...
+另外確認：所有 SQLite connections 必須有 `contextlib.closing` 或等價 close guarantee；crawler／LLM 永不 auto-verify。Owner 核准後可使用 live network／AWS／LLM 驗證，但 credentials 不得進 Git、local tests 必須保留，且本決策仍未選 production AWS service。
 
-
-class EligibilityService(Protocol):
-    def get_required_fields(
-        self,
-        item_id: str,
-    ) -> Sequence["FieldRegistryEntry"]: ...
-
-    def evaluate(
-        self,
-        item_id: str,
-        user_attributes: UserAttributes,
-    ) -> "EligibilityDecision": ...
-
-    def evaluate_many(
-        self,
-        item_ids: Sequence[str],
-        user_attributes: UserAttributes,
-    ) -> Sequence["EligibilityDecision"]: ...
-
-
-class EvidenceRepository(Protocol):
-    def get_citations(self, item_id: str) -> Sequence["Citation"]: ...
-
-
-@dataclass(frozen=True)
-class RefreshRequest:
-    event_id: str
-    source_ids: tuple[str, ...]
-    requested_at: datetime
-
-
-@dataclass(frozen=True)
-class RefreshReceipt:
-    job_id: str
-    accepted: bool
-    deduplicated: bool
-
-
-class SourceRefreshService(Protocol):
-    def get_coverage_status(
-        self,
-        event_id: str,
-    ) -> Sequence["CoverageMetadata"]: ...
-
-    def request_on_demand_refresh(
-        self,
-        request: RefreshRequest,
-    ) -> RefreshReceipt: ...
-```
-
-介面約束：
-
-- `SourceRefreshService` 必須先回傳目前 coverage 狀態，再以非阻塞方式排入 on-demand refresh；使用者請求不得等待 crawl 或 LLM 完成。
-- `EligibilityService` 可在內部呼叫 rule repository 與 deterministic Rule Engine，但 workflow 不應知道規則存在哪張表。
-- SQLite adapter、未來 storage adapter 與測試 double 都要實作同一組 contracts。
-- Repository 回傳 domain dataclass，不回傳 `sqlite3.Row`、SQL tuple 或未解碼的 `metadata_json`。
-
-## 7. Shared data contracts
-
-以下 dataclasses 表示跨層交換資料，不等同 SQLite schema。欄位命名差異由 adapter 處理。
-
-```python
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Literal
-
-ProgramStatus = Literal[
-    "candidate",
-    "under_review",
-    "verified",
-    "stale",
-    "rejected",
-    "inactive",
-]
-EligibilityStatus = Literal[
-    "eligible",
-    "ineligible",
-    "needs_information",
-    "needs_human_review",
-]
-AmountPeriod = Literal["one_time", "monthly", "annual"]
-
-
-@dataclass(frozen=True)
-class GraphRelation:
-    item_id: str
-    display_name: str
-    order: int = 0
-
-
-@dataclass(frozen=True)
-class CandidateItem:
-    item_id: str
-    display_name: str
-    program_status: ProgramStatus
-    relevance_score: int | float | None
-    missing_field_ids: tuple[str, ...]
-    prerequisites: tuple[GraphRelation, ...]
-    produces: tuple[GraphRelation, ...]
-
-
-@dataclass(frozen=True)
-class StructuredReason:
-    condition_id: str
-    field_id: str
-    operator: str
-    expected: Any
-    actual: Any
-    label: str
-    source_reference: str
-
-
-@dataclass(frozen=True)
-class EligibilityDecision:
-    item_id: str
-    status: EligibilityStatus
-    amount_min: int | None
-    amount_max: int | None
-    amount_period: AmountPeriod | None
-    amount_currency: str | None
-    reasons: tuple[StructuredReason, ...]
-
-
-@dataclass(frozen=True)
-class Citation:
-    document_id: str
-    title: str
-    publisher: str
-    published_at: str | None
-    effective_at: str | None
-    url: str
-    excerpt: str
-    retrieved_at: str | None
-
-
-@dataclass(frozen=True)
-class FieldRegistryEntry:
-    field_id: str
-    data_type: str
-    allowed_values: tuple[str, ...]
-    prompt_label: str
-    why_needed: str
-    pii_classification: str
-
-
-@dataclass(frozen=True)
-class CoverageMetadata:
-    source_id: str
-    crawl_status: str
-    last_crawled_at: datetime | None
-    indexed_document_count: int
-    domain_tags: tuple[str, ...]
-```
-
-契約規則：
-
-- `CandidateItem` 必須提供 `item_id`、`display_name`、`program_status`、`relevance_score`、`missing_field_ids`、`prerequisites`、`produces`。
-- `EligibilityDecision` 必須提供 `item_id`、`status`、金額上下限、發放週期、幣別及結構化原因；不得只提供展示文字。
-- `StructuredReason.actual` 可以回傳給提出該請求的使用者，用來解釋「你的情況」與「規則要求」的差異；**actual 值永遠不得寫入 log、trace、metric、exception message 或持久化 audit event。**
-- Citation 必須保留文件識別、標題、發布者、發布／生效時間、URL、引用段落與擷取時間，不得退化成單一 `source_url`。
-- Field registry 是 workflow 提問的共同詞彙表，包含型別、合法值、提問文字、為何需要及 PII 分類。
-- Coverage metadata 表示可量測的來源進度，不代表法律或網站內容的絕對完整性。
-- SQLite 的 `program_id` 到 workflow 的 `item_id` 映射屬於 adapter；workflow 不應為資料表欄名改變 domain contract。
-- `relevance_score` 只代表相關性，不代表符合資格的機率或程度。
-
-## 8. Status 與 safety gates
+## 7. Status、privacy、refresh 與 coverage gates
 
 | `program_status` | Runtime 行為 |
 | --- | --- |
-| `verified` | 執行完整 deterministic evaluation，並附已核准的規則版本與 citations。 |
-| `candidate`／`under_review` | 可以顯示，但必須標示「**尚未二次確認**」；不得執行完整資格判斷，只能回 `needs_human_review`。 |
-| `stale` | 尚待共同決策：方案 A 使用 last-verified snapshot 並顯示明確警告；方案 B 直接回 `needs_human_review`。未決策前不得自行選擇。 |
-| `rejected`／`inactive` | 隱藏，不進入候選結果或資格評估。 |
+| `verified` | 規則與 citations 完整時做 deterministic evaluation；缺漏時降級 `needs_human_review`。 |
+| `candidate`／`under_review` | 可見並警告尚未二次確認；不做完整 evaluation，回 `needs_human_review`。 |
+| `stale` | 可見並警告；永遠 `needs_human_review`。 |
+| `rejected`／`inactive` | 隱藏且 non-evaluable。 |
 
-共同安全閘門：
+`relevance_score` 不得離開 backend。`StructuredReason.actual` 可回 Requesting User，但不得進任何 observability 或 audit。Raw user text 只存在 request-local extraction scope；sanitizer 無法確認安全時不得 serialize/emission 原 payload。
 
-- 永遠不得記錄 raw user text。
-- 永遠不得記錄實際 eligibility values，包括 `StructuredReason.actual`。
-- Log 只可包含不含使用者值的 ID、狀態、數量、時間與錯誤類型。
-- Crawler／LLM 輸出只能進入候選或待審查狀態。
-- 無已核准條件與證據時，不得產生完整 eligibility 結論或虛構原因。
+Refresh 先用 request-start committed SQLite 回應，再 enqueue local background job。Dedup key 等價於 source＋event/topic＋application-timezone date；同日同 key 只建立一個 job。Worker failure 不修改原 response 或 last committed state。Crawler／LLM outputs 只能是 candidate／under_review。
 
-## 9. On-demand refresh
+Coverage 只記錄 scope、observed time、source statuses、indexed counts 與 gap categories；robots、login、JavaScript-only、broken links、scanned attachments 或 connection failures 都是 gaps，而不是「零遺漏」。
 
-每次使用者請求的建議流程：
+## 8. 歷史 backend 檢查清單（保留，尚不代表完成）
 
-1. 先使用目前本機 SQLite 資料立即回應；不得等待新的 crawl、附件處理或 LLM 分析。
-2. 查詢與事件 `domain_tags` 相關且已核准可抓取來源的 coverage metadata。
-3. 若來源為 `pending_crawl` 或依 `check_frequency` 已到期，排入本機背景 refresh job。
-4. 以 `source_id + event_id/topic + 日期` 或等價鍵進行 same-day dedup；同一來源同一天不得因多個請求重複觸發。
-5. Refresh 失敗不應阻塞或撤銷目前資料的回應；錯誤記錄不得包含使用者文字或 eligibility values。
-6. Crawl 或 LLM 產出不得自動標為 `verified`，也不得靜默修改任何 verified rule。狀態提升與規則變更必須經人工審查。
+Yuan's AI 在 code migration 前應檢查並回報：
 
-這個流程是「先用已知資料回答，再更新候選資料」，不是「等網路爬完才回答」。
+- [ ] `CandidateItem`、legacy `EligibilityResult`、內外部 `Citation`、field/question models 的目前欄位與責任。
+- [ ] Graph、eligibility、evidence、refresh dependencies 的現有注入點與 FastAPI composition-root cutover。
+- [ ] `program_id` ↔ `item_id` 映射、unknown ID 行為與 compatibility tests。
+- [ ] Legacy amount／amount label 與 amount quartet 的差異；確認不從文字推定。
+- [ ] Text reasons 到 `StructuredReason` 的契約遷移，以及所有 `actual` logging paths。
+- [ ] Single `source_url` 到完整 `Citation` 的 mapping 與 missing evidence downgrade。
+- [ ] 六種 ProgramStatus 的 query、sorting、visibility 與 evaluation gates。
+- [ ] 所有 SQLite connections 在 success、exception、rollback 與 teardown 確實關閉。
+- [ ] Workflow、state machine、API mapping 是否含 SQL、SQLite row 或 table/column dependency。
+- [ ] 四個 ports 是否有 no-SQL fakes，且 fake startup 不開 DB。
+- [ ] Runtime import/startup/request path 是否完全不讀 JSON snapshot 或 fallback。
+- [ ] 受影響 unit、integration、contract、architecture、privacy 與 migration tests。
 
-## 10. Yuan's AI 的精確 backend 檢查清單
+## 9. 歷史 data-layer 檢查清單（保留，尚不代表完成）
 
-Yuan's AI 必須先檢查並回報以下項目；未獲 owner 核准前不得改 code：
+Data layer owner 應確認：
 
-- [ ] `CandidateItem`、`EligibilityResult`、內部與對外 `Citation`、field／question models 的目前欄位、列舉與責任。
-- [ ] Graph、eligibility、evidence、refresh dependencies 的現有注入點，以及 state machine／API handler 應如何取得 interfaces。
-- [ ] `program_id` ↔ `item_id` 映射位置、未知 ID 行為及相容性測試。
-- [ ] 單一 `amount`／`amount_label` 與 `amount_min`、`amount_max`、`amount_period`、`amount_currency` 的差異；確認週期不能由文字或 frontend 猜測。
-- [ ] 文字 `reasons` 到 `StructuredReason` 的契約變更，以及 logging 是否可能洩漏 `actual`。
-- [ ] 單一 `source_url` 到完整 `Citation` 的 mapping 與缺欄位行為。
-- [ ] `verified`、`candidate`、`under_review`、`stale`、`rejected`、`inactive` 的實際查詢、排序、顯示與 eligibility 行為。
-- [ ] 所有 SQLite connection 是否在成功、例外與測試 teardown 路徑確實關閉；不可只依賴 `with sqlite3.connect(...)` 提交交易。
-- [ ] Workflow、state machine、API mapping 是否含 ad-hoc SQL、`sqlite3.Row` 或資料表欄名依賴。
-- [ ] 每個 interface 是否有不需 SQLite 的 test double／fake，讓 workflow 測試可獨立執行。
-- [ ] 受影響的 unit、integration、contract 與 privacy logging tests，以及目前測試命令是否可執行。
+- [ ] Graph nodes/edges、conditions、foreign keys、stable ordering 與 indexes。
+- [ ] Field registry canonical IDs、types、allowed values、prompts、reasons 與 PII classification。
+- [ ] Canonical Rule DSL version/tree validation、operator allowlist 與 source references。
+- [ ] `program_rule_fields` deterministic/lossless projection、reverse conversion、read-only enforcement 與 atomic generation。
+- [ ] Structured reasons 提供 condition、field、operator、expected、actual、label、source reference。
+- [ ] Citation 可 exact-map registered/approved documents 與 excerpts。
+- [ ] ProgramStatus gates、review history 與 human-only protected transitions。
+- [ ] Graph、eligibility、evidence、coverage／refresh SQLite repositories。
+- [ ] Current-data-first local job、timezone-aware same-day dedup 與 coverage invariants。
+- [ ] Optional JSON exporter 只從 SQLite 單向產生，具版本、stable order 與 atomic replace。
+- [ ] Migration backup、legacy preservation、dry run、rollback 與 compatibility window。
 
-## 11. Data-layer 檢查清單
+## 10. 仍待 owner 核准的 implementation sequencing
 
-資料層 owner 應確認：
+架構決策已完成，但下列實作順序仍須依 tasks checkpoints 核准：
 
-- [ ] Graph schema、外鍵、condition JSON、雙向查詢、穩定排序與必要 indexes。
-- [ ] Field registry 的 canonical `field_id`、型別、合法值、提問文案、必要原因與 PII 分類。
-- [ ] `amount_period` 的 canonical 值與每個給付資料的來源，不從金額文字推測。
-- [ ] Structured reasons 能提供 condition、field、operator、expected、actual、label 與 source reference。
-- [ ] Citations 能從 `source_documents`／`program_sources` 組出完整共同契約。
-- [ ] 各 `program_status` 的查詢 gates、排序及 verified-only evaluation 規則。
-- [ ] Graph、status、source、rule fields 與 citation joins 的必要 indexes。
-- [ ] Graph、eligibility、evidence、coverage／refresh 的 SQLite repositories。
-- [ ] 選配 JSON exporter 只從 SQLite 自動產生，輸出具版本與 deterministic ordering，且不接受手動回寫為第二份真相。
+1. Ordered migrations、backup marker、temporary-copy dry run 與 rollback batch。
+2. Legacy rule preservation、人工核對與 canonical approval 批次。
+3. Compatibility projection cutover 與 legacy consumer inventory。
+4. Runtime reader 切換到四個 ports／EligibilityService 的時點。
+5. Optional property-test dependency 與 optional JSON exporter 的導入時點。
+6. 8 月 1 日後是否需要 production storage/network adapter；任何 AWS service 選擇都需另立 ADR。
 
-## 12. 已知衝突與待決策
+Rollback 只回到上一個受支援 schema、完整 projection generation 與 last successful committed SQLite state；不得回退成 JSON runtime。
 
-以下項目尚未定案，任何一方都不得靜默選擇：
+## 11. Yuan's AI requested response format（保留）
 
-1. **ADR-0008 修訂或取代：** SQLite runtime 提案與「runtime 只讀 JSON」直接衝突，需共同核准並留下正式 ADR。
-2. **`stale` 行為：** 使用 last-verified snapshot 加警告，或一律降級為 `needs_human_review`。
-3. **Frontend 是否看見 `relevance_score`：** 顯示分數可能被誤讀為資格程度；只排序則較難解釋排序理由。
-4. **`actual` 的傳輸與記錄邊界：** 可回給提出請求的使用者，但不得進 log；需確認 response schema、error handling 與 observability filter。
-5. **Adapter wiring：** repository／service 在 application、state machine 或 tool layer 的實際注入位置。
-6. **是否需要 JSON fallback：** 若需要，必須定義產生時機、版本、完整性檢查與 fallback 啟用條件；若不需要，不應為假想需求增加維護成本。
-7. **規則 canonical representation：** 現有 `program_rule_fields` 與 `docs/data-model.md` 的巢狀 `all_of`／`any_of` DSL 不是同一形狀。必須選擇唯一 canonical representation，或提供可測試、deterministic、無資訊損失的 converter；不可讓兩者各自演進。
-8. **Coverage 說法：** 絕對不遺漏的保證無法成立，因為 robots.txt、JavaScript-only 頁面、登入限制、失效連結、掃描附件或暫時不可存取網站都可能造成缺口。應回報可量測的 coverage status，例如已登記來源數、已爬取來源數、錯誤數、最後爬取時間與已索引文件數，不得宣稱「零遺漏」。
-
-## 13. Yuan's AI 必須使用的回覆格式
-
-Yuan's AI 在任何 code edit 前，必須交付一份回覆，且至少包含以下小節：
+任何 code edit 前的交接回覆至少包含：
 
 ```markdown
 ## 已對齊項目
@@ -373,17 +193,19 @@ Yuan's AI 在任何 code edit 前，必須交付一份回覆，且至少包含�
 - 尚未修改任何程式碼，等待 owner 核准
 ```
 
-若檢查發現本提案的假設與程式碼不同，必須列為衝突，不可為了符合本文件而直接改 code。
+這個格式的價值在於：把「legacy 現況」、「accepted 目標」與「尚待 owner 決定的 cutover sequencing」分開，避免 contributor 靜默改變 schema、API、privacy 或 runtime truth。
 
-## 14. Non-goals
+## 12. Non-goals
 
-本提案不包含：
+本 alignment 不包含：
 
-- 選定 production AWS database、部署服務或最終雲端架構；
-- 8 月 1 日前的任何 live AWS call 或資源建立；
-- 讓 LLM 判斷 eligibility；
-- 讓 crawler、LLM 或匯入腳本自動驗證資料；
-- 在 MVP 階段完整爬取約 8,000 個政府機關；
-- 在本文件中新增、推定或解釋任何法律資格規則。
+- 未經 owner 決策就選定 production AWS database、queue、object storage、deployment 或 observability service
+- 提交 AWS／network／LLM credentials、tokens、`.env` 或 account-specific secrets，或讓 local tests 依賴 live services
+- 讓 LLM、crawler、importer、converter 或 exporter 決定 eligibility 或 auto-verify
+- 新增、推定或解釋任何福利門檻、期限、金額、法規原文或來源摘錄
+- 把 coverage 描述成法律／網站完整、零遺漏或所有福利均已索引
 
-本提案只處理跨層 runtime alignment。福利門檻、期限、金額與適用條件仍必須來自經人工確認的官方來源，不得由本文件或 AI 補寫。
+正式 requirements 與 detailed design：
+
+- [Requirements](../../.kiro/specs/data-layer-rule-engine/requirements.md)
+- [Design](../../.kiro/specs/data-layer-rule-engine/design.md)

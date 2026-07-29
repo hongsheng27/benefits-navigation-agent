@@ -175,8 +175,8 @@ rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/
 已實作的安全行為：
 
 - **資料可信程度的安全檢查**：`verified` 才做完整判定；`candidate`／`under_review`
-  可以顯示但一律回 `needs_human_review`；`rejected`／`inactive` 隱藏；`stale` 暫行
-  降級（待決策，非定案）。
+  可以顯示但一律回 `needs_human_review`；`rejected`／`inactive` 隱藏；owner 核准的
+  `stale` 方案 B 是可見並警告、不做完整判定、固定回 `needs_human_review`。
 - **單項失敗隔離**：某一項判定拋例外時只有那一項標成 `needs_human_review`，其餘照常。
 - **說不出理由的「不符合」會降級**：規則引擎還不輸出結構化決定性條件，所以現階段不會
   回報任何 `ineligible`。
@@ -220,10 +220,9 @@ rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/
 
 ## AWS 相關
 
-8 月 1 日前**不得建立實際的 AWS 連線**，只能用本機模擬。目前後端連 `boto3` 都沒有
-安裝，所以在沒有網路與雲端帳號的環境也能完整運作。
+依團隊規範，owner 核准後可使用 live AWS 進行準備與驗證，但不得提交 credentials、tokens、`.env` 或 account-specific secrets。目前後端未安裝 `boto3`，local path 在沒有網路與雲端帳號時仍必須完整可運作。
 
-新增任何未來會需要 AWS 服務的功能時，**必須在同一個任務內**更新
+新增或修改任何使用 AWS、或未來會遷移到 AWS 的功能時，**必須在同一個任務內**更新
 [`docs/aws_migration_guide.md`](../docs/aws_migration_guide.md)。那份指南是遷移說明
 的唯一來源，不要把遷移步驟寫在別的檔案裡。
 

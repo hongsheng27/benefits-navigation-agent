@@ -56,6 +56,18 @@ Frontend 已決定使用 **React、Vite、TypeScript 與 Tailwind CSS**，並以
 component library 或部署平台。詳見
 [ADR-0006](docs/decisions/0006-use-react-vite-typescript-tailwind.md)。
 
+### 目前本機資料架構
+
+目前接受的目標架構以本機 SQLite 作為資料策展與 runtime 的單一真相來源，直到另有 owner-approved storage migration ADR 與替代 adapter。FastAPI application composition root 將建立並注入 `EntitlementGraphRepository`、
+`EligibilityService`、`EvidenceRepository` 與 `SourceRefreshService`；workflow／state machine
+只依賴 storage-neutral contracts，不包含 SQL。Runtime 不讀 JSON，也沒有 JSON fallback。
+這項架構已核准，但 schema migration、repositories、Rule DSL 與 runtime wiring 尚未完成，
+不能視為目前程式已完成切換。詳見
+[SQLite runtime accepted ADR-0013](docs/decisions/0013-use-sqlite-runtime-behind-repositories.md)
+與 [finalized data-layer rule-engine spec](.kiro/specs/data-layer-rule-engine/requirements.md)。
+
+依團隊規範，owner 核准後可使用 live AWS 進行準備與驗證，但不得提交 credentials、tokens、`.env` 或 account-specific secrets。Data-layer 目前仍使用本機 SQLite、本機檔案與本機背景工作；production AWS database、object storage、queue、LLM hosting 與 deployment service 均尚未決定，任何選型都需另行對齊並記錄 ADR。
+
 預計流程狀態：
 
 ```text
@@ -79,26 +91,13 @@ UNDERSTAND_EVENT
 - Agent 只能呼叫目前狀態允許的工具，並限制最大迭代次數。
 - Relevance scoring 用結構化欄位匹配做 deterministic 排序，不依賴 LLM。
 
-### Relevance Scoring（相關性評分）
+### Relevance metadata（相關性排序）
 
-當可能符合的方案超過一筆時，系統用結構化欄位匹配為每筆方案計算相關性分數
-（0–100），越高代表越可能適用。評分完全基於已知欄位比對，不呼叫 LLM，可解釋。
-
-評分因子與權重：
-
-| 因子 | 權重 | 說明 |
-| --- | ---: | --- |
-| 縣市吻合 | +25 | 使用者所在縣市 = 方案適用縣市 |
-| 亡者身分吻合 | +20 | 亡者身分在方案資格清單中 |
-| 骨灰/骨骸類型吻合 | +15 | 使用者類型在方案可適用列表中 |
-| 環保葬需求吻合 | +15 | 方案需要環保葬，使用者已完成或計畫中 |
-| 在申請期限內 | +10 | 使用者天數未超過方案期限 |
-| 受理期間內 | +5 | 目前日期在方案開放申請期間 |
-| 不限設籍 | +5 | 方案不要求設籍，對非本地使用者友善 |
-| 有金額資訊 | +5 | 資料完整度加分 |
-
-評分後結果按分數高到低排序，搜尋範圍過大時（500+ 筆），未來可疊加 embedding
-語意搜尋做二次精篩。
+相關性 metadata 只供 backend 以結構化欄位做 deterministic 候選排序，不代表資格機率、
+符合程度或法定判斷，也不會影響任何 eligibility 結果。API 與 frontend 會完全省略分數、
+區間、百分比及其衍生值；目前沒有核准固定數值範圍或情境別權重表。新的排序與 mapping
+行為已納入 [accepted spec](.kiro/specs/data-layer-rule-engine/requirements.md)，但尚未完成
+migration 與 runtime implementation。
 
 ## 暫定技術棧
 
@@ -115,10 +114,10 @@ UNDERSTAND_EVENT
 | Agent tools               | `resolve_life_event`、`retrieve_official_rules`、`evaluate_eligibility` | MVP 暫定三個核心工具                                    |
 | Document storage          | Amazon S3                                                               | 暫定；存放官方文件與處理後資料                          |
 | RAG                       | Amazon Bedrock Knowledge Bases 或自製 retrieval                         | **後續決定**；先固定 `Retriever` interface              |
-| Relevance scoring         | 結構化欄位匹配評分（本機 deterministic）                                | **已實作**；依使用者屬性對方案評分排序，見下方說明      |
+| Relevance metadata        | Backend-only deterministic ordering                                     | **已核准、待完成**；無固定數值範圍，API／frontend 省略且不影響資格判斷 |
 | Vector store / embeddings | 由 Bedrock Knowledge Bases 管理或自選方案                               | **後續決定**；資料量大時疊加語意搜尋                    |
-| Entitlement graph         | 本機 SQLite + JSON 結構化欄位                                           | **已決定**；SQLite 先行，8/1 後遷移 DynamoDB；見 ADR-0008 |
-| Eligibility rules         | 通用 Rule Engine + 宣告式 JSON 欄位                                     | **已決定**；規則是資料不是程式碼，engine 讀 DB 欄位判斷  |
+| Entitlement graph / runtime storage | 本機 SQLite + storage-neutral repositories                    | **架構已核准、migration 待完成**；SQLite 為本機 curation／runtime 單一真相，見 [accepted ADR](docs/decisions/0013-use-sqlite-runtime-behind-repositories.md) |
+| Eligibility rules         | Canonical versioned `all_of`／`any_of` Rule DSL                         | **架構已核准、implementation 待完成**；`program_rule_fields` 僅為唯讀 compatibility projection |
 | Session state boundary    | Client / server split                                                   | **已決定**；direct identifiers 留在 client              |
 | Session persistence       | 記憶體，不持久化                                                        | **MVP 已定**；結束即消失，保存政策見 ADR-0007           |
 | Safety                    | Dynamic tool allowlist、輸入驗證、human-in-the-loop                     | 暫定核心機制                                            |
@@ -134,15 +133,15 @@ UNDERSTAND_EVENT
 
 | 項目 | 白話說明 |
 | --- | --- |
-| **LLM (Bedrock)** | 讓系統能「聽懂」使用者的話、產生白話回答的 AI 模型。比賽規定用 AWS Bedrock 上的模型。8/1 後才能連線測試。 |
+| **LLM (Bedrock)** | 讓系統能「聽懂」使用者的話、產生白話回答的 AI 模型。比賽規定使用 AWS Bedrock 上的模型；owner 核准後可連線驗證，model 仍待實測。 |
 | **Agent SDK (Strands)** | Agent 的執行框架 — 控制 AI 怎麼選工具、怎麼停下來。包在自己的 interface 後面，換框架不影響其他模組。 |
-| **Agent hosting (AgentCore)** | 讓 Agent 跑在 AWS 上面（不是跑在你的電腦）。是否用要看比賽帳號有沒有開放權限。 |
-| **Document storage (S3)** | 雲端檔案儲存。目前用本機資料夾放 HTML；8/1 後改放 S3，讓所有人都讀得到。 |
+| **Agent hosting (AgentCore)** | 讓 Agent 跑在 AWS 上面（不是跑在你的電腦）。是否採用仍需依帳號權限與需求另行決定。 |
+| **Document storage (S3)** | 雲端檔案儲存候選方案。目前預設使用本機資料夾；是否採用 S3 仍需 owner 對齊與 ADR。 |
 | **RAG (Knowledge Bases)** | 語意搜尋 — 讓系統用「意思相近」來找資料，不只靠關鍵字。資料量少時用 SQL + 評分就夠，量大時才需要。 |
-| **Vector store / embeddings** | RAG 的底層技術。把文字轉成數字向量，比較向量距離來判斷「意思接不接近」。需要 Bedrock embedding model，8/1 後才能用。 |
-| **Guardrails** | AI 的安全圍欄 — 防止 AI 輸出個資、亂下結論、回答無關問題。目前靠 state machine 控制；8/1 後可再疊一層 AWS 提供的內容過濾。 |
-| **Observability (CloudWatch)** | 系統監控 — 記錄每次狀態轉換、tool 呼叫、回應時間、錯誤。用來 debug 和追蹤效能。部署到 AWS 後才需要。 |
-| **Deployment** | 怎麼讓別人用你的系統。目前只跑在本機；比賽當天需要放到 AWS 上讓評審連得到。Amplify 放前端、Lambda 放後端 API。 |
+| **Vector store / embeddings** | RAG 的底層技術。把文字轉成數字向量，比較向量距離來判斷「意思接不接近」。需要 embedding model；是否接 Bedrock 與底層 storage 仍待驗證。 |
+| **Guardrails** | AI 的安全圍欄 — 防止 AI 輸出個資、亂下結論、回答無關問題。目前靠 state machine 控制；AWS Guardrails 是否採用仍待決策。 |
+| **Observability (CloudWatch)** | 系統監控 — 記錄狀態轉換、tool 呼叫、回應時間與錯誤。CloudWatch 是候選方案，實際服務仍待 deployment 決策。 |
+| **Deployment** | 怎麼讓別人使用系統。目前可在 owner 核准後驗證 AWS 路徑，但 Amplify、Lambda、AgentCore Runtime 或其他 production 組合尚未選定。 |
 | **Infrastructure as Code** | 用程式碼一鍵建立 AWS 資源（S3 bucket、Lambda、資料庫等），不用手動去 console 點。Hackathon 趕時間可能先手動，之後再補。 |
 | **Session persistence** | 使用者跟系統的對話狀態要不要存起來。MVP 決定不存 — 關掉就消失，避免處理個資保存問題。 |
 
@@ -271,11 +270,14 @@ Importer 會先讀取 OID 官方下載網址；若該主機暫時關閉連線，
 python3 scripts/import_government_oid.py --source-file /path/to/GDS.csv
 ```
 
-SQLite 只作為可重新產生的本機與 demo reference store，不存放使用者 session、直接
-識別資料或 credentials，也不代表已選定正式 AWS database。未來若部署需要 shared
-writes 或 horizontal scaling，應讓 DynamoDB 或其他已同意的 adapter 使用相同的
-normalized OID record contract。詳見
-[ADR-0009](docs/decisions/0009-use-generated-sqlite-for-government-oid.md)。
+政府 OID 匯入資料本身可由核准的 importer 與官方來源重新產生；但 accepted target 同時把人工策展
+catalog 與 runtime 最近一次成功 commit 的完整 SQLite 狀態視為 canonical truth，不再把整個
+SQLite 僅視為可重建 reference store。Runtime 透過 storage-neutral adapters 取用資料，未來若有
+shared writes 或 horizontal scaling 需求，另立決策替換 adapter，不預先選定 production database。
+這個 catalog 不存放使用者 session、直接識別資料、raw user text 或 credentials；上述架構已核准，
+schema migration 與 runtime wiring 尚未完成。詳見
+[SQLite runtime accepted ADR-0013](docs/decisions/0013-use-sqlite-runtime-behind-repositories.md)
+與 [ADR-0009](docs/decisions/0009-use-generated-sqlite-for-government-oid.md)。
 
 ## 本機補助來源與方案 catalog
 
@@ -368,9 +370,14 @@ checkpoints。請每位成員確認想負責的角色、希望獲得的技術經
 - 採用 policy-governed hybrid：state machine 控制流程，Agent 僅在指定節點推理。
 - Bounded agentic steps 試用 Strands Agents + Bedrock，並透過自有 `AgentRunner` 接入。
 - 採用 client / server split state；direct identifiers 留在 client。
+- 已接受 SQLite runtime behind storage-neutral repositories：SQLite 是目前本機 curation／runtime
+  單一真相，FastAPI composition root 注入四個 ports，workflow 不含 SQL，runtime 無 JSON fallback；
+  migration 與 wiring 尚未完成。
+- Relevance metadata 只供 backend deterministic ordering，沒有核准固定數值範圍，API／frontend
+  完全省略，且永不影響 eligibility；新 mapping 尚未完成。
 
-Bedrock model、retrieval、session persistence、AgentCore 與 deployment 細節將由技術驗證
-逐步確定；已接受的共同工程決策記錄在 [Architecture Decision Records](docs/decisions/README.md)。
+Bedrock model、retrieval、AgentCore、production storage 與 deployment 細節仍待技術驗證與獨立決策。Owner 核准後可使用 live AWS 進行準備與驗證，但 credentials、tokens、`.env` 與 account-specific secrets 不得提交；已接受的共同工程決策記錄在
+[Architecture Decision Records](docs/decisions/README.md)。
 
 技術選型原則：能在有限時間內完成穩定 demo、保留官方依據、可測試，且能清楚說明
 AI 與確定性程式各自負責什麼；不以使用最多 AWS 服務為目標。
@@ -423,7 +430,8 @@ Session persistence 技術、精確欄位、保存期限與刪除政策仍待決
 
 ## 專案狀態
 
-決賽為 **8/1–8/2 現場 30 小時開發**。架構方向與隱私邊界已定案,目前重心在
-補齊 `data/` 內容、驗證 Bedrock 權限與賽前整合演練。
+決賽為 **8/1–8/2 現場 30 小時開發**。架構方向與隱私邊界已定案，目前重心在
+補齊 `data/` 內容、完成 SQLite runtime migration 的實作準備，以及依 owner 核准驗證 Bedrock
+權限與整合路徑；任何 live AWS 使用都不得提交 credentials 或 account-specific secrets。
 
 比賽條件、MVP 範圍與交付分工見 [hackathon-plan.md](docs/hackathon-plan.md)。

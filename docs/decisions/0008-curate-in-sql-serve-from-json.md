@@ -1,7 +1,8 @@
 # ADR-0008: Curate in SQL, Serve from JSON
 
-- Status: Accepted
+- Status: Superseded
 - Date: 2026-07-26
+- Superseded by: [ADR-0013: Use SQLite Runtime Behind Repositories](0013-use-sqlite-runtime-behind-repositories.md)
 
 ## Context
 

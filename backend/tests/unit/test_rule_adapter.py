@@ -1,10 +1,17 @@
 """驗證規則引擎轉接層。"""
 
+from app.orchestration.data_contracts import EligibilityDecision
 from app.orchestration.rule_adapter import (
     adapt_result,
+    apply_decision,
     downgrade_unexplained_ineligible,
 )
-from app.orchestration.state import DecisiveCondition, ItemKind, ItemStatus
+from app.orchestration.state import (
+    CandidateItem,
+    DecisiveCondition,
+    ItemKind,
+    ItemStatus,
+)
 from app.rules.engine import EligibilityResult
 
 
@@ -76,6 +83,29 @@ def test_downgrade_leaves_other_statuses_alone() -> None:
 def test_needs_information_status_is_mapped() -> None:
     item = adapt_result(_result(status="needs_information"))
     assert item.status is ItemStatus.NEEDS_INFORMATION
+
+
+def test_apply_decision_uses_the_decisions_missing_field_ids() -> None:
+    item = CandidateItem(
+        item_id="test_program",
+        kind=ItemKind.BENEFIT,
+        missing_field_ids=("old_field",),
+    )
+    decision = EligibilityDecision(
+        item_id="test_program",
+        status="needs_information",
+        amount_min=None,
+        amount_max=None,
+        amount_period=None,
+        amount_currency=None,
+        missing_field_ids=("field_a", "field_b"),
+        reasons=(),
+    )
+
+    updated = apply_decision(item, decision)
+
+    assert updated.status is ItemStatus.NEEDS_INFORMATION
+    assert updated.missing_field_ids == ("field_a", "field_b")
 
 
 def test_unknown_status_falls_back_to_human_review() -> None:

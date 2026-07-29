@@ -7,7 +7,7 @@
 | `verified` | 走完整確定性判定 |
 | `candidate`／`under_review` | 可以顯示，但一律回需人工協助 |
 | `rejected`／`inactive` | 完全不出現在結果裡 |
-| `stale` | **暫行**回需人工協助（提案第 12 節第 2 項的待決策項目） |
+| `stale` | 顯示警示、不執行完整判定，固定回需人工協助（owner 核准方案 B） |
 """
 
 from datetime import UTC, datetime, timedelta
@@ -44,6 +44,7 @@ def _eligible(item_id: str) -> EligibilityDecision:
         amount_max=10000,
         amount_period="one_time",
         amount_currency="TWD",
+        missing_field_ids=(),
         reasons=(),
     )
 
@@ -167,16 +168,14 @@ def test_hidden_items_leave_the_candidate_list(program_status: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 閘門四：stale 的暫行行為
+# 閘門四：stale 方案 B
 # ---------------------------------------------------------------------------
 
 
-def test_a_stale_item_is_downgraded_for_now() -> None:
-    """`stale` 暫行採用較安全的一端：不給結論，交給人看。
+def test_a_stale_item_always_needs_human_review() -> None:
+    """`stale` 可見但不執行完整判定，固定交給人看。
 
-    這是**暫行行為**，不是已定案的決策。提案第 12 節第 2 項把它列為待共同決策：
-    方案 A 是使用最後一次驗證過的快照加警告，方案 B 是一律降級。決策確定後
-    改 `determination._STALE_FALLBACK_STATUS` 一處即可。
+    Owner 已選定方案 B；不得使用最後一次驗證快照產生完整資格結論。
     """
     service = FixtureEligibilityService(
         decisions={"funeral_benefit": _eligible("funeral_benefit")}
