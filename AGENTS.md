@@ -211,6 +211,22 @@ changes for them:
   checks passed or failed — the reviewer does not run them. If the PR
   description is missing the `make check` result, flag that instead.
 
+### Test Expectations (for coding agents implementing features)
+
+- Backend changes (`app/api/`, `app/orchestration/`, `app/tools/`,
+  `app/rules/`, `app/services/`) include tests in the same PR: at most three
+  cases — one happy path, one boundary, one failure. Follow the existing
+  patterns in `backend/tests/unit/` and `backend/tests/integration/`.
+- Eligibility rule changes use golden cases (eligible / ineligible /
+  boundary), following `data/evaluations/`.
+- Frontend UI changes do not require tests; verifying in the browser is the
+  expected check.
+- Never weaken assertions, delete, or skip an existing test to make the suite
+  pass. If a test the current task did not touch fails, stop and tell the
+  user to ask the team instead of "fixing" the test.
+- Run `make check` (or `make check-backend` / `make check-frontend`) and fix
+  until green before opening the PR.
+
 ### Pull Request Requirements (for coding agents opening PRs)
 
 - One PR is one coherent task; split unrelated work into separate PRs.
