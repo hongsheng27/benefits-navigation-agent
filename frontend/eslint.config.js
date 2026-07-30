@@ -24,6 +24,12 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
+      // UI copy is Chinese-first and uses the ideographic space (U+3000) as a
+      // typographic separator around middle dots; it's intentional, not stray whitespace.
+      "no-irregular-whitespace": [
+        "error",
+        { skipTemplates: true, skipJSXText: true },
+      ],
     },
   },
 );
