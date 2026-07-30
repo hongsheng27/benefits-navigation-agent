@@ -11,6 +11,21 @@ function sendViaTextarea(text: string) {
 }
 
 describe("NavigatorFlow", () => {
+  it("shows the intro hero before the conversation starts, then hides it", async () => {
+    render(<NavigatorFlow />);
+
+    expect(
+      screen.getByRole("heading", { name: "先說說你的狀況，我幫你找出可以申請的補助" }),
+    ).toBeInTheDocument();
+
+    sendViaTextarea("家人剛過世，不知道接下來要辦什麼");
+
+    expect(await screen.findByText("喪偶")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "先說說你的狀況，我幫你找出可以申請的補助" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("collects a few turns of chat, then confirms into the interpretation screen", async () => {
     render(<NavigatorFlow />);
 
