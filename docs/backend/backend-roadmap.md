@@ -14,8 +14,9 @@
 但**事件辨識寫死**（一律 `spouse_death`）、**判定是 stub**（湊齊欄位標 eligible，
 不會判不符合）、**決定性條件為空**。前端還沒接上。
 
-階段 1 到 3 完成。階段 4 的介面與假實作已經有人做完了，剩下把假資料填到底
-（T17）和接 SQLite（T18）。
+階段 1 到 3 完成。階段 4 只剩 **T18（接 SQLite）未完成** —— 介面與假實作由他人完成，
+示範資料（T17）本輪做完了。T18 被 `feat/databaseV3` 這個未合併的分支擋著，
+理由寫在階段 4 那一節。
 
 ---
 
@@ -185,8 +186,8 @@ T11 補的是中間那道。原本 `PassThroughPrivacyGate` 什麼都不擋，�
 | --- | --- | --- | --- | --- |
 | T15 | 資料介面定義 | ✅ | 他人 | `protocols.py` 定了五個接縫，比原本規劃的三個多 |
 | T16 | 每個介面的假實作 | ✅ | 他人 | 五個離線實作，全部不碰 SQLite |
-| T17 | 窄而深的假資料 | 🟡 | 與資料層協調 | 寫死了配偶過世的四項，但全是 `candidate` 狀態、沒有規則條件，所以是**寬而淺** |
-| T18 | 接上真實的 SQLite | 🔴 | 負責人 | **等資料層**填 `benefit_programs` |
+| T17 | 窄而深的假資料 | ✅ | 負責人 | `demo_fixtures.py`，喪葬給付一項可走到 `eligible`。依 ADR-0014 不是預設值 |
+| T18 | 接上真實的 SQLite | 🔴 **未完成** | 負責人 | 四個原因都還在，見下方「T18 為什麼還沒做」 |
 
 ### 五個接縫，不是三個
 
@@ -201,14 +202,72 @@ T11 補的是中間那道。原本 `PassThroughPrivacyGate` 什麼都不擋，�
 如果只有一個「資料層」介面，規則判定就有機會直接去撈文件內容，
 兩者糾纏之後就沒辦法單獨測試規則了。
 
+### T17 做了什麼（2026-07-30）
+
+新增 `orchestration/demo_fixtures.py`，把**喪葬給付一項**填到底：資料治理狀態提升為
+`verified`、判定回 `eligible`、帶一條決定性條件與一次性金額。其餘三項不動。
+
+`DemoEntitlementGraphRepository` 是包在 `FixtureEntitlementGraphRepository` 外面的
+一層，只把示範項目的狀態換掉，不複製那四筆候選清單 —— 複製會讓同一份資料有兩個定義，
+其中一份遲早過期。
+
+依 ADR-0014，這些示範資料**不是任何預設值**，HTTP 端點也不注入它們，所以從 API 跑
+出來仍然是四項需人工協助。有一個測試專門守這件事：預設路徑若哪天產出 `verified`，
+那個測試會失敗。
+
+**沒有做官方依據。** `EligibilityDecision` 沒有依據欄位，依據要走
+`EvidenceRepository`，而那個還沒接進狀態機。分開做才各自驗證得出來。
+
+### T18 為什麼還沒做（2026-07-30 實際查證）
+
+**這一段是本輪查證的結果，不是推測。** T18 是階段 4 唯一剩下的任務，四個原因都成立，
+其中第二個是新發現的。
+
+**一、這台機器上沒有資料庫。** 全域搜過 `*.db`、`*.sqlite`、`*.sqlite3`，一個都沒有。
+`.gitignore` 排除 `*.db`，所以資料庫是本機產物，要靠 `scripts/` 的腳本生成。
+`data/benefits/` 目前只有 `.gitkeep`。**沒有東西可以接。**
+
+**二、資料表定義還在未合併的分支上，而且正在改。**
+`origin/feat/databaseV3`（三筆 commit，未合併）的內容：
+
+| 檔案 | 變動 |
+| --- | --- |
+| `backend/app/adapters/sqlite/migrations.py` | 新增約 1020 行 |
+| `backend/app/adapters/sqlite/migration_sql/*.sql` | 兩個 migration，約 221 行 |
+| `backend/app/orchestration/protocols.py` | 約 +242 行（新增 `CoverageScope`、`CoverageSnapshot`）|
+| `determination.py`、`state_machine.py`、`rule_adapter.py`、`source_refresh.py`、`data_contracts.py` | 都有改 |
+| `docs/back_database_doc/README.md` | 約 508 行變動，大部分是刪除 |
+| `docs/decisions/0013-use-sqlite-runtime-behind-repositories.md` | 新增 |
+
+那個分支做的是 **schema 與 migration 工具**，不是 repository 實作 —— 搜過沒有任何
+`class Sqlite*` 實作那四個接縫。所以 T18 本身沒有被別人做掉，但它要依賴的契約
+**正在被那個分支修改**。現在寫 adapter 等於對著移動的目標寫。
+
+**三、接上了也看不出差別。** `determination.gated_status` 只讓 `verified` 走完整判定，
+而 `benefit_programs` 只有候選狀態的資料。接上 SQLite 之後結果仍然是四項全部需人工
+協助，跟現在完全一樣。
+
+**四、落差九未解決。** 規則條件的屬性代號與欄位登記表交集為零
+（見 `docs/back_database_doc/README.md`）。接上之後那些項目會永遠停在資訊不足，
+而且全程不報錯。
+
+### 一個好消息：人工審查在資料層有地方存了
+
+`feat/databaseV3` 的 migration 建了 `program_status_history` 與 `review_approvals`
+兩張表，欄位包含 `reviewer_ref`、`reviewed_at`、`approved_version`，還有一個 trigger
+限制 `actor_type` 只能是 `human_reviewer` 或 `migration`。
+
+**那正是 ADR-0014 需要的機制** —— 「有人真的審查過並記錄下來」在資料層有了落點。
+所以「拿到真正的 `eligible`」那條路是通的，只是還沒到。
+
 ### 這一段實際剩下的工作
 
-1. **T17 改成窄而深**：現在四項都是 `candidate`，離線流程一律回「需人工協助」。
-   那是誠實的預設值，但整條路走不到「符合資格」的結局。建議只挑喪葬給付一項，
-   把規則條件與官方依據填到底。
-2. **T18 接 SQLite**：等資料層。
-3. **接上 `EvidenceRepository`**：`_do_retrieve_rules` 目前什麼都不做。接上之後
-   階段 2 那道「找不到依據就標人工協助」的護欄才有東西可以判斷。
+1. **催 `feat/databaseV3` 合併。** 它擋著 T18，而 T18 是階段 4 唯一剩下的事。
+   合併之前做 T18 都是繞路。
+2. **接上 `EvidenceRepository`**：`_do_retrieve_rules` 目前什麼都不做。接上之後
+   階段 2 那道「找不到依據就標人工協助」的護欄才有東西可以判斷，示範項目也才會帶
+   `citations`。碰撞風險中等（要改 `state_machine.py`，那個分支也改了它）。
+3. **T18 接 SQLite**：等上面第 1 項，並且落差九要先有結論。
 
 ---
 
@@ -251,7 +310,9 @@ T11 補的是中間那道。原本 `PassThroughPrivacyGate` 什麼都不擋，�
 | --- | --- | --- | --- |
 | T9 | 規則引擎輸出**結構化的決定性條件**，而不是中文句子 | 資料層 | 沒有它，「差在哪個條件」做不出來，而那是專案最強的差異點 |
 | T9 | 規則欄位增加**發放性質**（一次性／按月／按年） | 資料層 | 遺屬年金是按月、喪葬給付是一次性，這無法從金額數字推斷 |
+| T18 | `feat/databaseV3` 合併（schema 與 migration 在那上面） | 資料層 | **最直接的阻塞**。本機沒有任何 `.db` 檔案，資料表定義也還沒進 `main` |
 | T18 | `benefit_programs` 填入正式方案 | 資料層 | 目前那張表只有候選狀態的資料 |
+| T18 | 落差九：規則條件的屬性代號與欄位登記表統一 | 兩邊 | 不解決的話接完會表現成「問完了還是沒結論」而且不報錯 |
 | T23 | Bedrock 帳號權限確認 | 成員 A | 沒確認之前無法驗，但已經沒有日期限制 |
 | T7 | 欄位登記表的**正式**欄位與選項（目前是三筆 draft） | 政策資料負責人 | 前端可以先接，但問的問題不是最終版本 |
 | T25 | Entitlement graph 的順序與依賴資料 | 政策資料負責人 | 辦理清單的那個「完成後才能辦」箭頭做不出來 |
@@ -266,10 +327,10 @@ T11 補的是中間那道。原本 `PassThroughPrivacyGate` 什麼都不擋，�
 | 順序 | 做什麼 | 理由 |
 | --- | --- | --- |
 | 1 | **前端接上那四個端點** | 後端做好了但沒人用。而且現在真的有三組問題卡可以顯示，接上就能看到完整流程。不是後端的工作，但應該優先推動 |
-| 2 | T17 把假資料改成窄而深 | T15、T16 已經有人做完了，接縫都在。現在缺的是「至少有一項能走到符合資格」，否則離線流程永遠停在需人工協助 |
-| 3 | 接上 `EvidenceRepository` | `_do_retrieve_rules` 是空操作，接上之後第三道護欄才成立 |
-| 4 | T20 假的 `AgentRunner` | 提早做，讓 LLM 相關測試不需要網路 |
-| 5 | T18 接真正的 SQLite 規則引擎 | 需要資料層先填 `benefit_programs` |
+| 2 | 接上 `EvidenceRepository` | `_do_retrieve_rules` 是空操作，接上之後第三道護欄才成立，示範項目也才會帶官方依據 |
+| 3 | T20 假的 `AgentRunner` | 提早做，讓 LLM 相關測試不需要網路 |
+| 4 | 跟資料層談落差九 | 代號對不上，不解決的話 T18 接完會表現成「問完了還是沒結論」而且不報錯 |
+| 5 | T18 接真正的 SQLite 規則引擎 | 需要資料層先填 `benefit_programs`，且落差九要先有結論 |
 
 ---
 
@@ -288,6 +349,31 @@ T11 補的是中間那道。原本 `PassThroughPrivacyGate` 什麼都不擋，�
 | 07-30 | T11 | 從「屬性允許清單」改成「值的型別與選項驗證」 | 代號的允許清單檢查在合併進來的 `main` 已經有了（`_record_answers` 會拋 `UnknownFieldError`），剩下沒人擋的是值本身 |
 | 07-30 | T12 | 查證後確認已完整，沒有動程式 | 四個環節都已到位，寫程式只會是重複的 |
 | 07-30 | T13 | 延後到 T21 | 事件辨識目前寫死，沒有讀那段文字，測不到真實情況 |
+| 07-30 | T15、T16 | 由他人完成，我們只做查證 | 合併進來的 `main` 已有 `protocols.py` 與五個離線實作 |
+| 07-30 | T17 | 官方依據移出範圍 | 依據要走 `EvidenceRepository`，那條線還沒接。分開做才各自驗證得出來 |
+| 07-30 | ADR-0014 | 決定句從「示範資料一律不得標 `verified`」改成「預設路徑不得產生 `verified`」 | 原句執行不了：`gated_status` 只讓 `verified` 走完整判定，照字面做的話示範連 `ineligible` 都到不了 |
+
+---
+
+## 合併時要注意的衝突（2026-07-30）
+
+`feat/databaseV3` 跟本分支合併會產生**兩個衝突，都在文件上**。實際跑過
+`git merge-tree`（只算不寫）的結果：
+
+```
+CONFLICT (content): docs/back_database_doc/README.md
+CONFLICT (content): docs/decisions/README.md
+```
+
+程式碼檔案全部乾淨自動合併。兩個衝突的內容：
+
+| 檔案 | 兩邊各做了什麼 |
+| --- | --- |
+| `docs/back_database_doc/README.md` | 我們加了落差九與幾段狀態更新；那個分支大改這份文件 |
+| `docs/decisions/README.md` | 我們加了 ADR-0014 那列與編號說明；那個分支加了 ADR-0013 那列 |
+
+**解衝突時不要整段挑一邊。** 落差九是新資訊，那個分支不知道它存在；ADR-0013 與
+ADR-0014 是兩份不同的決策，索引裡兩列都要留。
 
 ---
 
@@ -342,5 +428,6 @@ T11 補的是中間那道。原本 `PassThroughPrivacyGate` 什麼都不擋，�
 | `docs/decisions/0007-limit-data-retention-and-egress.md` | 資料保存與外送的限制，隱私閘門的依據 |
 | `docs/decisions/0011-frozen-pydantic-session-workflow-state.md` | 狀態形狀的決策與已知限制 |
 | `docs/decisions/0012-deterministic-state-machine-with-guardrails.md` | 狀態機的三張宣告表與護欄的決策 |
+| `docs/decisions/0014-keep-fixture-data-out-of-verified-status.md` | 示範資料不得標成已核對，以及 T17 為什麼這樣做 |
 | `docs/aws_migration_guide.md` | AWS 遷移說明的唯一來源 |
 | `backend/README.md` | 啟動與測試指令，含兩個環境坑 |
