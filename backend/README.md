@@ -11,8 +11,8 @@ Backend 採用 Python **modular monolith**，負責 API、workflow state、Agent
   framework-neutral，不把 business logic 寫進 route handlers。
 - 採用 policy-governed hybrid orchestration：state machine 控制狀態、允許的 tools、
   停止條件與人工確認；LLM 不直接決定福利資格。
-- Strands Agents + Amazon Bedrock 先作為 `AgentRunner` 後方的可逆 trial；schemas、
-  tools、rules 與 session state 不依賴 Strands-specific types。
+- **不做 agent 迴圈。** 模型呼叫走一個窄的 LLM port（`app/llm/port.py`），沒有工具
+  登記表也沒有迴圈；目前的實作是 Gemini，目標是 Bedrock。理由見 ADR-0015。
 - Raw Lambda handler 不列為 MVP 必要項目；若未來部署需要，只能作為 application
   service 前方的 thin adapter。
 - 環境與套件以 **uv** 管理，Python 版本由 `.python-version` 釘在 3.13。

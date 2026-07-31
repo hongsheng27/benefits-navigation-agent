@@ -23,14 +23,14 @@
 
 ## 這個版本還沒有的
 
-- 官方依據檢索：`RETRIEVE_RULES` 仍是空操作，資料層還沒交出 `EvidenceRepository`
-- 白話說明：`EXPLAIN_RESULT` 仍是空操作，還沒接模型
+- 官方依據檢索：`RETRIEVE_RULES` 仍是空操作，`EvidenceRepository` 的接縫備好了但沒接上
+- 白話說明：`EXPLAIN_RESULT` 仍是空操作，還沒接模型（T22，要等依據先有內容）
 
-## 流程規則是真的，資料來源還不是
+## 流程規則是真的，資料來源還不全是
 
-轉換規則、守門條件、自動推進與護欄都已經是最終行為。但**事件辨識仍是寫死的**
-（等 LLM），**項目展開仍來自離線 fixture**（等資料層的 SQLite repository）。每一處
-都有註解說明。
+轉換規則、守門條件、自動推進與護欄都已經是最終行為。**事件辨識已經接上真實模型**
+（`_receive_life_event` → `llm/tasks/resolve_life_event.py`），但**項目展開仍來自離線
+fixture**（等資料層的 SQLite repository）。每一處都有註解說明。
 
 資料來源不由這個模組自己去拿，而是透過 `protocols.py` 的接縫注入（見 `advance()`
 的具名參數）。目前注入的是不需要 SQLite 的離線實作，換成真實來源時這個模組不用改。
@@ -424,8 +424,9 @@ def _record_answers(
     if unknown:
         raise UnknownFieldError(unknown)
 
-    # 代號合格之後，值本身再交給隱私閘門。Phase 2 的閘門原樣回傳；型別與選項的
-    # 驗證屬於 Req 16.3（T11），換掉閘門的實作就能加上，狀態機不用改。
+    # 代號合格之後，值本身再交給隱私閘門。預設的 `RegistryBackedPrivacyGate` 會依登記表
+    # 驗證型別與選項，不合法就拒絕整筆（T11 已完成）。這裡的呼叫方式當初就設計成
+    # 可替換，所以加上驗證時狀態機一行都沒改。
     accepted = seams.privacy_gate.validate_attributes(
         dict(user_input.answers), seams.registry
     )

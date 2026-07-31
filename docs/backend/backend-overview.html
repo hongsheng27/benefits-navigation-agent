@@ -36,7 +36,7 @@ li { margin-bottom: 4px; }
 <body>
 
 <h1>接住 — 後端 Workflow 層說明</h1>
-<p class="subtitle">最後更新：2026-07-30 ｜ 分支：feat/backend-privacy-gate ｜ 延續 <a href="../architecture-overview.html">專案架構與資料庫說明</a></p>
+<p class="subtitle">最後更新：2026-07-30 ｜ 分支：feat/backend-llm-port ｜ 延續 <a href="../architecture-overview.html">專案架構與資料庫說明</a></p>
 
 <!-- ==================== 定位 ==================== -->
 
@@ -307,7 +307,7 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   <tr><th></th><th>任務</th><th>狀態</th></tr>
   <tr><td>T11</td><td>屬性值的型別與選項驗證</td><td><span class="tag tag-green">完成</span>（<code>privacy/attribute_gate.py</code>）</td></tr>
   <tr><td>T12</td><td>錯誤轉換（不外洩原始值）</td><td><span class="tag tag-green">完成</span>（查證後確認已完整，沒有動程式）</td></tr>
-  <tr><td>T13</td><td>自由文字只存在第一步的結構保證</td><td><span class="tag tag-yellow">結構已擋</span>，實際丟棄延後到 T21</td></tr>
+  <tr><td>T13</td><td>自由文字只存在第一步的結構保證</td><td><span class="tag tag-green">完成</span>（2026-07-30 在 T21a 完成）</td></tr>
   <tr><td>T14</td><td>紀錄檔埋點</td><td><span class="tag tag-green">完成</span>（狀態機四種事件）</td></tr>
 </table>
 <p>
@@ -316,9 +316,13 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   <code>invalid_field_value</code>。錯誤回應只帶代號，不帶使用者送來的值。
 </p>
 <p>
-  T13 延後的理由：「不保存原文」目前是靠<strong>契約上沒有那個欄位</strong>達成的，
-  結構上已經擋住。而事件辨識還是寫死的，後端根本沒有收下那段文字，
-  現在寫丟棄邏輯會沒有東西可丟。
+  <strong>T13 已經在 T21a 完成（2026-07-30）。</strong>原本延後的理由是「事件辨識寫死，
+  後端根本沒收下那段文字，寫丟棄邏輯會沒有東西可丟」。接上模型之後那段文字真的被使用了，
+  所以這一項有了實質內容：<code>resolve_life_event</code> 收下文字、送給模型、
+  <strong>只回傳一個事件代號</strong>。原文只存在於那個函式的參數裡，呼叫端拿不到它。
+</p>
+<p>
+  <code>implementation.pending</code> 因此從七項降到六項（移除 <code>privacy_gate</code>）。
 </p>
 
 <h3><span class="tag tag-blue">階段 4</span> 資料來源介面 <span class="tag tag-yellow">只剩 T18 未完成</span></h3>
@@ -358,13 +362,60 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
 </p>
 <table>
   <tr><th></th><th>任務</th><th>狀態</th><th>備註</th></tr>
-  <tr><td>T19</td><td>LLM port 介面與邊界形狀</td><td><span class="tag tag-gray">未開始</span></td><td>不連網路、不加依賴</td></tr>
-  <tr><td>T20</td><td>離線假實作</td><td><span class="tag tag-gray">未開始</span></td><td>有了它，LLM 相關測試不需要網路也不需要金鑰</td></tr>
-  <tr><td>T21</td><td><code>resolve_life_event</code></td><td><span class="tag tag-gray">未開始</span></td><td><strong>會順便完成 T13</strong>（原文丟棄）</td></tr>
-  <tr><td>T23</td><td><strong>Gemini adapter</strong></td><td><span class="tag tag-gray">未開始</span></td><td>原本是 Strands / Bedrock，改成先接自己的 Gemini</td></tr>
+  <tr><td>T19</td><td>LLM port 介面與邊界形狀</td><td><span class="tag tag-green">完成</span></td><td><code>llm/port.py</code>，含 schema 可攜性檢查</td></tr>
+  <tr><td>T20</td><td>離線假實作</td><td><span class="tag tag-green">完成</span></td><td><code>llm/fake.py</code>，測試不需要網路也不需要金鑰</td></tr>
+  <tr><td>T21a</td><td>事件辨識</td><td><span class="tag tag-green">完成</span></td><td><strong>順便完成了 T13</strong>（原文丟棄）</td></tr>
+  <tr><td>T23</td><td><strong>Gemini adapter</strong></td><td><span class="tag tag-green">完成</span></td><td>已用真金鑰實測，見下方</td></tr>
+  <tr><td>T21b</td><td>屬性抽取</td><td><span class="tag tag-gray">未開始</span></td><td>要從欄位登記表動態生成 schema</td></tr>
   <tr><td>T22</td><td>白話解釋</td><td><span class="tag tag-gray">未開始</span></td><td>必須排在官方依據檢索之後</td></tr>
   <tr><td>T28</td><td>Bedrock adapter</td><td><span class="tag tag-red">被依賴卡住</span></td><td>要先確認帳號權限，<code>boto3</code> 還沒進依賴</td></tr>
 </table>
+<div class="done">
+  <strong>事件辨識已經接上真模型並實測過（2026-07-30）。</strong>
+  預設模型是 <code>gemma-4-31b-it</code>，<code>gemini-3.6-flash</code> 也驗過可用。
+  <table>
+    <tr><th>輸入</th><th>結果</th></tr>
+    <tr><td>我先生上個月過世了</td><td><code>spouse_death</code></td></tr>
+    <tr><td>我太太走了，我不知道該辦什麼</td><td><code>spouse_death</code></td></tr>
+    <tr><td>我媽媽前天在醫院過世</td><td><code>parent_death</code></td></tr>
+    <tr><td>我想問問看有什麼補助可以申請</td><td><strong>拒絕，不猜</strong></td></tr>
+    <tr><td>今天天氣真好</td><td><strong>拒絕，不猜</strong></td></tr>
+  </table>
+  <p>
+    後兩個案例回 <code>unrecognised</code> 而不是硬挑一個最接近的 ——
+    <strong>「不准猜」在真模型上生效了。</strong>
+  </p>
+</div>
+<div class="gap">
+  <strong>三件實測才知道、寫在這裡避免有人照舊教學重做一次的事。</strong>
+  <ol>
+    <li>
+      <strong><code>generateContent</code> + <code>responseSchema</code> 那條路不能用。</strong>
+      它會回 400，因為那個 schema 型別<strong>不支援 <code>additionalProperties</code></strong>，
+      而我們的可攜性規則要求它必須是 <code>false</code>（Bedrock 的硬性要求）。
+      兩者無法同時滿足，所以走 <code>interactions</code> 端點不只是「比較新」，
+      是唯一能同時滿足兩邊的路。
+    </li>
+    <li>
+      <strong><code>generation_config</code> 的欄位名是 snake_case。</strong>
+      送 <code>maxOutputTokens</code> 會被拒絕。這個 API 會拒絕未知欄位，
+      所以拼錯不會被默默忽略。
+    </li>
+    <li>
+      <strong>模型會把 JSON 包在 Markdown 圍籬裡</strong>，即使指定了
+      <code>mime_type: application/json</code>。adapter 會拿掉圍籬，但<strong>刻意只做
+      這件事</strong> —— 不做「從一段文字裡挖出看起來像 JSON 的部分」，
+      那會把「模型答錯了」硬掰成成功。
+    </li>
+  </ol>
+</div>
+<div class="highlight">
+  <strong>測試不會用到真實模型，即使本機設了金鑰。</strong>
+  <code>backend/tests/conftest.py</code> 有一個 <code>autouse</code> fixture 把金鑰清成空的。
+  沒有它的話整套測試會真的打網路 —— 實測症狀是從 3 秒變成 46 秒、七個失敗。
+  三個理由：會花額度、會不穩（間歇性失敗的測試最後都會被關掉）、
+  以及結果取決於誰在跑。
+</div>
 <div class="highlight">
   <strong>為什麼不做 agent 迴圈。</strong>
   系統裡只有兩個 LLM 工作（聽懂事件、翻成白話），兩個都是問一次答一次，
@@ -456,6 +507,12 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   <tr><td><code>frontend/src/types/session.ts</code></td><td>同一份契約的 TypeScript 版本</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/privacy/attribute_gate.py</code></td><td>屬性值的型別與選項驗證，不合法就拒絕整筆</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/orchestration/demo_fixtures.py</code></td><td><strong>示範用</strong>資料，只有喪葬給付一項填到底。不得作為預設值</td><td><span class="tag tag-yellow">示範</span></td></tr>
+  <tr><td><code>backend/app/llm/port.py</code></td><td>語言模型的邊界形狀、呼叫契約、schema 可攜性檢查</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/llm/fake.py</code></td><td>不連網路的模型實作，<code>advance()</code> 的預設值</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/llm/gemini.py</code></td><td>Gemini adapter。<strong>唯一 import <code>httpx</code>、也唯一知道 Gemini 存在的模組</strong></td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/llm/factory.py</code></td><td>有金鑰用 Gemini、沒金鑰用示範實作。啟動時決定一次</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/llm/tasks/resolve_life_event.py</code></td><td>把一段文字對應成事件代號。<strong>系統唯一持有原文的地方</strong></td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/orchestration/life_events.py</code></td><td>生命事件登記表，讀 <code>data/life_events/events.v0.1.json</code></td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/retrieval/</code></td><td>文件檢索與引用組裝</td><td><span class="tag tag-gray">空的</span></td></tr>
   <tr><td><code>backend/app/tools/</code></td><td>三個 Agent tool</td><td><span class="tag tag-gray">只有說明</span></td></tr>
   <tr><td><code>backend/app/api/health.py</code></td><td>存活檢查端點</td><td><span class="tag tag-green">已完成</span></td></tr>
