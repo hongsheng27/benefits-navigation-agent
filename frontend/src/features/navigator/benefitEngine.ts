@@ -72,6 +72,40 @@ export function getMissingRequirementCodes(
   return missingRequirements(item, answers);
 }
 
+// Item-specific exclusions live in one table so the boolean rule (used by
+// verdict()) and its human-readable explanation (used by noReason()) can
+// never drift apart — editing one edits the other.
+type ExclusionRule = {
+  itemId: string;
+  isExcluded: (answers: Record<string, string>) => boolean;
+  describe: (answers: Record<string, string>) => NoReasonInfo;
+};
+
+const EXCLUSION_RULES: ExclusionRule[] = [
+  {
+    itemId: "special",
+    isExcluded: (answers) => answers.children === "沒有",
+    describe: () => ({
+      condition: "家中有未成年子女",
+      mine: "沒有未成年子女",
+      need: "至少 1 名未滿 18 歲子女",
+    }),
+  },
+  {
+    itemId: "unemploy",
+    isExcluded: (answers) => answers.employment !== "非自願離職",
+    describe: (answers) => ({
+      condition: "離職原因",
+      mine: answers.employment || "—",
+      need: "非自願離職",
+    }),
+  },
+];
+
+function findExclusionRule(itemId: string): ExclusionRule | undefined {
+  return EXCLUSION_RULES.find((rule) => rule.itemId === itemId);
+}
+
 export function verdict(
   item: BenefitItem,
   answers: Record<string, string>,
@@ -83,10 +117,8 @@ export function verdict(
   if (missing.length) {
     return "info";
   }
-  if (item.id === "special" && answers.children === "沒有") {
-    return "no";
-  }
-  if (item.id === "unemploy" && answers.employment !== "非自願離職") {
+  const rule = findExclusionRule(item.id);
+  if (rule && rule.isExcluded(answers)) {
     return "no";
   }
   return "ok";
@@ -96,21 +128,8 @@ export function noReason(
   item: BenefitItem,
   answers: Record<string, string>,
 ): NoReasonInfo | null {
-  if (item.id === "special") {
-    return {
-      condition: "家中有未成年子女",
-      mine: "沒有未成年子女",
-      need: "至少 1 名未滿 18 歲子女",
-    };
-  }
-  if (item.id === "unemploy") {
-    return {
-      condition: "離職原因",
-      mine: answers.employment || "—",
-      need: "非自願離職",
-    };
-  }
-  return null;
+  const rule = findExclusionRule(item.id);
+  return rule ? rule.describe(answers) : null;
 }
 
 export function estimate(

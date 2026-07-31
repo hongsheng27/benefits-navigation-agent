@@ -3,14 +3,13 @@ import { BENEFIT_ITEMS } from "../../mocks/benefitCatalog";
 import type {
   BenefitItem,
   EligibilityQuestion,
-  ProfileSectionKey,
   ProfileState,
 } from "../../types/navigator";
 import { BenefitCard } from "./BenefitCard";
 import { IneligibleItemCard } from "./IneligibleItemCard";
 import { MoneySummary } from "./MoneySummary";
 import { readiness, totals, verdict } from "./benefitEngine";
-import { useNavigator } from "./NavigatorContext";
+import { findProfileField, useNavigator } from "./NavigatorContext";
 
 function getPrefillValue(
   question: EligibilityQuestion,
@@ -18,13 +17,9 @@ function getPrefillValue(
   mydataAuthorized: boolean,
 ): string | null {
   if (question.profileField) {
-    for (const key of Object.keys(profile) as ProfileSectionKey[]) {
-      const field = profile[key].fields.find(
-        (f) => f.code === question.profileField,
-      );
-      if (field?.value) {
-        return field.value;
-      }
+    const value = findProfileField(profile, question.profileField)?.value;
+    if (value) {
+      return value;
     }
   }
   if (question.mydataPrefill && mydataAuthorized) {

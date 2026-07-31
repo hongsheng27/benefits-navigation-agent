@@ -52,7 +52,10 @@ export function ChatScreen() {
             </div>
           </div>
 
-          <div className="flex min-h-[22rem] flex-col gap-4 px-6 py-6">
+          <div
+            aria-live="polite"
+            className="flex min-h-[22rem] flex-col gap-4 px-6 py-6"
+          >
             {state.messages.map((message) => (
               <div
                 key={message.id}
@@ -133,8 +136,11 @@ export function ChatScreen() {
             </div>
           )}
 
+          <p className="border-t border-slate-200 bg-slate-50/60 px-6 pt-3 text-xs text-slate-400">
+            請不要輸入姓名、身分證字號、地址、電話或 email。
+          </p>
           <form
-            className="flex items-end gap-3 border-t border-slate-200 bg-slate-50/60 px-6 py-4"
+            className="flex items-end gap-3 bg-slate-50/60 px-6 pb-4 pt-2"
             onSubmit={handleSubmit}
           >
             <textarea

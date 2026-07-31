@@ -144,7 +144,11 @@ function planNextAiTurn(
   const nextTurn = state.turn + 1;
   const followUp =
     nextTurn < state.turnGoal
-      ? FOLLOW_UPS.find((f) => !answeredNeeds.includes(f.need)) ?? null
+      ? FOLLOW_UPS.find(
+          (f) =>
+            !answeredNeeds.includes(f.need) &&
+            !dims.some((dim) => dim.key === f.need),
+        ) ?? null
       : null;
 
   if (followUp) {
@@ -185,17 +189,17 @@ function planNextAiTurn(
   };
 }
 
-function findProfileFieldValue(
+export function findProfileField(
   profile: ProfileState,
   code: string,
-): string | null {
+): ProfileField | undefined {
   for (const key of Object.keys(profile) as ProfileSectionKey[]) {
     const field = profile[key].fields.find((f) => f.code === code);
     if (field) {
-      return field.value || null;
+      return field;
     }
   }
-  return null;
+  return undefined;
 }
 
 function updateProfileField(
@@ -287,7 +291,7 @@ function reducer(
       }
       let profile = state.profile;
       if (state.detectedDims.some((dim) => dim.key === "jobless")) {
-        const current = findProfileFieldValue(profile, "employment");
+        const current = findProfileField(profile, "employment")?.value;
         if (!current) {
           profile = updateProfileField(profile, "employment", (f) => ({
             ...f,
@@ -330,6 +334,7 @@ function reducer(
         profile = updateProfileField(profile, question.profileField, (f) => ({
           ...f,
           value: action.value,
+          source: f.source === "mydata" ? "self" : f.source,
         }));
       }
       return {
@@ -359,11 +364,21 @@ function reducer(
     case "AUTHORIZE_MYDATA": {
       let profile = state.profile;
       MY_DATA_SOURCE_SETS.forEach((set) => {
-        profile = updateProfileField(profile, set.fieldCode, (f) => ({
-          ...f,
-          source: "mydata",
-          value: f.value || MYDATA_MOCK_VALUES[set.fieldCode] || "已取得",
-        }));
+        profile = updateProfileField(profile, set.fieldCode, (f) => {
+          // Only claim MyData provenance for fields it actually fills in.
+          // A field that already has a self-entered value was never
+          // authorized via MyData, so leave it (and its source) untouched —
+          // otherwise revoking MyData later would wipe data the user typed
+          // themselves.
+          if (f.value) {
+            return f;
+          }
+          return {
+            ...f,
+            source: "mydata",
+            value: MYDATA_MOCK_VALUES[set.fieldCode] || "已取得",
+          };
+        });
       });
       profile = updateProfileField(profile, "avg", (f) => ({
         ...f,

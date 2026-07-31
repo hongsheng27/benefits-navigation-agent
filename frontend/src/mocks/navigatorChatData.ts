@@ -20,7 +20,10 @@ export const DIM_MATCHERS: DimMatcher[] = [
   {
     key: "jobless",
     tag: "收入中斷",
-    keywords: ["工作", "失業", "離職", "資遣", "裁員", "沒收入", "沒工作"],
+    // Deliberately excludes the bare "工作" substring — it also matches
+    // "還在工作" (still employed), one of this need's own follow-up chips,
+    // which would falsely flag a still-employed user as jobless.
+    keywords: ["失業", "離職", "資遣", "裁員", "沒收入", "沒工作"],
   },
   {
     key: "money",

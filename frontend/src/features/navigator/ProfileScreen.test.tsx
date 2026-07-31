@@ -35,6 +35,22 @@ describe("ProfileScreen", () => {
     expect(await screen.findByText("尚未授權")).toBeInTheDocument();
   });
 
+  it("does not erase a pre-existing self-entered field after a MyData authorize/revoke round-trip", async () => {
+    render(<NavigatorFlow />);
+
+    fireEvent.click(screen.getByRole("button", { name: "我的資料" }));
+    fireEvent.click(await screen.findByRole("button", { name: "MyData 授權" }));
+    fireEvent.click(screen.getByRole("button", { name: "前往 MyData 授權" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "撤回授權並刪除帶入資料" }),
+    );
+    await screen.findByText("尚未授權");
+
+    fireEvent.click(screen.getByRole("button", { name: "家庭狀況" }));
+
+    expect(await screen.findByText("3 人")).toBeInTheDocument();
+  });
+
   it("wipes all data through the confirmation dialog and returns to the chat step", async () => {
     render(<NavigatorFlow />);
 

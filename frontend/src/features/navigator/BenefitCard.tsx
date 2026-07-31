@@ -3,9 +3,11 @@ import {
   estimate,
   formatMoney,
   getMissingRequirementCodes,
+  isDocumentReady,
   readiness,
   verdict,
 } from "./benefitEngine";
+import { SELF_PROVIDED_LABEL } from "./labels";
 
 const VERDICT_STYLE: Record<
   string,
@@ -31,7 +33,7 @@ const VERDICT_STYLE: Record<
 const SOURCE_LABEL: Record<string, string> = {
   auto: "帳戶帶入",
   mydata: "MyData",
-  self: "自行準備",
+  self: SELF_PROVIDED_LABEL,
 };
 
 type BenefitCardProps = {
@@ -69,11 +71,9 @@ export function BenefitCard({
       if (!docs.length) {
         return null;
       }
-      const readyCount = docs.filter((d) => {
-        if (type === "mydata") return mydataAuthorized;
-        if (type === "self") return false;
-        return d.needs.every((code) => Boolean(answers[code]));
-      }).length;
+      const readyCount = docs.filter((d) =>
+        isDocumentReady(d, answers, mydataAuthorized),
+      ).length;
       return { type, readyCount, total: docs.length };
     })
     .filter((group): group is NonNullable<typeof group> => group !== null);

@@ -1,6 +1,5 @@
 import { APPLY_GUIDES, BENEFIT_ITEMS } from "../../mocks/benefitCatalog";
 import { ELIGIBILITY_QUESTIONS } from "../../mocks/eligibilityQuestions";
-import type { ProfileSectionKey } from "../../types/navigator";
 import {
   estimate,
   formatMoney,
@@ -11,7 +10,7 @@ import {
   verdict,
 } from "./benefitEngine";
 import { NotEligibleAndInfoPanel } from "./NotEligibleAndInfoPanel";
-import { useNavigator } from "./NavigatorContext";
+import { findProfileField, useNavigator } from "./NavigatorContext";
 
 export function DetailScreen() {
   const {
@@ -46,9 +45,7 @@ export function DetailScreen() {
   const missingLabels = getMissingRequirementCodes(item, answers).map(
     (code) => ELIGIBILITY_QUESTIONS.find((q) => q.code === code)?.label ?? code,
   );
-  const city = (Object.keys(profile) as ProfileSectionKey[])
-    .flatMap((key) => profile[key].fields)
-    .find((f) => f.code === "city")?.value;
+  const city = findProfileField(profile, "city")?.value;
 
   const autoDocs = item.documents.filter((d) => d.sourceType === "auto");
   const myDocs = item.documents.filter((d) => d.sourceType === "mydata");

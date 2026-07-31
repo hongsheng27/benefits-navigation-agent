@@ -1,13 +1,18 @@
 import { useState } from "react";
 
 import { MY_DATA_SOURCE_SETS } from "../../mocks/profileData";
-import type { ProfileField, ProfileSectionKey } from "../../types/navigator";
+import type {
+  ProfileField,
+  ProfileSectionKey,
+  ProfileState,
+} from "../../types/navigator";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EditFieldModal } from "./EditFieldModal";
-import { useNavigator } from "./NavigatorContext";
+import { SELF_PROVIDED_LABEL } from "./labels";
+import { findProfileField, useNavigator } from "./NavigatorContext";
 
 const SOURCE_LABEL: Record<string, { label: string; className: string }> = {
-  self: { label: "自行填寫", className: "bg-[#eaf0f5] text-[#3f5b73]" },
+  self: { label: SELF_PROVIDED_LABEL, className: "bg-[#eaf0f5] text-[#3f5b73]" },
   mydata: { label: "MyData", className: "bg-[#eeecf8] text-[#54479c]" },
   calc: { label: "系統推算", className: "bg-[#e6f2ef] text-[#27756c]" },
 };
@@ -243,18 +248,10 @@ function MyDataPanel({
   authorized: boolean;
   authorizedAt: string | null;
   expiresAt: string | null;
-  profile: Record<ProfileSectionKey, { fields: ProfileField[] }>;
+  profile: ProfileState;
   onAuthorize: () => void;
   onRevoke: () => void;
 }) {
-  const findFieldLabel = (code: string) => {
-    for (const key of Object.keys(profile) as ProfileSectionKey[]) {
-      const field = profile[key].fields.find((f) => f.code === code);
-      if (field) return field.label;
-    }
-    return code;
-  };
-
   return (
     <div className="space-y-4">
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -279,7 +276,8 @@ function MyDataPanel({
               <div className="min-w-[160px] flex-1">
                 <p className="text-sm font-medium text-slate-800">{set.name}</p>
                 <p className="text-xs text-slate-400">
-                  {set.org}　→　{findFieldLabel(set.fieldCode)}
+                  {set.org}　→
+                  {findProfileField(profile, set.fieldCode)?.label ?? set.fieldCode}
                 </p>
               </div>
               <span
