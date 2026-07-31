@@ -36,7 +36,7 @@ li { margin-bottom: 4px; }
 <body>
 
 <h1>接住 — 後端 Workflow 層說明</h1>
-<p class="subtitle">最後更新：2026-07-26 ｜ 分支：feat/frontend-backend-contracts ｜ 延續 <a href="../architecture-overview.html">專案架構與資料庫說明</a></p>
+<p class="subtitle">最後更新：2026-07-30 ｜ 分支：feat/backend-privacy-gate ｜ 延續 <a href="../architecture-overview.html">專案架構與資料庫說明</a></p>
 
 <!-- ==================== 定位 ==================== -->
 
@@ -240,7 +240,17 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
     <li><code>extra="forbid"</code> 會拒絕未知欄位，所以手滑加一個欄位會直接報錯。</li>
     <li>有一個單元測試掃描所有欄位名稱，出現代表文字或身分資料的片段就失敗。正當的例外在測試裡逐一列名並附理由。</li>
     <li><code>log_event</code> 只接受 allowlist 裡的欄位，傳別的直接拋錯。它刻意只記錄例外的<strong>類別名稱</strong>，因為例外訊息會引用不合法的原始值。</li>
+    <li><strong>欄位代號與欄位值有兩道獨立的檢查，兩道都拒絕整筆。</strong>代號不在登記表上，狀態機的 <code>_record_answers</code> 會拋 <code>UnknownFieldError</code>；值的型別或選項不符，<code>RegistryBackedPrivacyGate</code> 會拋 <code>InvalidAttributeValueError</code>。兩者都只回欄位代號，不回值。</li>
   </ul>
+  <p>
+    最後那一條為什麼要拒絕整筆，而不是收下對的、退回錯的：如果部分接受，前端送三個欄位、
+    後端收了兩個，畫面上沒有任何地方能表達「有一個沒收到」，使用者會以為都填好了。
+  </p>
+  <p>
+    也為什麼要擋值而不只擋代號：只擋代號的話，送一個合法的代號配一段自由文字
+    （例如 <code>deceased_insurance_type</code> 配一整段個人敘述）就會通過，
+    然後那段文字會被存進 state 再原值回到前端。那正是 ADR-0007 要防的事。
+  </p>
 </div>
 
 <div class="card">
@@ -258,6 +268,12 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
 <!-- ==================== 進度 ==================== -->
 
 <h2>目前進度</h2>
+<div class="highlight">
+  <strong>任務編號（T1、T2…）的唯一定義在
+  <a href="backend-roadmap.md">docs/backend/backend-roadmap.md</a>。</strong>
+  那份文件有完整的依賴關係、被擋住的項目、範圍變更紀錄與技術債。
+  這裡只放摘要，方便快速看一眼；兩邊對不上時以 roadmap 為準。
+</div>
 <h3><span class="tag tag-blue">階段 1</span> 讓前端能動</h3>
 <table>
   <tr><th></th><th>任務</th><th>狀態</th></tr>
@@ -276,24 +292,55 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   <tr><td>T7</td><td>欄位登記表機制</td><td><span class="tag tag-green">完成</span></td></tr>
   <tr><td>T8</td><td>缺漏欄位計算與主題分組</td><td><span class="tag tag-green">完成</span></td></tr>
   <tr><td>T9</td><td>接上 Rule Engine 並轉成 workflow 的形狀</td><td><span class="tag tag-green">完成</span>（決定性條件留空，等資料層配合）</td></tr>
-  <tr><td>T10</td><td>逐項判定的組裝</td><td><span class="tag tag-green">完成</span>（stub 版，標 eligible）</td></tr>
+  <tr><td>T10</td><td>逐項判定的組裝</td><td><span class="tag tag-green">完成</span>（機制完成，但目前每一項都回需人工協助，見下方）</td></tr>
 </table>
+<div class="highlight">
+  <strong>現在跑完整條流程，四個項目全部是「需人工協助」，不會出現「符合資格」。</strong>
+  這不是 bug。<code>determination.py</code> 規定只有資料治理狀態是
+  <code>verified</code> 的方案才可以下完整結論，而目前的示範資料全部是
+  <code>candidate</code>（沒有人審查過的資料）。等有一項真的經過人工審查，
+  那一項就會走完整判定。
+</div>
 
-<h3><span class="tag tag-blue">階段 3</span> 隱私閘門</h3>
+<h3><span class="tag tag-blue">階段 3</span> 隱私閘門 <span class="tag tag-green">完成</span></h3>
 <table>
   <tr><th></th><th>任務</th><th>狀態</th></tr>
-  <tr><td>T11</td><td>屬性 allowlist 驗證</td><td><span class="tag tag-gray">未開始</span></td></tr>
-  <tr><td>T12</td><td>Pydantic 錯誤轉換（不外洩原始值）</td><td><span class="tag tag-gray">未開始</span></td></tr>
-  <tr><td>T13</td><td>自由文字只存在第一步的結構保證</td><td><span class="tag tag-gray">未開始</span></td></tr>
-  <tr><td>T14</td><td>紀錄檔埋點</td><td><span class="tag tag-gray">未開始</span></td></tr>
+  <tr><td>T11</td><td>屬性值的型別與選項驗證</td><td><span class="tag tag-green">完成</span>（<code>privacy/attribute_gate.py</code>）</td></tr>
+  <tr><td>T12</td><td>錯誤轉換（不外洩原始值）</td><td><span class="tag tag-green">完成</span>（查證後確認已完整，沒有動程式）</td></tr>
+  <tr><td>T13</td><td>自由文字只存在第一步的結構保證</td><td><span class="tag tag-yellow">結構已擋</span>，實際丟棄延後到 T21</td></tr>
+  <tr><td>T14</td><td>紀錄檔埋點</td><td><span class="tag tag-green">完成</span>（狀態機四種事件）</td></tr>
 </table>
+<p>
+  欄位代號與欄位值現在是兩道獨立的檢查，<strong>兩道都是拒絕整筆</strong>：
+  代號不在登記表上回 <code>unknown_field</code>，值的型別或選項不符回
+  <code>invalid_field_value</code>。錯誤回應只帶代號，不帶使用者送來的值。
+</p>
+<p>
+  T13 延後的理由：「不保存原文」目前是靠<strong>契約上沒有那個欄位</strong>達成的，
+  結構上已經擋住。而事件辨識還是寫死的，後端根本沒有收下那段文字，
+  現在寫丟棄邏輯會沒有東西可丟。
+</p>
 
-<h3><span class="tag tag-blue">階段 4、5</span> 資料來源介面與接上 LLM</h3>
+<h3><span class="tag tag-blue">階段 4</span> 資料來源介面 <span class="tag tag-yellow">大部分已由他人完成</span></h3>
+<table>
+  <tr><th></th><th>任務</th><th>狀態</th><th>備註</th></tr>
+  <tr><td>T15</td><td>資料介面定義</td><td><span class="tag tag-green">完成</span></td><td><code>protocols.py</code>，四個資料層接縫（不是原本規劃的三個）</td></tr>
+  <tr><td>T16</td><td>每個介面的假實作</td><td><span class="tag tag-green">完成</span></td><td>全部不碰 SQLite，所以測試不需要資料庫</td></tr>
+  <tr><td>T17</td><td>窄而深的假資料</td><td><span class="tag tag-yellow">進行中</span></td><td>目前是「寬而淺」：四項都有但都沒有規則條件</td></tr>
+  <tr><td>T18</td><td>接上真實的 SQLite</td><td><span class="tag tag-red">等資料層</span></td><td>需要 <code>benefit_programs</code> 填入正式方案</td></tr>
+</table>
+<p>
+  <code>EvidenceRepository</code>（官方依據）的介面與離線實作都在，但<strong>還沒接進狀態機</strong> ——
+  <code>_do_retrieve_rules</code> 仍是空操作。接上之後，「找不到依據就標人工協助」
+  那道護欄才有東西可以判斷。
+</p>
+
+<h3><span class="tag tag-blue">階段 5</span> 接上 LLM</h3>
 <table>
   <tr><th>任務</th><th>狀態</th><th>備註</th></tr>
-  <tr><td>三個資料介面與假實作</td><td><span class="tag tag-gray">未開始</span></td><td>目的是跟資料層解耦，不是等資料層</td></tr>
-  <tr><td><code>AgentRunner</code> 介面</td><td><span class="tag tag-gray">未開始</span></td><td>需先確認 Bedrock 帳號權限</td></tr>
-  <tr><td>Strands / Bedrock adapter</td><td><span class="tag tag-red">被依賴卡住</span></td><td><code>boto3</code> 與 Strands 目前都還沒進依賴</td></tr>
+  <tr><td><code>AgentRunner</code> 介面（T19）</td><td><span class="tag tag-gray">未開始</span></td><td>需先確認 Bedrock 帳號權限</td></tr>
+  <tr><td>假的 <code>AgentRunner</code>（T20）</td><td><span class="tag tag-gray">未開始</span></td><td>值得提早做，讓 LLM 相關測試不需要網路</td></tr>
+  <tr><td>Strands / Bedrock adapter（T23）</td><td><span class="tag tag-red">被依賴卡住</span></td><td><code>boto3</code> 與 Strands 目前都還沒進依賴</td></tr>
 </table>
 
 <!-- ==================== 落差 ==================== -->
@@ -311,14 +358,27 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
 </div>
 <table>
   <tr><th>落差</th><th>狀態</th></tr>
-  <tr><td>金額：Rule Engine 回單一 <code>amount</code>，workflow 層要上下界與發放性質</td><td><span class="tag tag-yellow">形狀已補，轉接未做</span></td></tr>
+  <tr><td>金額：Rule Engine 回單一 <code>amount</code>，workflow 層要上下界與發放性質</td><td><span class="tag tag-yellow">轉接已做，<code>amount_period</code> 仍缺</span></td></tr>
   <tr><td><code>reasons</code> 是文字，workflow 層需要「哪個欄位、要求什麼、實際什麼」三段結構</td><td><span class="tag tag-red">需資料層配合</span></td></tr>
-  <tr><td>欄位命名不一致（<code>program_id</code> 對 <code>item_id</code> 等）</td><td><span class="tag tag-yellow">後端寫轉接</span></td></tr>
+  <tr><td>欄位命名不一致（<code>program_id</code> 對 <code>item_id</code> 等）</td><td><span class="tag tag-green">轉接已完成</span></td></tr>
   <tr><td><code>reasons</code> 的字串裡混入使用者提供的值，寫進紀錄檔會洩漏</td><td><span class="tag tag-red">需資料層配合</span></td></tr>
-  <tr><td>相關性評分：Rule Engine 會算分並排序，workflow 層沒有欄位接，也沒有說明順序依據</td><td><span class="tag tag-gray">待 T9 決定</span></td></tr>
+  <tr><td>相關性評分：Rule Engine 會算分並排序，workflow 層沒有欄位接，也沒有說明順序依據</td><td><span class="tag tag-gray">未決，要不要露給前端</span></td></tr>
+  <tr><td>沒有存福利前後順序的表（entitlement graph 的節點與邊）</td><td><span class="tag tag-red">需資料層配合，最擋人</span></td></tr>
+  <tr><td><strong>規則條件用的屬性代號，欄位登記表上一個都沒有</strong></td><td><span class="tag tag-red">接 SQLite 前必須解決</span></td></tr>
 </table>
+<div class="gap">
+  <strong>最後那一項是 2026-07-30 新發現的，值得單獨說明。</strong>
+  規則引擎要求的屬性代號（<code>remains_type</code>、<code>registered_in_city</code> 等）
+  來自資料庫裡的條件字串；欄位登記表上的三個代號
+  （<code>deceased_insurance_type</code> 等）完全不一樣，<strong>交集是零</strong>。
+  而登記表現在是屬性的唯一入口 —— 不在表上的欄位系統不會問、也不會收。
+  所以規則要的欄位永遠拿不到，那一項會永遠停在資訊不足，
+  <strong>而且過程中不會有任何錯誤訊息</strong>。
+  三個可能的方向寫在
+  <a href="../back_database_doc/README.md">back_database_doc/README.md</a> 的落差九。
+</div>
 <p>
-  因此 T9 的範圍要調整：<strong>不是重寫一個規則引擎，而是寫一層轉接</strong>，
+  T9 的範圍因此調整過：<strong>不是重寫一個規則引擎，而是寫一層轉接</strong>，
   把 <code>EligibilityResult</code> 轉成 <code>CandidateItem</code>。
   但「決定性條件」需要 Rule Engine 端配合輸出，不是 workflow 層能單方面補出來的 ——
   而那是整個專案最強的差異點。
@@ -338,10 +398,13 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   <tr><td><code>backend/app/orchestration/field_registry.py</code></td><td>欄位登記表讀取與驗證</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/orchestration/missing_fields.py</code></td><td>缺漏欄位計算與主題分組</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/orchestration/rule_adapter.py</code></td><td>規則引擎 → CandidateItem 轉接</td><td><span class="tag tag-green">已完成</span></td></tr>
-  <tr><td><code>backend/app/orchestration/determination.py</code></td><td>逐項判定組裝（stub 版）</td><td><span class="tag tag-yellow">佔位</span></td></tr>
+  <tr><td><code>backend/app/orchestration/determination.py</code></td><td>逐項判定組裝、資料治理狀態的安全閘門、單項失敗隔離</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/orchestration/protocols.py</code></td><td>四個資料層接縫與各自的離線實作</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/orchestration/data_contracts.py</code></td><td>跨層交換的資料形狀</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/orchestration/source_refresh.py</code></td><td>來源刷新流程組裝（本機佇列，不抓網路）</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/schemas/session.py</code></td><td>對外的請求與回應形狀</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>frontend/src/types/session.ts</code></td><td>同一份契約的 TypeScript 版本</td><td><span class="tag tag-green">已完成</span></td></tr>
-  <tr><td><code>backend/app/privacy/</code></td><td>屬性 allowlist、去識別化</td><td><span class="tag tag-gray">空的</span></td></tr>
+  <tr><td><code>backend/app/privacy/attribute_gate.py</code></td><td>屬性值的型別與選項驗證，不合法就拒絕整筆</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/retrieval/</code></td><td>文件檢索與引用組裝</td><td><span class="tag tag-gray">空的</span></td></tr>
   <tr><td><code>backend/app/tools/</code></td><td>三個 Agent tool</td><td><span class="tag tag-gray">只有說明</span></td></tr>
   <tr><td><code>backend/app/api/health.py</code></td><td>存活檢查端點</td><td><span class="tag tag-green">已完成</span></td></tr>
