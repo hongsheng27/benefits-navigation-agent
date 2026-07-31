@@ -150,6 +150,8 @@ rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/
 | `app/orchestration/protocols.py` | 四個資料層接口（graph、判定、證據、來源刷新）與各自的離線實作 |
 | `app/orchestration/source_refresh.py` | on-demand refresh 的流程組裝，本機佇列、非阻塞、失敗不影響回應 |
 | `app/orchestration/determination.py` | 逐項判定組裝、依 `program_status` 的安全檢查、單項失敗隔離 |
+| `app/orchestration/demo_fixtures.py` | **示範用**資料，只有喪葬給付一項填到底。不得作為預設值。見 ADR-0014 |
+| `app/privacy/attribute_gate.py` | 屬性值的型別與選項驗證，不合法就拒絕整筆 |
 | `app/schemas/session.py` | 對外的請求與回應形狀 |
 | `app/observability/logging.py` | 結構化 JSON logging 與欄位 allowlist |
 | `app/rules/engine.py` | 通用規則引擎與相關性評分（資料層負責） |
@@ -164,6 +166,32 @@ rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/
 | --- | --- |
 | `app/api/implementation.py` | 回應裡「哪些能力還沒實作」的宣告。全部實作完成後連同 `ImplementationNotice` 一起從契約移除 |
 | `app/orchestration/protocols.py` 裡的 `Fixture*` / `Local*` 類別 | 四個接口的離線實作。資料層交出 SQLite 實作後，改注入參數即可換掉，介面本身保留 |
+
+### 預設跑起來為什麼每一項都是「需人工協助」
+
+這不是壞掉。`determination.py` 規定只有資料治理狀態是 `verified`（有人真的審查過）
+的方案才可以下完整結論，而離線的預設資料全部是 `candidate`（候選），所以四項一律
+降級。理由與取捨見
+[ADR-0014](../docs/decisions/0014-keep-fixture-data-out-of-verified-status.md)。
+
+要看到「符合資格」的完整路徑，注入 `demo_fixtures` 的兩個實作：
+
+```python
+from app.orchestration.demo_fixtures import (
+    DemoEntitlementGraphRepository,
+    demo_eligibility_service,
+)
+
+advance(
+    state,
+    user_input,
+    entitlement_repository=DemoEntitlementGraphRepository(),
+    eligibility_service=demo_eligibility_service(),
+)
+```
+
+**HTTP 端點不會注入它們**，所以從 API 跑仍然是誠實的預設行為。示範資料只走測試與
+明確注入的程式碼。
 
 ### 資料層接口目前的狀態
 

@@ -17,16 +17,27 @@ shortcut is to relabel one fixture as `verified`.
 
 ## Decision
 
-**Fixture data is never marked `verified`.** A record may only carry `verified`
-after a person has actually read the governing statute, confirmed the rule
-conditions and the citation, and recorded that review.
+**No default path ever produces `verified`.** In production data, a record may
+only carry `verified` after a person has actually read the governing statute,
+confirmed the rule conditions and the citation, and recorded that review.
 
 The default offline implementations therefore keep their honest governance
-status and continue to produce `needs_human_review`. Depth needed for demos,
-manual verification, or tests is supplied by fixtures that are explicitly
-labelled as demonstration data and that the caller must inject through the
-named parameters of `state_machine.advance()`. Nothing in the default path
-depends on them.
+status and continue to produce `needs_human_review`.
+
+Depth needed for demos, manual verification, or tests is supplied by
+demonstration fixtures, which **may** set `verified` because that status is
+itself part of what they demonstrate. They are constrained instead by
+visibility:
+
+- they live in a module whose name says `demo`, so the import line discloses
+  what they are;
+- their class names say `Demo`;
+- they are never a default value anywhere, and reach the state machine only
+  through the named parameters of `state_machine.advance()`.
+
+The distinction is between lying and acting. Marking real catalog data
+`verified` without review is a false claim about that data. A module called
+`demo_fixtures` that says so in its own docstring claims nothing.
 
 A genuine `eligible` outcome remains reachable, but only by the honest route:
 one real human review of one item is enough, because the fixtures are already
@@ -51,6 +62,9 @@ government office for nothing. The cheaper error is the cautious one.
   `docs/front_back_doc/README.md`, so it is not reported as a defect.
 - Tests that need a settled outcome must inject the decision explicitly. That is
   a benefit: the test states its own assumption instead of inheriting it.
+- One test must assert that the defaults still resolve everything to
+  `needs_human_review`. Without it, a later change could quietly make a
+  demonstration fixture the default and nothing would fail.
 - The demonstration path and the default path can diverge. Whatever is shown in
   a demo must therefore say plainly that its depth comes from demonstration
   data.
@@ -76,12 +90,29 @@ government office for nothing. The cheaper error is the cautious one.
 
 ## 決定
 
-**示範資料一律不得標成 `verified`。** 一筆資料只有在真的有人讀過相關法規、確認過
-規則條件與引用依據、而且那次審查被記錄下來之後，才可以帶這個狀態。
+**任何預設路徑都不會產生 `verified`。** 正式資料只有在真的有人讀過相關法規、
+確認過規則條件與引用依據、而且那次審查被記錄下來之後，才可以帶這個狀態。
 
-因此離線的預設實作維持誠實的治理狀態，繼續產出需人工協助。示範、手動驗證或測試
-需要的深度，由**明確標示為示範用**的資料提供，而且呼叫端必須透過
-`state_machine.advance()` 的具名參數主動注入才會生效 —— 預設路徑不依賴它們。
+因此離線的預設實作維持誠實的治理狀態，繼續產出需人工協助。
+
+示範、手動驗證或測試需要的深度，由**示範用資料**提供。這些資料**可以**設
+`verified`，因為那個狀態本身就是它要示範的東西之一。約束它們的方式改成「看得見」：
+
+- 放在名稱含 `demo` 的模組裡，所以 `import` 那一行就會說明它是什麼；
+- 類別名稱帶 `Demo`；
+- 任何地方都不得把它設成預設值，只能透過 `state_machine.advance()` 的具名參數
+  傳進狀態機。
+
+分界是「說謊」與「演示」的差別。在真實的 catalog 資料上標 `verified` 而沒有人審查過，
+那是對那筆資料做了一個不實的宣稱。一個叫 `demo_fixtures` 而且自己在開頭就寫明的模組，
+沒有宣稱任何事。
+
+### 這句決定改過一次
+
+初版寫的是「示範資料一律不得標成 `verified`」。那句話**執行不了**：
+`determination.gated_status` 只讓 `verified` 走完整判定，所以照字面做的話，示範資料
+連 `ineligible` 都到不了，整條路走不到任何結論，這個決定就等於禁止了自己的目的。
+改成現在的版本，約束的對象從「所有示範資料」收窄成「預設值」。
 
 真正的「符合資格」仍然拿得到，但只能走誠實那條路：因為示範資料本來就窄，
 只要有一項真的經過人工審查就夠了。
@@ -102,6 +133,8 @@ government office for nothing. The cheaper error is the cautious one.
   `docs/front_back_doc/README.md` 給前端，不會被當成缺陷回報。
 - 需要「已定案結果」的測試必須自己把判定注入進去。這其實是好事：
   測試會把自己的假設寫出來，而不是繼承一個看不見的預設值。
+- 必須有一個測試斷言「預設值仍然讓所有項目回需人工協助」。沒有它，
+  之後有人把示範資料設成預設值時不會有任何測試失敗。
 - 示範用的路徑與預設路徑會不一致。所以任何示範的場合都必須講明：
   它能走到結論是因為用了示範資料。
 - 這份決定**沒有**解決「經過審查的規則最後要存在哪裡」。那件事跟 SQLite 的工作
