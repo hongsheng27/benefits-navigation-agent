@@ -321,14 +321,28 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   現在寫丟棄邏輯會沒有東西可丟。
 </p>
 
-<h3><span class="tag tag-blue">階段 4</span> 資料來源介面 <span class="tag tag-yellow">大部分已由他人完成</span></h3>
+<h3><span class="tag tag-blue">階段 4</span> 資料來源介面 <span class="tag tag-yellow">只剩 T18 未完成</span></h3>
 <table>
   <tr><th></th><th>任務</th><th>狀態</th><th>備註</th></tr>
   <tr><td>T15</td><td>資料介面定義</td><td><span class="tag tag-green">完成</span></td><td><code>protocols.py</code>，四個資料層接縫（不是原本規劃的三個）</td></tr>
   <tr><td>T16</td><td>每個介面的假實作</td><td><span class="tag tag-green">完成</span></td><td>全部不碰 SQLite，所以測試不需要資料庫</td></tr>
-  <tr><td>T17</td><td>窄而深的假資料</td><td><span class="tag tag-yellow">進行中</span></td><td>目前是「寬而淺」：四項都有但都沒有規則條件</td></tr>
-  <tr><td>T18</td><td>接上真實的 SQLite</td><td><span class="tag tag-red">等資料層</span></td><td>需要 <code>benefit_programs</code> 填入正式方案</td></tr>
+  <tr><td>T17</td><td>窄而深的假資料</td><td><span class="tag tag-green">完成</span></td><td><code>demo_fixtures.py</code>，喪葬給付一項可走到 <code>eligible</code>。依 ADR-0014 不是預設值</td></tr>
+  <tr><td>T18</td><td>接上真實的 SQLite</td><td><span class="tag tag-red">未完成</span></td><td>被 <code>feat/databaseV3</code> 擋著，見下方</td></tr>
 </table>
+<div class="gap">
+  <strong>T18 是階段 4 唯一剩下的任務，2026-07-30 查證後確認四個原因都成立。</strong>
+  <ol>
+    <li><strong>本機沒有任何資料庫檔案。</strong>全域搜過 <code>*.db</code>、<code>*.sqlite</code>、<code>*.sqlite3</code>，一個都沒有；<code>.gitignore</code> 排除 <code>*.db</code>，所以那是本機產物。<strong>沒有東西可以接。</strong></li>
+    <li><strong>資料表定義還在未合併的分支上，而且正在改。</strong><code>origin/feat/databaseV3</code> 有 schema 與 migration（約 1200 行），並修改 <code>protocols.py</code>、<code>determination.py</code>、<code>state_machine.py</code>、<code>rule_adapter.py</code>、<code>data_contracts.py</code>。那個分支<strong>沒有</strong>實作那四個接縫，所以 T18 沒被做掉；但要接的契約正在被它修改，現在寫 adapter 等於對著移動的目標寫。</li>
+    <li><strong>接上了也看不出差別。</strong><code>gated_status</code> 只讓 <code>verified</code> 走完整判定，而 <code>benefit_programs</code> 只有候選狀態的資料，結果仍然是四項需人工協助。</li>
+    <li><strong>屬性代號對不上。</strong>規則條件用的代號與欄位登記表交集為零，接完那些項目會永遠停在資訊不足而且不報錯。</li>
+  </ol>
+  <p>
+    <strong>所以下一步是催那個分支合併，不是硬做 T18。</strong>
+    好消息是它的 migration 建了 <code>program_status_history</code> 與
+    <code>review_approvals</code> 兩張表，正是 ADR-0014 需要的「人工審查有地方記錄」。
+  </p>
+</div>
 <p>
   <code>EvidenceRepository</code>（官方依據）的介面與離線實作都在，但<strong>還沒接進狀態機</strong> ——
   <code>_do_retrieve_rules</code> 仍是空操作。接上之後，「找不到依據就標人工協助」
@@ -405,6 +419,7 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   <tr><td><code>backend/app/schemas/session.py</code></td><td>對外的請求與回應形狀</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>frontend/src/types/session.ts</code></td><td>同一份契約的 TypeScript 版本</td><td><span class="tag tag-green">已完成</span></td></tr>
   <tr><td><code>backend/app/privacy/attribute_gate.py</code></td><td>屬性值的型別與選項驗證，不合法就拒絕整筆</td><td><span class="tag tag-green">已完成</span></td></tr>
+  <tr><td><code>backend/app/orchestration/demo_fixtures.py</code></td><td><strong>示範用</strong>資料，只有喪葬給付一項填到底。不得作為預設值</td><td><span class="tag tag-yellow">示範</span></td></tr>
   <tr><td><code>backend/app/retrieval/</code></td><td>文件檢索與引用組裝</td><td><span class="tag tag-gray">空的</span></td></tr>
   <tr><td><code>backend/app/tools/</code></td><td>三個 Agent tool</td><td><span class="tag tag-gray">只有說明</span></td></tr>
   <tr><td><code>backend/app/api/health.py</code></td><td>存活檢查端點</td><td><span class="tag tag-green">已完成</span></td></tr>

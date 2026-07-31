@@ -7,7 +7,13 @@
 - 對外契約的真正定義在 `backend/app/schemas/session.py` 與
   `frontend/src/types/session.ts`。這份文件與程式衝突時，**程式為準**。
 - 使用者流程與畫面設計見 `docs/backend/backend-overview.html`。
-- 最後更新：2026-07-30
+- 最後更新：2026-07-30（第二次）
+
+> **2026-07-30 第二次更新：對前端沒有任何影響。** 後端加了一份示範資料，
+> 讓喪葬給付在測試裡可以走到 `eligible`。但**端點不會使用它** —— 從 API 呼叫
+> 得到的結果完全不變，仍然是四項 `needs_human_review`，`implementation.pending`
+> 也還是同樣七項。前端不需要改任何東西。理由見
+> [ADR-0014](../decisions/0014-keep-fixture-data-out-of-verified-status.md)。
 
 ---
 

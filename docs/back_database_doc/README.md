@@ -428,6 +428,51 @@ eco_burial_completed    是否完成環保葬
 
 ---
 
+## 五之二、`feat/databaseV3` 這個分支擋著 T18（2026-07-30）
+
+後端這邊查證的結果，寫在這裡讓兩邊看到同一份事實。
+
+**後端本機沒有任何資料庫檔案。** 全域搜過 `*.db`、`*.sqlite`、`*.sqlite3`，一個都沒有。
+`.gitignore` 排除 `*.db`，所以那是本機產物。`data/benefits/` 也只有 `.gitkeep`。
+
+**資料表定義還沒進 `main`。** `origin/feat/databaseV3`（三筆 commit）有：
+
+| 內容 | 規模 |
+| --- | --- |
+| `backend/app/adapters/sqlite/migrations.py` | 約 1020 行 |
+| `migration_sql/0001_metadata.sql`、`0002_programs_fields.sql` | 約 221 行 |
+| `protocols.py` 增加 `CoverageScope`、`CoverageSnapshot` | 約 +242 行 |
+| `determination.py`、`state_machine.py`、`rule_adapter.py`、`source_refresh.py`、`data_contracts.py` | 都有改 |
+| 本文件 | 約 508 行變動，大部分是刪除 |
+
+那個分支做的是 **schema 與 migration 工具**，不是 repository 實作 —— 後端搜過沒有任何
+`class Sqlite*` 實作那四個接縫。所以後端要接的東西沒有被做掉，但**要接的契約正在被
+那個分支修改**，現在寫 adapter 等於對著移動的目標寫。
+
+### 後端請求
+
+1. **`feat/databaseV3` 合併進 `main` 之前，後端不會開始 T18。** 這不是拖延，是避免
+   對著兩份不同的契約各寫一次。
+2. **合併那個分支時，本文件會衝突。** 後端實際跑過 `git merge-tree`，衝突有兩處：
+   本文件與 `docs/decisions/README.md`，程式碼檔案全部乾淨合併。
+   **請不要整段挑一邊** —— 落差九（規則條件的屬性代號與欄位登記表交集為零）是後端
+   2026-07-30 新發現的資訊，那個分支不知道它存在，整段覆蓋會讓它消失。
+3. **`benefit_programs` 需要至少一項經過人工審查。** 沒有 `verified` 狀態的資料，
+   接上 SQLite 之後結果跟現在完全一樣（四項全部需人工協助），看不出接上了。
+
+### 一件後端認為做對了的事
+
+`feat/databaseV3` 的 migration 建了 `program_status_history` 與 `review_approvals`
+兩張表，帶 `reviewer_ref`、`reviewed_at`、`approved_version`，還有 trigger 限制
+`actor_type` 只能是 `human_reviewer` 或 `migration`。
+
+那正好是後端
+[ADR-0014](../decisions/0014-keep-fixture-data-out-of-verified-status.md)
+需要的機制 —— 「有人真的審查過並記錄下來」在資料層有了落點。兩邊的想法在這件事上
+是一致的。
+
+---
+
 ## 六、待確認事項
 
 | # | 事項 | 誰要回答 | 狀態 |
@@ -449,6 +494,7 @@ eco_burial_completed    是否完成環保葬
 | 15 | 同一天不重複觸發的紀錄要移到共用儲存 | 兩邊 | 已記在 `docs/aws_migration_guide.md`。目前只在單一 process 內有效，多個 worker 時同一天仍會重複抓同一個來源 |
 | 16 | 「哪些項目是行政事項、哪些是福利」的分類欄位 | 資料層 | **未討論**。目前由 `rule_adapter._ADMINISTRATIVE_ITEM_IDS` 一份寫死清單判斷，因為提案第 7 節的契約沒有這個分類欄位。資料層若帶上就能刪掉 |
 | 17 | 規則條件的屬性代號與欄位登記表要怎麼統一（落差九） | 兩邊 | **未討論，接 SQLite 前必須解決**。兩邊代號交集為零，而登記表現在是屬性的唯一入口，所以規則要求的欄位系統問不出來也收不進來。三個方向見落差九 |
+| 18 | `feat/databaseV3` 什麼時候合併進 `main` | 資料層 | **T18 最直接的阻塞**，見五之二。合併時本文件會衝突，請保留落差九那一段 |
 
 第 13 項（ADR-0008）：提案第 2 節指出 SQLite runtime 與「runtime 只讀 JSON」直接衝突，
 但**這需要雙方 owner 共同核准**，後端沒有、也不會單方面宣告 ADR-0008 失效 —— 在正式
