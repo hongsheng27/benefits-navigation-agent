@@ -349,13 +349,49 @@ collect_missing_fields ──答完一組──> retrieve_rules ──> evaluate
   那道護欄才有東西可以判斷。
 </p>
 
-<h3><span class="tag tag-blue">階段 5</span> 接上 LLM</h3>
+<h3><span class="tag tag-blue">階段 5</span> 接上 LLM <span class="tag tag-yellow">進行中</span></h3>
+<p>
+  <strong>T19 到 T23 在 2026-07-30 依查證結果重新定義過</strong>，不做 agent 迴圈，
+  改做一個窄的 LLM 隔離層。決策與理由見
+  <a href="../decisions/0015-narrow-llm-port-instead-of-agent-loop.md">ADR-0015</a>。
+  下表順序<strong>就是執行順序</strong>，不是編號順序。
+</p>
 <table>
-  <tr><th>任務</th><th>狀態</th><th>備註</th></tr>
-  <tr><td><code>AgentRunner</code> 介面（T19）</td><td><span class="tag tag-gray">未開始</span></td><td>需先確認 Bedrock 帳號權限</td></tr>
-  <tr><td>假的 <code>AgentRunner</code>（T20）</td><td><span class="tag tag-gray">未開始</span></td><td>值得提早做，讓 LLM 相關測試不需要網路</td></tr>
-  <tr><td>Strands / Bedrock adapter（T23）</td><td><span class="tag tag-red">被依賴卡住</span></td><td><code>boto3</code> 與 Strands 目前都還沒進依賴</td></tr>
+  <tr><th></th><th>任務</th><th>狀態</th><th>備註</th></tr>
+  <tr><td>T19</td><td>LLM port 介面與邊界形狀</td><td><span class="tag tag-gray">未開始</span></td><td>不連網路、不加依賴</td></tr>
+  <tr><td>T20</td><td>離線假實作</td><td><span class="tag tag-gray">未開始</span></td><td>有了它，LLM 相關測試不需要網路也不需要金鑰</td></tr>
+  <tr><td>T21</td><td><code>resolve_life_event</code></td><td><span class="tag tag-gray">未開始</span></td><td><strong>會順便完成 T13</strong>（原文丟棄）</td></tr>
+  <tr><td>T23</td><td><strong>Gemini adapter</strong></td><td><span class="tag tag-gray">未開始</span></td><td>原本是 Strands / Bedrock，改成先接自己的 Gemini</td></tr>
+  <tr><td>T22</td><td>白話解釋</td><td><span class="tag tag-gray">未開始</span></td><td>必須排在官方依據檢索之後</td></tr>
+  <tr><td>T28</td><td>Bedrock adapter</td><td><span class="tag tag-red">被依賴卡住</span></td><td>要先確認帳號權限，<code>boto3</code> 還沒進依賴</td></tr>
 </table>
+<div class="highlight">
+  <strong>為什麼不做 agent 迴圈。</strong>
+  系統裡只有兩個 LLM 工作（聽懂事件、翻成白話），兩個都是問一次答一次，
+  中間的檢索與判定是確定性的。而讓模型能自己呼叫工具，等於開出一條它可以影響資格判定
+  的路 —— 那是 ADR-0003 明文禁止的事。<strong>不存在的能力不需要防守。</strong>
+  ADR-0004 本身也允許單次結構化任務直接呼叫，所以這不是推翻它。
+</div>
+<div class="gap">
+  <strong>寫 schema 的硬規則：只用 Bedrock 支援的 JSON Schema 子集。</strong>
+  即使目前只接 Gemini 也一樣。不可用的有
+  <code>minimum</code>／<code>maximum</code>、<code>minLength</code>／<code>maxLength</code>、
+  遞迴 schema、外部 <code>$ref</code>，而 <code>additionalProperties</code>
+  必須明寫為 <code>false</code>。<code>enum</code> 可用，那正是我們需要的。
+  <br><br>
+  寫出 Gemini 接受但 Bedrock 拒絕的 schema，會在切換那天變成 400 錯誤，
+  而且每一份 schema 都要同時重新設計。
+</div>
+<p>
+  三條用結構強制的規則：模型回來的屬性走<strong>與使用者送答案相同</strong>的隱私閘門、
+  原文送出去但不寫 state 也不寫紀錄檔、解釋任務的回傳型別<strong>只有文字沒有 status
+  欄位</strong>所以改不了結論。另外刻意不做多輪對話 —— 沒有歷史就沒有歷史存在哪裡的問題。
+</p>
+<p>
+  失敗行為刻意不對稱：<strong>聽懂事件失敗不准猜</strong>（猜錯後面七步全錯），
+  請使用者從清單挑或轉人工；<strong>白話解釋失敗照樣顯示結果</strong>，
+  只是沒有說明（說明是附加的，不能因為它壞掉就不給結果）。
+</p>
 
 <!-- ==================== 落差 ==================== -->
 

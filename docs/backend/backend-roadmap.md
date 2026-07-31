@@ -14,9 +14,12 @@
 但**事件辨識寫死**（一律 `spouse_death`）、**判定是 stub**（湊齊欄位標 eligible，
 不會判不符合）、**決定性條件為空**。前端還沒接上。
 
-階段 1 到 3 完成。階段 4 只剩 **T18（接 SQLite）未完成** —— 介面與假實作由他人完成，
-示範資料（T17）本輪做完了。T18 被 `feat/databaseV3` 這個未合併的分支擋著，
-理由寫在階段 4 那一節。
+階段 1 到 3 完成。階段 4 只剩 **T18（接 SQLite）未完成**，被 `feat/databaseV3` 這個
+未合併的分支擋著，理由寫在階段 4 那一節。
+
+**現在進行中的是階段 5（接上 LLM）。** T19 到 T23 已依查證結果重新定義（ADR-0015）：
+不做 agent 迴圈，改做一個窄的 LLM 隔離層，先接自己的 Gemini，之後可換成 Bedrock。
+選它的理由是**它完全沒有被任何人擋住**，而 T18 有。
 
 ---
 
@@ -129,7 +132,7 @@ PII 處理、檢索依據、評測邏輯。
 | --- | --- | --- | --- | --- |
 | T11 | 屬性值的型別與選項驗證 | ✅ | 負責人 | `privacy/attribute_gate.py` |
 | T12 | 錯誤轉換 | ✅ | 負責人 | 已完整，本輪沒有動程式 |
-| T13 | 自由文字只存在第一步 | 🟡 結構已擋 | 負責人 | 延後到接 LLM 時（T21） |
+| T13 | 自由文字只存在第一步 | 🟡 結構已擋 | 負責人 | 延後到 T21，會在那裡完成 |
 | T14 | 紀錄檔埋點 | ✅ | AI 可做 | `state_machine.py` 四種事件 |
 
 ### 三道防線的現況
@@ -271,25 +274,123 @@ T11 補的是中間那道。原本 `PassThroughPrivacyGate` 什麼都不擋，�
 
 ---
 
-## 階段 5：接上 LLM 🔴 未開始
+## 階段 5：接上 LLM � 進行中
 
-排最後，因為**這是唯一會被外部帳號權限卡住的部分**。
+**T19 到 T23 在 2026-07-30 依查證結果重新定義過**，舊版的任務內容已經不適用。
+變更理由見下方「為什麼改掉 T19 到 T23」，決策記錄在 ADR-0015。
 
 | # | 任務 | 狀態 | 負責 | 依賴 |
 | --- | --- | --- | --- | --- |
-| T19 | `AgentRunner` 介面 | 🔴 | 成員 A，負責人審查 | 無 |
-| T20 | 假的 `AgentRunner` | 🔴 | AI 可做 | T19 |
-| T21 | `resolve_life_event` 工具 | 🔴 | 負責人（prompt 屬核心） | T19 |
-| T22 | 白話解釋 | 🔴 | 負責人 | T19、T10 |
-| T23 | Strands / Bedrock adapter | 🔴 | 成員 A | T19 + Bedrock 權限 |
+| T19 | LLM port 介面與邊界形狀 | 🔴 | 負責人 | 無 |
+| T20 | 離線假實作（`FakeLanguageModel`） | 🔴 | AI 可做 | T19 |
+| T21 | `resolve_life_event`（**含原文丟棄，完成 T13**） | 🔴 | 負責人（prompt 屬核心） | T20 |
+| T23 | **Gemini adapter**（第一個真實 adapter） | 🔴 | 負責人 | T19 |
+| T22 | 白話解釋 | 🔴 | 負責人 | T20、官方依據檢索 |
+| T28 | Bedrock adapter | 🔴 | 成員 A | T19 + Bedrock 權限 |
+
+表格順序**就是實際的執行順序**，不是編號順序。T23 排在 T22 前面，理由見下。
+
+### 為什麼改掉 T19 到 T23
+
+**舊版規劃的是 `AgentRunner`** —— 一個帶工具呼叫的 agent 迴圈，用 Strands 實作
+（ADR-0004）。查證後認為這一階段不該做 agent 迴圈，改做一個窄的 LLM port：
+
+1. **系統裡只有兩個 LLM 工作，兩個都是單次問答。** 聽懂事件（第 1 步）、把已定案的
+   結果翻成白話（第 6 步）。中間的檢索與判定是確定性的，模型不需要決定下一步。
+2. **給模型工具反而擴大風險面。** ADR-0003 禁止模型影響資格判定。一個能呼叫工具的
+   迴圈就是給了它一條介入的路；不給迴圈，那條路在結構上不存在。
+3. **ADR-0004 自己允許。** 它寫「單次結構化任務不需要 agent 迴圈時可以直接呼叫」。
+
+因此 T23 從「Strands / Bedrock adapter」改成「Gemini adapter」，Bedrock 那個往後排成
+**T28**（T24 到 T27 已被階段 6 使用，不重號）。
+
+### 兩個 API 的形狀比較（查證結果）
+
+比較 Bedrock Converse API 與 Gemini `generateContent` 之後，**骨架幾乎相同**：
+
+| 概念 | Bedrock Converse | Gemini `generateContent` |
+| --- | --- | --- |
+| 訊息 | `messages[].role` + `content[].text` | `contents[].role` + `parts[].text` |
+| 輸出格式 | `outputConfig.textFormat` | `generationConfig.responseSchema` |
+| 描述方式 | JSON Schema | JSON Schema |
+| 推論設定 | `inferenceConfig` | `generationConfig` |
+
+三個差異：欄位命名不同（改名即可）、**Bedrock 要求 schema 是字串**
+（`json.dumps()` 一行）、**認證機制完全不通用**（Gemini 是 header 放金鑰，
+Bedrock 需要 AWS SigV4 簽章，實務上必須用 `boto3`）。
+
+### 寫 schema 的硬規則：只用 Bedrock 支援的子集
+
+**這是這次查證最有價值的結果，寫在這裡是為了讓之後寫 schema 的人不必再查一次。**
+
+Bedrock 只支援 JSON Schema Draft 2020-12 的一個子集。以下**不支援**：
+
+| 不支援 | 意思 |
+| --- | --- |
+| `minimum` / `maximum` | 不能限制數值範圍 |
+| `minLength` / `maxLength` | 不能限制文字長度 |
+| 遞迴 schema | 不能自我參照 |
+| 外部 `$ref` | 只能參照同一份文件內的定義 |
+| `additionalProperties` 不為 `false` | **必須明寫不允許多餘欄位** |
+
+`enum`（值只能是清單裡的其中一個）**支援**，而那正是我們最需要的 —— 我們要模型回的
+就是代號。
+
+**所以本專案的 schema 一律只用 Bedrock 支援的功能。** 現在若使用 Gemini 允許但
+Bedrock 不允許的寫法，換過去那天會收到 400 錯誤，而且每一個 schema 都要重新設計。
+
+### 隔離層的位置
+
+```
+app/llm/
+├── port.py     LanguageModelPort（Protocol）與請求／回應的邊界形狀
+├── fake.py     FakeLanguageModel，回固定內容，不連網路
+├── gemini.py   GeminiLanguageModel（直接打 HTTP，只有這個檔案 import httpx）
+└── tasks/      resolve_life_event.py、explain_result.py
+```
+
+Port 只負責「送一段提示給模型，拿回符合指定結構的結果」，**不知道**什麼是生命事件。
+Prompt 屬於核心資產放在 `tasks/`，廠商細節關在 adapter 裡 —— 換廠商時只動一個檔案，
+不必重新決定 prompt。
+
+注入方式與現有接縫一致：`advance()` 的具名參數，預設是 `FakeLanguageModel`，
+所以整套測試不需要網路也不需要金鑰。
+
+### 三條不能破的規則
+
+| 規則 | 怎麼強制 |
+| --- | --- |
+| 模型回來的屬性一律走隱私閘門 | 與使用者直接送答案走同一道檢查，模型不享有特權 |
+| 原文送出去但不留下 | 不寫 state（結構上已不可能）、不寫紀錄檔、不回前端。**完成 T13** |
+| 解釋不得改結論 | `explain_result` 的回傳型別**只有文字**，沒有 status 欄位 |
+
+另外**刻意不做多輪對話**：每次呼叫獨立，不帶歷史。沒有歷史就沒有「歷史存在哪裡」
+的問題，而且不帶歷史的請求在兩邊 API 上形狀最單純。
+
+### 失敗行為刻意不對稱
+
+| 任務 | 失敗時 | 為什麼 |
+| --- | --- | --- |
+| `resolve_life_event` | **不准猜。** 請使用者從清單挑選，或走人工協助出口 | 事件猜錯，後面七步全錯 |
+| `explain_result` | 照樣顯示判定結果，只是沒有白話說明 | 說明是附加的，不能因為它壞掉就不給結果 |
+
+### 為什麼 T22 排在 T23 後面
+
+ADR-0003 要求「用檢索到的官方來源解釋確定性結果」。**目前 `citations` 永遠是空的**
+（`_do_retrieve_rules` 是空操作），沒有依據可錨定，模型只能自己編 —— 那是本專案最不能
+出的錯。所以順序是先接依據檢索，再做白話解釋。
 
 ### 開始前要確認的事
 
-- T23 開始前要先確認比賽帳號有 Bedrock 權限，並加上 `boto3` 等依賴。目前後端連
-  `boto3` 都沒裝。
+- 新依賴只有 **`httpx`**（HTTP 客戶端），而且**只有 `gemini.py` 會 import 它**，
+  所以沒有金鑰的人照樣能跑全部測試。舊版規劃寫的 `google-genai` SDK 不採用，
+  理由見 ADR-0015。
+- `GEMINI_API_KEY` 只放在本機 `.env`（已 gitignore），`.env.example` 只放變數名稱。
+  **沒有金鑰時不得報錯**，要落回 `FakeLanguageModel`。
+- 模型代號進設定（`GEMINI_MODEL_ID`），不寫死 —— 模型會下線，寫死之後會突然壞掉
+  而且看不出原因。
+- T28 開始前要先確認比賽帳號有 Bedrock 權限，並加上 `boto3`。目前後端沒裝。
 - 原本 `AGENTS.md` 有「8 月 1 日前不准建立實際的 AWS 連線」這條規則，**現在已經解除**。
-
-**T20 值得提早做**，可以往前搬到階段 4 之後 —— 有了它，整條流程的測試完全不需要網路。
 
 ---
 
@@ -326,11 +427,17 @@ T11 補的是中間那道。原本 `PassThroughPrivacyGate` 什麼都不擋，�
 
 | 順序 | 做什麼 | 理由 |
 | --- | --- | --- |
-| 1 | **前端接上那四個端點** | 後端做好了但沒人用。而且現在真的有三組問題卡可以顯示，接上就能看到完整流程。不是後端的工作，但應該優先推動 |
-| 2 | 接上 `EvidenceRepository` | `_do_retrieve_rules` 是空操作，接上之後第三道護欄才成立，示範項目也才會帶官方依據 |
-| 3 | T20 假的 `AgentRunner` | 提早做，讓 LLM 相關測試不需要網路 |
-| 4 | 跟資料層談落差九 | 代號對不上，不解決的話 T18 接完會表現成「問完了還是沒結論」而且不報錯 |
-| 5 | T18 接真正的 SQLite 規則引擎 | 需要資料層先填 `benefit_programs`，且落差九要先有結論 |
+| 1 | **T19 + T20**：LLM port 與假實作 | 不連網路、不加依賴。做完之後所有 LLM 相關的工作都能離線開發與測試 |
+| 2 | T21 `resolve_life_event` | 用假實作先做通，順便完成 T13（原文丟棄） |
+| 3 | T23 Gemini adapter | 第一次真實連線，驗證 T21 對真模型也成立 |
+| 4 | 接上 `EvidenceRepository` | `_do_retrieve_rules` 是空操作，接上之後第三道護欄才成立，示範項目也才會帶官方依據 |
+| 5 | T22 白話解釋 | 必須排在依據之後，否則模型沒有東西可錨定 |
+| 6 | **前端接上那四個端點** | 後端做好了但沒人用。不是後端的工作，但應該優先推動 |
+| 7 | 跟資料層談落差九 | 代號對不上，不解決的話 T18 接完會表現成「問完了還是沒結論」而且不報錯 |
+| 8 | T18 接真正的 SQLite 規則引擎 | 等 `feat/databaseV3` 合併，且落差九要先有結論 |
+
+順序改成 LLM 先做的理由：**T18 被別人的分支擋著，而 LLM 這一段完全沒有被任何人擋。**
+在等待期間做被擋住的事只會繞路。
 
 ---
 
@@ -352,6 +459,11 @@ T11 補的是中間那道。原本 `PassThroughPrivacyGate` 什麼都不擋，�
 | 07-30 | T15、T16 | 由他人完成，我們只做查證 | 合併進來的 `main` 已有 `protocols.py` 與五個離線實作 |
 | 07-30 | T17 | 官方依據移出範圍 | 依據要走 `EvidenceRepository`，那條線還沒接。分開做才各自驗證得出來 |
 | 07-30 | ADR-0014 | 決定句從「示範資料一律不得標 `verified`」改成「預設路徑不得產生 `verified`」 | 原句執行不了：`gated_status` 只讓 `verified` 走完整判定，照字面做的話示範連 `ineligible` 都到不了 |
+| 07-30 | T19、T20 | 從 `AgentRunner`（agent 迴圈）改成窄的 LLM port | 只有兩個單次問答任務；給模型工具會擴大它影響資格判定的風險面。見 ADR-0015 |
+| 07-30 | T23 | 從「Strands / Bedrock adapter」改成「Gemini adapter」 | 先接自己的 Gemini 驗證整條路，Bedrock 往後排成 T28 |
+| 07-30 | T22 | 依賴增加「官方依據檢索」 | 沒有依據可錨定的解釋等於讓模型自己編法規 |
+| 07-30 | 階段 5 依賴 | 從 `google-genai` SDK 改成直接打 HTTP（`httpx`） | 送出去的內容要能在一個函式裡看完，這是隱私可稽核性的要求。見 ADR-0015 |
+| 07-30 | T28 | 新增 | Bedrock adapter 從 T23 拆出來獨立排序 |
 
 ---
 

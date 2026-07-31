@@ -1,7 +1,20 @@
 # ADR-0004: Trial Strands for the Bounded Agent Runner
 
-- Status: Trial / Reversible
+- Status: Trial / Reversible — **superseded in part by ADR-0015**
 - Date: 2026-07-21
+
+> **2026-07-30 update.** Do not build an `AgentRunner` on the strength of this
+> ADR alone. [ADR-0015](0015-narrow-llm-port-instead-of-agent-loop.md) decided
+> that the current two model-driven tasks are single-call structured tasks and
+> are served by a narrow LLM port with no tool loop — a path this ADR already
+> permits. Strands and Bedrock remain the intended production direction; the
+> trial validation spike below has not been run.
+>
+> **2026-07-30 更新。** 不要只憑這份 ADR 去實作 `AgentRunner`。
+> [ADR-0015](0015-narrow-llm-port-instead-of-agent-loop.md) 判定目前兩個
+> 模型任務都是單次結構化任務，改由一個沒有工具迴圈的窄 LLM port 承擔 ——
+> 那是本 ADR 本來就允許的路徑。Strands 與 Bedrock 仍是預期的正式方向；
+> 下方的 trial validation spike 尚未執行。
 
 ## Context
 
