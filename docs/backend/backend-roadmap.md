@@ -342,5 +342,6 @@ T11 補的是中間那道。原本 `PassThroughPrivacyGate` 什麼都不擋，�
 | `docs/decisions/0007-limit-data-retention-and-egress.md` | 資料保存與外送的限制，隱私閘門的依據 |
 | `docs/decisions/0011-frozen-pydantic-session-workflow-state.md` | 狀態形狀的決策與已知限制 |
 | `docs/decisions/0012-deterministic-state-machine-with-guardrails.md` | 狀態機的三張宣告表與護欄的決策 |
+| `docs/decisions/0014-keep-fixture-data-out-of-verified-status.md` | 示範資料不得標成已核對，以及 T17 為什麼這樣做 |
 | `docs/aws_migration_guide.md` | AWS 遷移說明的唯一來源 |
 | `backend/README.md` | 啟動與測試指令，含兩個環境坑 |
