@@ -49,46 +49,110 @@ function BannerIllustration() {
         <path d="M880 199 L906 231" />
       </g>
       <g transform="translate(112,58)">
-        <rect fill="#fff" fillOpacity="0.72" height="120" rx="12" width="132" x="-46" y="-8" />
+        <rect
+          fill="#fff"
+          fillOpacity="0.72"
+          height="120"
+          rx="12"
+          width="132"
+          x="-46"
+          y="-8"
+        />
         <circle cx="8" cy="30" fill="#3f5b73" r="15" />
         <path d="M-8 88 q16-32 32-32 t32 32z" fill="#3f5b73" />
         <circle cx="48" cy="42" fill="#8fa6b8" r="10" />
         <path d="M34 88 q14-22 28-22 t14 22z" fill="#8fa6b8" />
         <path d="M62 16 v-14" stroke="#96660f" strokeWidth="3" />
         <circle cx="62" cy="-2" fill="#efa32a" r="4" />
-        <text fill="#0d7360" fontFamily="sans-serif" fontSize="13" fontWeight="700" textAnchor="middle" x="20" y="108">
+        <text
+          fill="#0d7360"
+          fontFamily="sans-serif"
+          fontSize="13"
+          fontWeight="700"
+          textAnchor="middle"
+          x="20"
+          y="108"
+        >
           親人過世
         </text>
       </g>
       <g transform="translate(330,50)">
-        <rect fill="#fff" fillOpacity="0.72" height="128" rx="12" width="128" x="-44" y="0" />
+        <rect
+          fill="#fff"
+          fillOpacity="0.72"
+          height="128"
+          rx="12"
+          width="128"
+          x="-44"
+          y="0"
+        />
         <circle cx="10" cy="38" fill="#54479c" r="15" />
         <path d="M-6 96 q16-32 32-32 t32 32z" fill="#54479c" />
         <circle cx="52" cy="62" fill="#a49bd8" r="10" />
         <path d="M40 96 q12-20 24-20 t12 20z" fill="#a49bd8" />
         <path d="M26 62 h18" stroke="#54479c" strokeLinecap="round" strokeWidth="3" />
-        <text fill="#0d7360" fontFamily="sans-serif" fontSize="13" fontWeight="700" textAnchor="middle" x="20" y="118">
+        <text
+          fill="#0d7360"
+          fontFamily="sans-serif"
+          fontSize="13"
+          fontWeight="700"
+          textAnchor="middle"
+          x="20"
+          y="118"
+        >
           獨自照顧孩子
         </text>
       </g>
       <g transform="translate(548,50)">
-        <rect fill="#fff" fillOpacity="0.72" height="128" rx="12" width="128" x="-44" y="0" />
+        <rect
+          fill="#fff"
+          fillOpacity="0.72"
+          height="128"
+          rx="12"
+          width="128"
+          x="-44"
+          y="0"
+        />
         <circle cx="20" cy="36" fill="#a35a2c" r="15" />
         <path d="M4 94 q16-32 32-32 t32 32z" fill="#a35a2c" />
         <rect fill="#d8874f" height="26" rx="4" width="34" x="-24" y="56" />
         <path d="M-16 56 v-6 h18 v6" fill="none" stroke="#a35a2c" strokeWidth="3" />
-        <text fill="#0d7360" fontFamily="sans-serif" fontSize="13" fontWeight="700" textAnchor="middle" x="20" y="118">
+        <text
+          fill="#0d7360"
+          fontFamily="sans-serif"
+          fontSize="13"
+          fontWeight="700"
+          textAnchor="middle"
+          x="20"
+          y="118"
+        >
           失去收入
         </text>
       </g>
       <g transform="translate(766,50)">
-        <rect fill="#fff" fillOpacity="0.72" height="128" rx="12" width="128" x="-44" y="0" />
+        <rect
+          fill="#fff"
+          fillOpacity="0.72"
+          height="128"
+          rx="12"
+          width="128"
+          x="-44"
+          y="0"
+        />
         <circle cx="14" cy="38" fill="#0d7360" r="14" />
         <path d="M0 94 q14-30 28-30 t28 30z" fill="#0d7360" />
         <circle cx="54" cy="46" fill="#7bbfa9" r="11" />
         <path d="M40 94 q14-24 28-24 t10 24z" fill="#7bbfa9" />
         <path d="M74 52 v42" stroke="#5f6b74" strokeLinecap="round" strokeWidth="3" />
-        <text fill="#0d7360" fontFamily="sans-serif" fontSize="13" fontWeight="700" textAnchor="middle" x="20" y="118">
+        <text
+          fill="#0d7360"
+          fontFamily="sans-serif"
+          fontSize="13"
+          fontWeight="700"
+          textAnchor="middle"
+          x="20"
+          y="118"
+        >
           照顧長輩
         </text>
       </g>
@@ -139,7 +203,8 @@ export function IntroHero() {
         <div className="mt-5 flex flex-wrap gap-x-8 gap-y-3">
           {TRUST_NOTES.map((note) => (
             <p className="text-xs leading-6 text-slate-400" key={note.label}>
-              <span className="font-bold text-[#27756c]">{note.label}</span>　{note.detail}
+              <span className="font-bold text-[#27756c]">{note.label}</span>　
+              {note.detail}
             </p>
           ))}
         </div>

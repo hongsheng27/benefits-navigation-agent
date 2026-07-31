@@ -56,12 +56,8 @@ export function InterpretScreen() {
               {index + 1}
             </span>
             <div>
-              <h3 className="text-base font-bold text-slate-900">
-                {step.title}
-              </h3>
-              <p className="mt-1 text-sm leading-6 text-slate-500">
-                {step.body}
-              </p>
+              <h3 className="text-base font-bold text-slate-900">{step.title}</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500">{step.body}</p>
             </div>
           </div>
         ))}
@@ -69,9 +65,7 @@ export function InterpretScreen() {
 
       <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
         <div>
-          <p className="text-sm font-bold text-slate-700">
-            以上的解讀正確嗎？
-          </p>
+          <p className="text-sm font-bold text-slate-700">以上的解讀正確嗎？</p>
           <p className="mt-1 text-xs leading-5 text-slate-400">
             確認後才會開始判斷你可能符合哪些補助；理解有誤可以回去補充。
           </p>

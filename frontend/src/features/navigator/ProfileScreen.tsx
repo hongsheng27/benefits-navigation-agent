@@ -72,8 +72,16 @@ export function ProfileScreen() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="已填寫欄位" value={`${filledCount} / ${allFields.length}`} />
-        <Stat label="MyData 帶入" value={String(mydata.authorized ? mydataCount : 0)} valueClassName="text-[#54479c]" />
-        <Stat label="資料完整度" value={`${completeness}%`} valueClassName="text-[#27756c]" />
+        <Stat
+          label="MyData 帶入"
+          value={String(mydata.authorized ? mydataCount : 0)}
+          valueClassName="text-[#54479c]"
+        />
+        <Stat
+          label="資料完整度"
+          value={`${completeness}%`}
+          valueClassName="text-[#27756c]"
+        />
         <Stat label="本次已答問題" value={String(Object.keys(answers).length)} />
       </div>
 
@@ -166,7 +174,9 @@ function Stat({
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className={`text-xl font-bold ${valueClassName ?? "text-slate-900"}`}>{value}</p>
+      <p className={`text-xl font-bold ${valueClassName ?? "text-slate-900"}`}>
+        {value}
+      </p>
       <p className="text-xs text-slate-400">{label}</p>
     </div>
   );
@@ -184,7 +194,9 @@ function NavButton({
   return (
     <button
       className={`block w-full rounded-xl px-4 py-2.5 text-left text-sm transition ${
-        active ? "bg-[#e6f2ef] font-bold text-[#27756c]" : "text-slate-600 hover:bg-slate-50"
+        active
+          ? "bg-[#e6f2ef] font-bold text-[#27756c]"
+          : "text-slate-600 hover:bg-slate-50"
       }`}
       onClick={onClick}
       type="button"
@@ -214,10 +226,18 @@ function SectionPanel({
                 <p className="text-sm font-medium text-slate-800">{field.label}</p>
                 <p className="text-xs text-slate-400">{field.why}</p>
               </div>
-              <span className={field.value ? "text-sm font-bold text-slate-900" : "text-sm italic text-slate-400"}>
+              <span
+                className={
+                  field.value
+                    ? "text-sm font-bold text-slate-900"
+                    : "text-sm italic text-slate-400"
+                }
+              >
                 {field.value || "尚未填寫"}
               </span>
-              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${src.className}`}>
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${src.className}`}
+              >
                 {src.label}
               </span>
               {field.source !== "calc" && (
@@ -272,7 +292,10 @@ function MyDataPanel({
         </p>
         <div className="mt-4 divide-y divide-slate-100">
           {MY_DATA_SOURCE_SETS.map((set) => (
-            <div className="flex flex-wrap items-center gap-3 py-2.5" key={set.fieldCode}>
+            <div
+              className="flex flex-wrap items-center gap-3 py-2.5"
+              key={set.fieldCode}
+            >
               <div className="min-w-[160px] flex-1">
                 <p className="text-sm font-medium text-slate-800">{set.name}</p>
                 <p className="text-xs text-slate-400">
@@ -282,7 +305,9 @@ function MyDataPanel({
               </div>
               <span
                 className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                  authorized ? "bg-[#eeecf8] text-[#54479c]" : "bg-[#eaf0f5] text-[#3f5b73]"
+                  authorized
+                    ? "bg-[#eeecf8] text-[#54479c]"
+                    : "bg-[#eaf0f5] text-[#3f5b73]"
                 }`}
               >
                 {authorized ? "已取得" : "未取得"}
@@ -322,7 +347,8 @@ function MyDataPanel({
       <div className="flex gap-3 rounded-2xl border border-[#d7e1ea] bg-[#eaf0f5] px-5 py-4 text-sm leading-6 text-[#3a4d5e]">
         <span>🔐</span>
         <p>
-          接住以<strong>服務提供者</strong>身分介接 MyData，所有資料都由你本人在官方平台單次同意後傳送。
+          接住以<strong>服務提供者</strong>身分介接
+          MyData，所有資料都由你本人在官方平台單次同意後傳送。
           我們不會、也無法主動查詢你的任何資料。
         </p>
       </div>
@@ -352,13 +378,22 @@ function PrivacyPanel({
         </p>
         <div className="mt-3 divide-y divide-slate-100 text-sm">
           <Row label="儲存位置" value="接住服務資料庫（加密儲存）" />
-          <Row hint="任何欄位變更都會即時同步" label="最後更新" value={lastUpdatedHint} />
-          <Row label="MyData 資料有效期" value={mydataExpiresAt ? `至 ${mydataExpiresAt}` : "無"} />
+          <Row
+            hint="任何欄位變更都會即時同步"
+            label="最後更新"
+            value={lastUpdatedHint}
+          />
+          <Row
+            label="MyData 資料有效期"
+            value={mydataExpiresAt ? `至 ${mydataExpiresAt}` : "無"}
+          />
         </div>
       </section>
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="text-base font-bold text-slate-900">你可以做的事</h3>
-        <p className="mt-1 text-xs leading-6 text-slate-400">資料是你的，隨時可以帶走或刪除。</p>
+        <p className="mt-1 text-xs leading-6 text-slate-400">
+          資料是你的，隨時可以帶走或刪除。
+        </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-600 transition hover:border-[#74a9a3] hover:text-[#27756c]"
@@ -379,7 +414,8 @@ function PrivacyPanel({
       <section className="rounded-2xl border border-[#f0d3da] bg-[#fbeef1] p-6">
         <h3 className="text-base font-bold text-[#9e3a4e]">刪除我的資料</h3>
         <p className="mt-1 text-sm leading-6 text-[#7a3546]">
-          會從資料庫永久刪除你填寫的所有個人資料、MyData 帶入內容與歷次諮詢紀錄。此動作無法復原。
+          會從資料庫永久刪除你填寫的所有個人資料、MyData
+          帶入內容與歷次諮詢紀錄。此動作無法復原。
         </p>
         <button
           className="mt-3 rounded-xl bg-[#9e3a4e] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#873041]"

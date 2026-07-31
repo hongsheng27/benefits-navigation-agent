@@ -99,10 +99,7 @@ function detectDims(text: string): DetectedDim[] {
   ).map((matcher) => ({ key: matcher.key, tag: matcher.tag }));
 }
 
-function mergeDims(
-  existing: DetectedDim[],
-  found: DetectedDim[],
-): DetectedDim[] {
+function mergeDims(existing: DetectedDim[], found: DetectedDim[]): DetectedDim[] {
   const merged = [...existing];
   found.forEach((dim) => {
     if (!merged.some((d) => d.key === dim.key)) {
@@ -137,18 +134,14 @@ function planNextAiTurn(
   pending: PendingAiTurn;
 } {
   const dims = mergeDims(state.detectedDims, detectDims(text));
-  const answeredNeeds = markAnswered(
-    state.answeredNeeds,
-    state.currentFollowUpNeed,
-  );
+  const answeredNeeds = markAnswered(state.answeredNeeds, state.currentFollowUpNeed);
   const nextTurn = state.turn + 1;
   const followUp =
     nextTurn < state.turnGoal
-      ? FOLLOW_UPS.find(
+      ? (FOLLOW_UPS.find(
           (f) =>
-            !answeredNeeds.includes(f.need) &&
-            !dims.some((dim) => dim.key === f.need),
-        ) ?? null
+            !answeredNeeds.includes(f.need) && !dims.some((dim) => dim.key === f.need),
+        ) ?? null)
       : null;
 
   if (followUp) {
@@ -244,10 +237,7 @@ function initialState(): NavigatorState {
   };
 }
 
-function reducer(
-  state: NavigatorState,
-  action: NavigatorAction,
-): NavigatorState {
+function reducer(state: NavigatorState, action: NavigatorAction): NavigatorState {
   switch (action.type) {
     case "SEND_USER_MESSAGE": {
       const trimmed = action.text.trim();
@@ -326,9 +316,7 @@ function reducer(
       return { ...state, step: "match" };
     }
     case "ANSWER_QUESTION": {
-      const question = ELIGIBILITY_QUESTIONS.find(
-        (q) => q.code === action.code,
-      );
+      const question = ELIGIBILITY_QUESTIONS.find((q) => q.code === action.code);
       let profile = state.profile;
       if (question?.profileField) {
         profile = updateProfileField(profile, question.profileField, (f) => ({
@@ -626,9 +614,7 @@ export function NavigatorProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <NavigatorContext.Provider value={value}>
-      {children}
-    </NavigatorContext.Provider>
+    <NavigatorContext.Provider value={value}>{children}</NavigatorContext.Provider>
   );
 }
 

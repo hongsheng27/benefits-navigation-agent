@@ -60,9 +60,7 @@ function missingRequirements(
   item: BenefitItem,
   answers: Record<string, string>,
 ): QuestionCode[] {
-  return item.requires.filter(
-    (code) => !answers[code] || answers[code] === "不確定",
-  );
+  return item.requires.filter((code) => !answers[code] || answers[code] === "不確定");
 }
 
 export function getMissingRequirementCodes(
@@ -169,7 +167,11 @@ export function estimate(
     case "survivor": {
       const years = answers.insured_years;
       const base =
-        years === "15 年以上" ? wage * 0.3 : years === "5 – 15 年" ? wage * 0.22 : wage * 0.15;
+        years === "15 年以上"
+          ? wage * 0.3
+          : years === "5 – 15 年"
+            ? wage * 0.22
+            : wage * 0.15;
       const add = Math.min(kids, 2) * 0.25;
       return {
         ok: true,
@@ -205,7 +207,14 @@ export function estimate(
       };
     }
     case "relief": {
-      const amount = household >= 4 ? 40000 : household === 3 ? 30000 : household === 2 ? 20000 : 10000;
+      const amount =
+        household >= 4
+          ? 40000
+          : household === 3
+            ? 30000
+            : household === 2
+              ? 20000
+              : 10000;
       return {
         ok: true,
         kind: "once",
@@ -283,7 +292,10 @@ export function resolveDocumentSource(documentName: string): DocumentSourceInfo 
     return { org: "勞動部勞工保險局", linkLabel: "勞保局 · 被保險人投保資料" };
   }
   if (/死亡證明/.test(n)) {
-    return { org: "開立死亡證明的醫院或衛生所", linkLabel: "衛福部 · 死亡證明書開立規定" };
+    return {
+      org: "開立死亡證明的醫院或衛生所",
+      linkLabel: "衛福部 · 死亡證明書開立規定",
+    };
   }
   if (/離職證明/.test(n)) {
     return { org: "原任職單位（雇主）", linkLabel: "勞動部 · 非自願離職證明說明" };

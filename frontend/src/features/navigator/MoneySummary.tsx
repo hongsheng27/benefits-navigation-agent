@@ -6,9 +6,7 @@ type MoneySummaryProps = {
 };
 
 export function MoneySummary({ variant, totals }: MoneySummaryProps) {
-  const firstYearLabel = totals.hasAnyEstimate
-    ? formatMoney(totals.firstYear)
-    : "—";
+  const firstYearLabel = totals.hasAnyEstimate ? formatMoney(totals.firstYear) : "—";
 
   if (variant === "compact") {
     return (
@@ -36,9 +34,7 @@ export function MoneySummary({ variant, totals }: MoneySummaryProps) {
           </p>
           <p className="mt-1 text-3xl font-bold tracking-tight text-[#27756c]">
             {firstYearLabel}
-            <span className="ml-1 text-sm font-medium text-slate-400">
-              ／首年合計
-            </span>
+            <span className="ml-1 text-sm font-medium text-slate-400">／首年合計</span>
           </p>
         </div>
         <span
@@ -72,12 +68,8 @@ export function MoneySummary({ variant, totals }: MoneySummaryProps) {
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-xs text-slate-400">首年合計</p>
-          <p className="mt-1 text-xl font-bold text-[#27756c]">
-            {firstYearLabel}
-          </p>
-          <p className="text-[11px] text-slate-400">
-            月領 × 給付月數 ＋ 一次性
-          </p>
+          <p className="mt-1 text-xl font-bold text-[#27756c]">{firstYearLabel}</p>
+          <p className="text-[11px] text-slate-400">月領 × 給付月數 ＋ 一次性</p>
         </div>
       </div>
       <p className="mt-4 rounded-xl bg-[#fbf1de] px-4 py-3 text-xs leading-6 text-[#96660f]">

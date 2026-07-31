@@ -58,9 +58,7 @@ describe("ProfileScreen", () => {
     fireEvent.click(await screen.findByRole("button", { name: "隱私與資料管理" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "永久刪除我的資料" }));
-    expect(
-      await screen.findByText("確定要永久刪除我的資料嗎？"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("確定要永久刪除我的資料嗎？")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "永久刪除" }));
 

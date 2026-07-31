@@ -20,16 +20,10 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-refresh/only-export-components": [
-        "warn",
-        { allowConstantExport: true },
-      ],
+      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       // UI copy is Chinese-first and uses the ideographic space (U+3000) as a
       // typographic separator around middle dots; it's intentional, not stray whitespace.
-      "no-irregular-whitespace": [
-        "error",
-        { skipTemplates: true, skipJSXText: true },
-      ],
+      "no-irregular-whitespace": ["error", { skipTemplates: true, skipJSXText: true }],
     },
   },
 );

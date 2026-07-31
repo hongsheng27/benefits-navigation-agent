@@ -44,7 +44,9 @@ describe("MatchScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /喪葬給付/ }));
 
-    expect(await screen.findByRole("heading", { name: "喪葬給付" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "喪葬給付" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("應備文件")).toBeInTheDocument();
   });
 

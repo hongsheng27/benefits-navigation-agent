@@ -6,8 +6,20 @@ export function createInitialProfile(): ProfileState {
       title: "基本資料",
       description: "用於判斷戶籍地適用的地方性補助，以及年齡相關的資格門檻。",
       fields: [
-        { code: "name", label: "姓名", why: "產生申請表預填內容時使用", value: "李○芳", source: "self" },
-        { code: "birth", label: "出生年", why: "年齡是多數給付的基本門檻條件", value: "1979 年", source: "self" },
+        {
+          code: "name",
+          label: "姓名",
+          why: "產生申請表預填內容時使用",
+          value: "李○芳",
+          source: "self",
+        },
+        {
+          code: "birth",
+          label: "出生年",
+          why: "年齡是多數給付的基本門檻條件",
+          value: "1979 年",
+          source: "self",
+        },
         {
           code: "city",
           label: "戶籍地",
@@ -16,7 +28,13 @@ export function createInitialProfile(): ProfileState {
           source: "self",
           options: ["臺北市 中山區", "新北市 板橋區", "桃園市 中壢區", "其他"],
         },
-        { code: "phone", label: "聯絡電話", why: "僅用於你主動要求人工協助時回撥", value: "09xx-xxx-xxx", source: "self" },
+        {
+          code: "phone",
+          label: "聯絡電話",
+          why: "僅用於你主動要求人工協助時回撥",
+          value: "09xx-xxx-xxx",
+          source: "self",
+        },
       ],
     },
     family: {
@@ -61,11 +79,41 @@ export function createInitialProfile(): ProfileState {
       title: "經濟狀況",
       description: "資力審查的核心欄位。授權 MyData 後可由官方資料直接帶入。",
       fields: [
-        { code: "income", label: "家庭年所得", why: "低收、中低收與各項生活扶助的門檻依據", value: "", source: "self" },
-        { code: "avg", label: "每人每月平均收入", why: "由年所得與家戶人數自動推算", value: "", source: "calc" },
-        { code: "property", label: "不動產與車輛", why: "財產是否超過門檻會直接決定資格", value: "", source: "self" },
-        { code: "deposit", label: "存款總額", why: "部分項目設有存款上限", value: "", source: "self" },
-        { code: "labor", label: "本人勞保投保狀態", why: "影響就業保險相關給付的請領資格", value: "", source: "self" },
+        {
+          code: "income",
+          label: "家庭年所得",
+          why: "低收、中低收與各項生活扶助的門檻依據",
+          value: "",
+          source: "self",
+        },
+        {
+          code: "avg",
+          label: "每人每月平均收入",
+          why: "由年所得與家戶人數自動推算",
+          value: "",
+          source: "calc",
+        },
+        {
+          code: "property",
+          label: "不動產與車輛",
+          why: "財產是否超過門檻會直接決定資格",
+          value: "",
+          source: "self",
+        },
+        {
+          code: "deposit",
+          label: "存款總額",
+          why: "部分項目設有存款上限",
+          value: "",
+          source: "self",
+        },
+        {
+          code: "labor",
+          label: "本人勞保投保狀態",
+          why: "影響就業保險相關給付的請領資格",
+          value: "",
+          source: "self",
+        },
         {
           code: "employment",
           label: "目前就業狀況",
@@ -80,8 +128,20 @@ export function createInitialProfile(): ProfileState {
       title: "身分別",
       description: "具備特定身分可開啟專屬補助項目，多數需官方證明認定。",
       fields: [
-        { code: "lowincome", label: "低收 / 中低收入戶", why: "許多項目以此為前提條件", value: "", source: "self" },
-        { code: "disability", label: "身心障礙證明", why: "身障相關補助的認定基礎", value: "", source: "self" },
+        {
+          code: "lowincome",
+          label: "低收 / 中低收入戶",
+          why: "許多項目以此為前提條件",
+          value: "",
+          source: "self",
+        },
+        {
+          code: "disability",
+          label: "身心障礙證明",
+          why: "身障相關補助的認定基礎",
+          value: "",
+          source: "self",
+        },
         {
           code: "indigenous",
           label: "原住民身分",

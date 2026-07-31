@@ -13,13 +13,8 @@ import { NotEligibleAndInfoPanel } from "./NotEligibleAndInfoPanel";
 import { findProfileField, useNavigator } from "./NavigatorContext";
 
 export function DetailScreen() {
-  const {
-    state,
-    backToMatch,
-    authorizeMyData,
-    revealPlainExplanation,
-    showToast,
-  } = useNavigator();
+  const { state, backToMatch, authorizeMyData, revealPlainExplanation, showToast } =
+    useNavigator();
   const { answers, mydata, profile, explained, selectedItemId } = state;
 
   const item = BENEFIT_ITEMS.find((x) => x.id === selectedItemId);
@@ -73,7 +68,13 @@ export function DetailScreen() {
             <p className="mt-1 text-sm text-slate-400">{item.org}</p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-600">
-            {v === "ok" ? "符合" : v === "info" ? "需補充資訊" : v === "no" ? "不符合" : "待確認"}
+            {v === "ok"
+              ? "符合"
+              : v === "info"
+                ? "需補充資訊"
+                : v === "no"
+                  ? "不符合"
+                  : "待確認"}
           </span>
         </div>
         <div className="grid grid-cols-2 gap-px border-t border-slate-200 bg-slate-200 sm:grid-cols-4">
@@ -82,7 +83,11 @@ export function DetailScreen() {
             value={est.ok ? formatMoney(est.amount) : "尚無法估算"}
             hint={est.ok ? (est.kind === "monthly" ? "／月" : "一次性") : undefined}
           />
-          <KeyMetric label="文件備妥率" value={`${ready.percent}%`} hint={`${ready.got}／${ready.total} 項`} />
+          <KeyMetric
+            label="文件備妥率"
+            value={`${ready.percent}%`}
+            hint={`${ready.got}／${ready.total} 項`}
+          />
           <KeyMetric label="受理期間" value={item.deadline || "全年受理"} />
           <KeyMetric label="辦理方式" value={guide?.onlineNote || "—"} />
         </div>
@@ -98,7 +103,11 @@ export function DetailScreen() {
         <div className="border-t border-slate-200 px-7 py-5">
           <h4 className="text-sm font-bold text-slate-900">主管機關與適用地區</h4>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <InfoBox label="主管機關" value={guide?.authority || item.org} hint={guide?.level} />
+            <InfoBox
+              label="主管機關"
+              value={guide?.authority || item.org}
+              hint={guide?.level}
+            />
             <InfoBox
               label="適用地區"
               value={guide?.area || "—"}
@@ -188,7 +197,9 @@ export function DetailScreen() {
                         </span>
                       )}
                     </p>
-                    <p className="mt-1 text-xs leading-6 text-slate-500">{step.detail}</p>
+                    <p className="mt-1 text-xs leading-6 text-slate-500">
+                      {step.detail}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -213,7 +224,9 @@ export function DetailScreen() {
                     onClick={() => showToast(`（示範）將開啟：${link.label}`)}
                     type="button"
                   >
-                    <span className="text-sm font-bold text-[#27756c]">{link.label}</span>
+                    <span className="text-sm font-bold text-[#27756c]">
+                      {link.label}
+                    </span>
                     <span className="text-xs text-slate-400">{link.note}</span>
                   </button>
                 ))}
@@ -228,7 +241,9 @@ export function DetailScreen() {
               <h3 className="text-base font-bold text-slate-900">應備文件</h3>
               <span
                 className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                  ready.percent >= 66 ? "bg-[#e6f2ef] text-[#27756c]" : "bg-[#eaf0f5] text-[#3f5b73]"
+                  ready.percent >= 66
+                    ? "bg-[#e6f2ef] text-[#27756c]"
+                    : "bg-[#eaf0f5] text-[#3f5b73]"
                 }`}
               >
                 備妥 {ready.percent}%
@@ -245,10 +260,20 @@ export function DetailScreen() {
             </div>
             <div className="mt-3 flex flex-wrap gap-4 border-b border-slate-100 pb-3 text-xs text-slate-400">
               <span>
-                帳戶帶入 {autoDocs.filter((d) => isDocumentReady(d, answers, mydata.authorized)).length}/{autoDocs.length}
+                帳戶帶入{" "}
+                {
+                  autoDocs.filter((d) => isDocumentReady(d, answers, mydata.authorized))
+                    .length
+                }
+                /{autoDocs.length}
               </span>
               <span>
-                MyData {myDocs.filter((d) => isDocumentReady(d, answers, mydata.authorized)).length}/{myDocs.length}
+                MyData{" "}
+                {
+                  myDocs.filter((d) => isDocumentReady(d, answers, mydata.authorized))
+                    .length
+                }
+                /{myDocs.length}
               </span>
               <span>自備 {selfDocs.length}</span>
             </div>
@@ -290,7 +315,9 @@ export function DetailScreen() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-slate-800">
                         {doc.name}{" "}
-                        <span className={`ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${pillClass}`}>
+                        <span
+                          className={`ml-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${pillClass}`}
+                        >
                           {pillLabel}
                         </span>
                       </p>
@@ -303,7 +330,9 @@ export function DetailScreen() {
                         {source.linkLabel !== "—" && (
                           <button
                             className="ml-1 font-bold text-[#27756c]"
-                            onClick={() => showToast(`（示範）將開啟：${source.linkLabel}`)}
+                            onClick={() =>
+                              showToast(`（示範）將開啟：${source.linkLabel}`)
+                            }
                             type="button"
                           >
                             {source.linkLabel} ↗
@@ -337,7 +366,9 @@ export function DetailScreen() {
 
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h3 className="text-base font-bold text-slate-900">帶著這份清單去辦理</h3>
-            <p className="mt-1 text-xs text-slate-400">建議印出來，或存成 PDF 存在手機裡。</p>
+            <p className="mt-1 text-xs text-slate-400">
+              建議印出來，或存成 PDF 存在手機裡。
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 className="rounded-xl bg-[#153f3b] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#1c504b]"
@@ -381,7 +412,9 @@ function KeyMetric({ label, value, hint }: KeyMetricProps) {
       <p className="text-[11px] font-bold text-slate-400">{label}</p>
       <p className="mt-1 text-base font-bold text-slate-900">
         {value}
-        {hint && <span className="ml-1 text-xs font-medium text-slate-400">{hint}</span>}
+        {hint && (
+          <span className="ml-1 text-xs font-medium text-slate-400">{hint}</span>
+        )}
       </p>
     </div>
   );

@@ -60,9 +60,7 @@ export function ChatScreen() {
               <div
                 key={message.id}
                 className={`flex max-w-[88%] gap-3 ${
-                  message.role === "user"
-                    ? "self-end flex-row-reverse"
-                    : "self-start"
+                  message.role === "user" ? "self-end flex-row-reverse" : "self-start"
                 }`}
               >
                 <span
@@ -114,9 +112,7 @@ export function ChatScreen() {
 
           {awaitingConfirmation && (
             <div className="mx-6 mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-[#153f3b] px-6 py-5">
-              <p className="text-sm font-bold text-white">
-                這樣理解你的狀況對嗎？
-              </p>
+              <p className="text-sm font-bold text-white">這樣理解你的狀況對嗎？</p>
               <div className="flex gap-2">
                 <button
                   className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-[#153f3b] transition hover:bg-[#f0faf7]"
