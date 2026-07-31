@@ -36,6 +36,8 @@ T17 的要求是「窄而深」，不是「寬而淺」。現在四個項目都�
 
 from dataclasses import replace
 
+from app.llm.fake import FakeLanguageModel
+from app.llm.port import LlmTask
 from app.orchestration.data_contracts import (
     CandidateItem,
     EligibilityDecision,
@@ -168,3 +170,25 @@ def demo_eligibility_service() -> FixtureEligibilityService:
     `needs_human_review` —— 那正是其餘三項應該得到的結果。不需要另寫一個類別。
     """
     return FixtureEligibilityService(decisions={DEMO_ITEM_ID: DEMO_DECISION})
+
+
+DEMO_EVENT_ID = "spouse_death"
+"""示範用的事件代號。必須是生命事件登記表上真的有的代號。"""
+
+
+def demo_language_model() -> FakeLanguageModel:
+    """把任何描述都對應到配偶過世的示範模型。
+
+    **它不看使用者打了什麼。** 這不是「很弱的辨識」，是完全沒有辨識 —— 名字裡的
+    demo 就是在說這件事。
+
+    為什麼需要它：`advance()` 的預設模型沒有登記任何答案，所以預設情況下事件辨識會
+    失敗。那個預設值是對的（沒有真模型時系統確實看不懂），但它會讓整個產品在第一步
+    就停住，示範與手動驗證都做不了。
+
+    這個實作讓「除了事件辨識以外的每一步」在沒有金鑰的情況下仍然驗證得到。
+    T23 接上 Gemini 之後，有金鑰時應該改用真實 adapter，沒有金鑰時才落回這裡。
+    """
+    return FakeLanguageModel(
+        responses={LlmTask.RESOLVE_LIFE_EVENT: {"event_id": DEMO_EVENT_ID}}
+    )

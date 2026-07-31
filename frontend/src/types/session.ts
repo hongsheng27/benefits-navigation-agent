@@ -91,6 +91,15 @@ export type ErrorCode =
   | "invalid_field_value"
   | "unknown_item"
   | "invalid_transition"
+  /**
+   * 無法把使用者的描述對應到已登記的事件。
+   *
+   * **這不是程式錯誤，不要顯示「系統發生錯誤」。** 請顯示「我們沒有看懂，
+   * 可以換個說法嗎」之類的訊息，並讓使用者重新送一次 `life_event_text`。
+   *
+   * 後端刻意不區分「模型壞掉」與「描述看不懂」—— 對使用者而言下一步都一樣。
+   */
+  | "event_not_recognized"
   | "internal_error";
 
 /** 自由文字的長度上限，與後端的 MAX_LIFE_EVENT_TEXT_LENGTH 相同。 */

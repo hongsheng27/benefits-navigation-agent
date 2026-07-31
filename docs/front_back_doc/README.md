@@ -7,12 +7,16 @@
 - 對外契約的真正定義在 `backend/app/schemas/session.py` 與
   `frontend/src/types/session.ts`。這份文件與程式衝突時，**程式為準**。
 - 使用者流程與畫面設計見 `docs/backend/backend-overview.html`。
-- 最後更新：2026-07-30（第二次）
+- 最後更新：2026-07-30（第三次）
 
+> **2026-07-30 第三次更新：契約有一個變更，前端要跟。**
+> 新增錯誤代號 **`event_not_recognized`**，見一之五。`frontend/src/types/session.ts`
+> 的 `ErrorCode` 已經同步加上了，但**顯示文字要前端補**。
+> 另外 `implementation.pending` 從七項變成六項（移除 `privacy_gate`）。
+>
 > **2026-07-30 第二次更新：對前端沒有任何影響。** 後端加了一份示範資料，
 > 讓喪葬給付在測試裡可以走到 `eligible`。但**端點不會使用它** —— 從 API 呼叫
-> 得到的結果完全不變，仍然是四項 `needs_human_review`，`implementation.pending`
-> 也還是同樣七項。前端不需要改任何東西。理由見
+> 得到的結果完全不變，仍然是四項 `needs_human_review`。理由見
 > [ADR-0014](../decisions/0014-keep-fixture-data-out-of-verified-status.md)。
 
 ---
@@ -33,7 +37,8 @@
 | 缺漏欄位計算與分組 | ✅ 完成 | 按主題分組，每題帶 unlocks_item_ids |
 | 問題卡 | 🟡 機制完成，內容是 draft | 有三組真的問題可以顯示，但欄位與選項是暫定的 |
 | 欄位值的驗證 | ✅ 完成 | 型別或選項不符會回 `invalid_field_value`，見一之四 |
-| 自由文字丟棄 | ❌ 未實作 | 結構上已擋（只有第一步帶文字），實際丟棄延後到接 LLM 時 |
+| 自由文字丟棄 | ✅ 完成 | 事件辨識只回代號，原文不進狀態、紀錄檔或回應 |
+| 事件辨識 | 🟡 管路已通，接的是示範模型 | 目前**一律回 `spouse_death`**，不管送什麼文字。見一之五 |
 | 前端呼叫程式 | ❌ 未實作 | `client.ts` 目前只有健康檢查 |
 | 前端 PII 遮罩 | ❌ 未實作 | 目前只有文字提醒 |
 
@@ -65,20 +70,16 @@
 文案」的分界。這是刻意的：它的讀者是開發者與 demo 觀眾，不是真正的使用者。
 **佔位資料移除時，這個欄位連同整個 `implementation` 物件一起刪除。**
 
-`pending` 目前有七項：`life_event_extraction`、`entitlement_graph`、
-`rule_evaluation`、`official_citations`、`plain_language_explanation`、
-`action_plan`、`privacy_gate`。
+`pending` 目前有**六項**：`life_event_extraction`、`entitlement_graph`、
+`rule_evaluation`、`official_citations`、`plain_language_explanation`、`action_plan`。
 
-已經從清單移除的（代表那一項已實作）：`state_machine`、`field_registry`。
-清單只會變短，前端不需要改程式。
+已經從清單移除的（代表那一項已實作）：`state_machine`、`field_registry`、
+**`privacy_gate`**（2026-07-30 移除）。清單只會變短，前端不需要改程式。
 
-**`privacy_gate` 還留著，但它已經做了一半。** 前端會用到的那一半已經完成：
-不在登記表上的欄位代號會讓整筆請求被拒（`unknown_field`），值本身也會依登記表的
-型別與選項驗證（`invalid_field_value`）。留著是因為「使用者輸入的原文不保存」
-還沒真的實作 —— 目前事件辨識是寫死的，後端根本沒有收下那段文字，所以現在寫丟棄
-邏輯會沒有東西可丟。這一項會在接上 LLM 時一起完成。
-
-前端可以據此判斷：看到 `privacy_gate` 在清單裡，**不代表送錯的值會被默默收下**。
+`privacy_gate` 移除的理由是三個部分都完成了：不在登記表上的欄位代號會讓整筆請求被拒
+（`unknown_field`）、值本身依登記表的型別與選項驗證（`invalid_field_value`）、
+而**使用者輸入的原文現在真的被丟棄** —— 事件辨識只回一個代號，原文沒有任何路徑進到
+後端的狀態、紀錄檔或回應裡。
 
 ## 一之三、目前的判定結果會是什麼（2026-07-29）
 
@@ -128,6 +129,39 @@
 
 實務上前端不該遇到這兩種錯誤 —— 選項是後端在 `questionGroups` 裡給的，照著送就不會
 錯。遇到了代表兩邊的型別或選項不同步，屬於程式錯誤，應該回報而不是顯示給使用者。
+
+## 一之五、`event_not_recognized`：唯一一個「不是程式錯誤」的錯誤代號（2026-07-30）
+
+其他錯誤代號的意思都是「有東西壞了」。**這一個不是。**
+
+送 `life_event_text` 之後，如果後端沒有辦法把那段描述對應到一個已知的生命事件，
+會回 422 加 `event_not_recognized`。狀態**維持在 `understand_event`**，使用者可以直接
+再送一次。
+
+| 項目 | 內容 |
+| --- | --- |
+| HTTP 狀態 | 422 |
+| `fieldIds` | 空的（問題不在某個欄位上） |
+| `currentState` | `understand_event` |
+| 前端該做什麼 | 顯示類似「我們沒有看懂，可以換個說法嗎」，讓使用者重新輸入 |
+| 前端**不該**做什麼 | 顯示「系統發生錯誤」、要求重新開始、或清除 session |
+
+**後端刻意不區分「模型壞掉」與「描述真的看不懂」。** 對使用者而言下一步完全一樣，
+而區分只對後端除錯有意義 —— 那個區分記在紀錄檔裡。所以前端不需要處理兩種情況。
+
+### 為什麼沒有「從清單挑一個事件」
+
+那會更好用，但需要兩個契約變更：快照要多一個候選事件清單欄位，而且要多一種新的輸入
+類型讓使用者送出選擇。**那是需要兩邊一起討論的決定**，所以先用「請再說一次」。
+如果前端覺得這個體驗不夠好，這是一個可以提出來討論的項目。
+
+### 目前的實際行為
+
+事件辨識還沒接上真實模型，端點注入的是一個**一律回配偶過世**的示範實作。所以現在
+**不管送什麼文字都會成功**，不會回 `event_not_recognized`。
+
+`implementation.pending` 裡的 `life_event_extraction` 就是在說這件事。接上真實模型
+（T23）之後這個錯誤才會真的出現，所以**前端最好現在就先把它處理掉**，不要等到那時。
 
 ---
 
@@ -262,6 +296,7 @@ referrer 與伺服器日誌帶走，所以走 header。
 | `invalid_field_value` | 值不符合欄位型別或選項 | 這是程式錯誤，回報 |
 | `unknown_item` | 項目代號不在候選清單裡（422） | 這是程式錯誤，回報 |
 | `invalid_transition` | 目前狀態不允許這個動作（409） | 重新取得快照後再試 |
+| `event_not_recognized` | 沒看懂使用者的描述（422） | **不是程式錯誤**，請使用者換個說法，見一之五 |
 | `internal_error` | 後端自身錯誤 | 顯示一般性錯誤訊息 |
 
 **錯誤本體就是 `ErrorResponse`，沒有包在 `detail` 底下。** FastAPI 的預設格式已經被

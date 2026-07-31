@@ -113,6 +113,10 @@ class ErrorCode(StrEnum):
     INVALID_FIELD_VALUE = "invalid_field_value"  # 值不符合欄位宣告的型別或選項
     UNKNOWN_ITEM = "unknown_item"  # 送來的項目代號不在候選清單裡
     INVALID_TRANSITION = "invalid_transition"  # 目前狀態不允許這個動作
+    # 無法把描述對應到已登記的事件。**不是程式錯誤**，前端應該請使用者換個說法，
+    # 而不是顯示「系統發生錯誤」。刻意不區分「模型壞掉」與「描述看不懂」——
+    # 對使用者而言下一步都一樣，區分只對我們有意義，記在紀錄檔就好。
+    EVENT_NOT_RECOGNIZED = "event_not_recognized"
     INTERNAL_ERROR = "internal_error"  # 後端自身錯誤，不透露細節
 
 

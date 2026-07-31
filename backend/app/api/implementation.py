@@ -36,12 +36,13 @@ PENDING_CAPABILITIES: tuple[PendingCapability, ...] = (
     PendingCapability.PLAIN_LANGUAGE_EXPLANATION,
     # 辦理清單尚未組裝。
     PendingCapability.ACTION_PLAN,
-    # 原文丟棄的行為尚未實作，所以這一項還留著。allowlist 那一半已經完成：未登記的
-    # 欄位代號會讓整筆請求被拒（`unknown_field`），值本身也會依登記表的型別與選項
-    # 驗證。剩下的原文丟棄延後到接上 LLM 時再做 —— 目前事件辨識是寫死的，根本沒有
-    # 收下使用者傳來的文字，現在寫的丟棄邏輯會沒有東西可丟。
-    PendingCapability.PRIVACY_GATE,
 )
+
+# 已經移除的（續）：
+# - PRIVACY_GATE：三個部分都完成了。未登記的欄位代號會讓整筆請求被拒
+#   （`unknown_field`）、值本身依登記表的型別與選項驗證（`invalid_field_value`）、
+#   而自由文字現在真的被丟棄 —— `resolve_life_event` 只回一個事件代號，原文沒有任何
+#   路徑進到 state、紀錄檔或回應裡。
 
 
 def implementation_notice() -> ImplementationNotice:

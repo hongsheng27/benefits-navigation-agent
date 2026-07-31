@@ -21,8 +21,10 @@ from fastapi import APIRouter, Depends, Header, Request, Response, status
 
 from app.api.errors import ApiError
 from app.api.implementation import implementation_notice
+from app.llm.tasks.resolve_life_event import LifeEventNotRecognisedError
 from app.observability.logging import log_event
 from app.orchestration import state_machine
+from app.orchestration.demo_fixtures import demo_language_model
 from app.orchestration.missing_fields import compute_question_groups
 from app.orchestration.session_store import (
     SESSION_ID_HEADER,
@@ -126,7 +128,20 @@ def advance_session(
     """送一筆輸入，推進一步。"""
     try:
         advanced = state_machine.advance(
-            state, payload.input, registry=state_machine.default_registry()
+            state,
+            payload.input,
+            registry=state_machine.default_registry(),
+            # 事件辨識目前用示範模型：它不看使用者打了什麼，一律回配偶過世。
+            #
+            # 為什麼端點要注入這個，而判定的示範資料卻不注入（ADR-0014 讓判定維持
+            # 誠實的「需人工協助」）：兩者的後果不對等。「需人工協助」是一個使用者
+            # 可以據此行動的結局；而事件辨識失敗會讓產品在第一步就停住，什麼都做不了。
+            #
+            # 這件事不是默默發生的 —— 回應裡的 `implementation.pending` 一直帶著
+            # `life_event_extraction`，明確宣告這一項還沒實作。
+            #
+            # TODO(T23): 有 Gemini 金鑰時改用真實 adapter，沒有金鑰才落回這裡。
+            language_model=demo_language_model(),
         )
     except state_machine.InvalidTransitionError as error:
         raise ApiError(
@@ -154,6 +169,16 @@ def advance_session(
         raise ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             ErrorCode.UNKNOWN_ITEM,
+            current_state=state.workflow_state,
+        ) from error
+    except LifeEventNotRecognisedError as error:
+        # 沒有把描述對應到已登記的事件。**這不是程式錯誤**，前端應該請使用者換個說法。
+        #
+        # 不帶 `field_ids`，因為問題不在某個欄位上；也不帶任何訊息文字，因為那可能
+        # 引用使用者寫的內容。狀態維持在 `understand_event`，使用者可以直接再送一次。
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.EVENT_NOT_RECOGNIZED,
             current_state=state.workflow_state,
         ) from error
 
