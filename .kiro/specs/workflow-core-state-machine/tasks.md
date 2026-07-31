@@ -246,14 +246,11 @@
 
 - [ ] 9. 實作逐項判定組裝（T10）
   - [ ] 9.1 建立 `backend/app/orchestration/determination.py`
-    - 現況（部分完成）：模組已存在，有 `find_ready_item_ids`、`find_undeclared_item_ids`、`evaluate_ready_items_stub`。stub 把湊齊欄位的項目標為 `ELIGIBLE`，登記表未宣告任何欄位的項目標為 `NEEDS_HUMAN_REVIEW`
+    - 現況（部分完成）：模組已存在，有 `find_ready_item_ids`、`find_undeclared_item_ids`、`gated_status`、`visible_items`、`evaluate_ready_items(state, registry, eligibility_service)`，逐項判定由 `_resolve_item` 負責
     - 已達成：護欄 4（不重跑已定案）以 `status != PENDING` 過濾實現；`resolved_at` 有蓋時間戳
-    - 缺口：**沒有接上真正的規則引擎**，`evaluate_pending_items(state, registry, rules_connection)` 不存在，也沒有 `assemble_determination()`。單一項目失敗隔離（Req 15.4）尚未實作。**等 T18 接上 SQLite 規則資料**
-    - 實作 `evaluate_pending_items(state, registry, rules_connection)` → tuple[CandidateItem, ...]
-    - 只對 PENDING/NEEDS_INFORMATION 項目呼叫 rules engine
-    - 單一項目 engine 失敗 → 標 NEEDS_HUMAN_REVIEW，不影響其他
-    - 回傳 tuple 長度 == state.items 長度
-    - 實作 `assemble_determination(item, result, rules)` → CandidateItem（整合 `rule_adapter.adapt_result` + resolved_at）
+    - 已達成：**單一項目失敗隔離（Req 15.4）** —— `_resolve_item` 對每一項各自包 `try/except Exception`，某一項的規則引擎拋例外時只把該項標成 `NEEDS_HUMAN_REVIEW` 並記一筆 `item_evaluation_failed`（只記項目代號、結果狀態與例外類別，走 `exc_info`，例外訊息不會進紀錄檔），其他項目照常判定
+    - 已達成：依 `program_status` 的安全檢查 —— `verified` 才做完整判定，`candidate` / `under_review` 回 `needs_human_review`，`rejected` / `inactive` 由 `visible_items` 隱藏，`stale` 依 `_STALE_FALLBACK_STATUS` 暫行降級（待決策，不得靜默定案）
+    - 缺口：**沒有接上真正的規則引擎**。目前 `evaluate_ready_items` 呼叫的是注入進來的 `EligibilityService`，而離線實作 `FixtureEligibilityService` 對每一項都回 `needs_human_review`，因為沒有任何已核准的規則。**等 T18 接上 SQLite 規則資料**
     - _Requirements: 7.1, 7.2, 15.1, 15.2, 15.3, 15.4, 15.5_
 
   - [x]* 9.2 撰寫 determination 單元測試
