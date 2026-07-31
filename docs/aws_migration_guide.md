@@ -38,10 +38,11 @@ AWS_ACCOUNT_ID=
 
 # Gemini (interim LLM before Bedrock access is confirmed).
 # Not an AWS variable, listed here so the LLM setup lives in one place.
-# Leave empty and the backend falls back to the offline FakeLanguageModel
-# instead of failing to start.
-# GEMINI_API_KEY=
-# GEMINI_MODEL_ID=
+# Get a key from Google AI Studio: https://aistudio.google.com/apikey
+# Leave GEMINI_API_KEY empty and the backend falls back to an offline demo
+# implementation instead of failing to start.
+GEMINI_API_KEY=
+GEMINI_MODEL_ID=
 
 # AgentCore (if used)
 # AGENTCORE_AGENT_ID=
@@ -84,9 +85,9 @@ AWS_ACCOUNT_ID=
 
 | Item | Current (Local) | AWS Target |
 |------|----------------|------------|
-| LLM | `FakeLanguageModel` (offline, fixed answers) | Amazon Bedrock Converse API |
-| Interim | Gemini over plain HTTP (team's own key) | — |
-| Files affected | `backend/app/llm/port.py`, `backend/app/llm/fake.py`, `backend/app/llm/gemini.py` | add `backend/app/llm/bedrock.py` |
+| LLM | Gemini over plain HTTP when `GEMINI_API_KEY` is set, offline demo otherwise | Amazon Bedrock Converse API |
+| Files affected | `backend/app/llm/port.py`, `fake.py`, `gemini.py`, `factory.py` | add `backend/app/llm/bedrock.py`, edit `factory.py` |
+| Endpoint in use | `POST /v1beta/interactions` (Gemini) | `Converse` (Bedrock) |
 
 **There is no `AgentRunner`.** ADR-0015 replaced it with a narrow port that has
 no tool loop, because both model tasks are single request/response and giving a
@@ -131,11 +132,23 @@ modes, so nothing above it changes:
 4. Map the vendor stop reason onto `FinishReason`. Unknown values go to
    `OTHER` — do not guess a meaning.
 5. Set `BEDROCK_MODEL_ID` and `AWS_REGION` in `.env`.
-6. Switch the injected default. The call sites pass the port as a named
-   parameter, so this is a one-line change at composition time, not a change to
-   the state machine.
+6. Change the selection in `backend/app/llm/factory.py`. That function is the
+   only place that decides which implementation runs; `create_app()` calls it
+   once at startup and stores the result on `app.state.language_model`. Neither
+   the state machine nor the route handler changes.
 7. Keep `FakeLanguageModel` as the default for tests. Tests must not require
    network access or credentials after the migration.
+
+### One request-shape difference that is easy to get wrong
+
+Gemini's Interactions API takes `input` as a **single string**, so
+`gemini.py` concatenates `instruction` and `user_content` with an explicit
+marker telling the model to treat the user's words as data, not instructions.
+
+Bedrock's Converse API takes a **list of content blocks**, so the Bedrock
+adapter should send them as two separate `text` blocks rather than
+concatenating. Keep the same "treat this as data" wording either way — it is a
+prompt-injection guard, not formatting.
 
 ### Do not remove the Gemini adapter on migration day
 

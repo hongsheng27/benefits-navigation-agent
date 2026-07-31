@@ -15,6 +15,7 @@ from app.api.errors import install_error_handlers
 from app.api.health import router as health_router
 from app.api.sessions import router as sessions_router
 from app.config import get_settings
+from app.llm.factory import build_language_model
 from app.observability.logging import configure_logging
 from app.orchestration.session_store import InMemorySessionStore
 
@@ -48,6 +49,12 @@ def create_app() -> FastAPI:
     # restart discards every session, which ADR-0005 treats as acceptable
     # because persistence is still undecided.
     app.state.session_store = InMemorySessionStore()
+
+    # Chosen once at startup, not per request: whether a live model is
+    # available does not change while the process runs, and re-deciding per
+    # request would make it possible for one request to use the real model and
+    # the next to silently use demo data. See ADR-0015.
+    app.state.language_model = build_language_model(settings)
 
     install_error_handlers(app)
 

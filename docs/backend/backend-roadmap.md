@@ -292,7 +292,7 @@ T21a 接上模型之後那段文字真的被使用了，所以這一項現在有
 | T20 | 離線假實作（`FakeLanguageModel`） | ✅ | AI 可做 | T19 |
 | T21a | 事件辨識（**完成 T13**） | ✅ | 負責人 | T20 |
 | T21b | 屬性抽取 | 🔴 | 負責人（prompt 屬核心） | T21a |
-| T23 | **Gemini adapter**（第一個真實 adapter） | 🔴 | 負責人 | T19 |
+| T23 | **Gemini adapter**（第一個真實 adapter） | ✅ | 負責人 | T19 |
 | T22 | 白話解釋 | 🔴 | 負責人 | T20、官方依據檢索 |
 | T28 | Bedrock adapter | 🔴 | 成員 A | T19 + Bedrock 權限 |
 
@@ -409,6 +409,115 @@ entitlement graph 的 curated 資料，寫死在程式裡等於把政策放進�
 明列。那是獨立的一批。好消息是那個限制帶來一個副作用：模型在結構上無法回一個沒登記的
 欄位代號。
 
+### T23 做了什麼，以及一個查證後推翻的規劃（2026-07-30）
+
+`app/llm/gemini.py`（adapter）、`app/llm/factory.py`（選哪一個實作）、
+`config.py` 的 `gemini_api_key` 與 `gemini_model_id`、`.env.example` 的變數名稱。
+新依賴只有 `httpx`，而且**只有 `gemini.py` import 它**。
+
+**用的端點跟原本規劃的不一樣。** 原本要寫
+`POST /v1beta/models/{model}:generateContent` 搭配
+`generationConfig.responseMimeType` 與 `responseSchema`。查證後發現那套**已經在
+2026-06-08 被移除**，現在的結構化輸出走
+`POST /v1beta/interactions` 搭配 `response_format`：
+
+```json
+{
+  "model": "gemini-3.6-flash",
+  "input": "<指示 + 使用者描述>",
+  "response_format": {
+    "type": "text",
+    "mime_type": "application/json",
+    "schema": { }
+  }
+}
+```
+
+回應是兩層 JSON：外層 `steps[]` 裡型別為 `model_output` 的那一個，它的
+`content[].text` 才是模型依 schema 產出的 JSON 字串。
+
+那份遷移說明也提到 `Api-Revision` 標頭，那是過渡期機制，**現在會被忽略**，所以不送 ——
+送一個已經失效的標頭只會讓後人以為它有作用。
+
+**如果照較舊的教學寫，會寫出一個直接失敗的 adapter。** 這是 ADR-0015 說「Google 的
+介面正在變動、所以要釘版本、所以 adapter 要薄」的具體例子。
+
+### 三個刻意的取捨
+
+**金鑰放標頭不放查詢字串。** 官方範例兩種都有，但查詢字串會被伺服器日誌與代理伺服器
+記下來，而金鑰外流無法收回。有測試斷言網址裡不含 `key=`。
+
+**沒有金鑰不是錯誤。** `factory.py` 在啟動時選一次：有金鑰用 Gemini，沒有就用示範實作。
+理由是隊友沒有金鑰 —— 如果缺金鑰會讓後端啟動失敗，任何想看前端畫面的人都得先去申請
+一把金鑰，而前端開發、資料層開發都不需要模型。
+
+**執行中失敗不會偷偷落回示範實作。** 選擇只在啟動時做一次。如果 Gemini 在跑的時候壞了，
+系統走 `event_not_recognized`，不會把「我們沒看懂」變成「一律回配偶過世」——
+後者會讓使用者拿到一個看起來正常但完全錯誤的結果，而且沒有任何跡象。
+
+啟動時會記一筆 `language_model_selected`，`model_id` 是 `demo_fixture` 或實際模型代號。
+**這一筆很重要，因為從行為上分不出跑的是真模型還是示範資料** —— 示範實作會成功回一個
+看起來正常的代號。
+
+### 這個 adapter 不會回報「被長度截斷」
+
+Interactions API 的回應帶 `status`，文件上沒有可靠的 token 截斷訊號。所以真的被截斷時
+JSON 會不完整，表現成 `LanguageModelOutputError` 而不是 `FinishReason.MAX_TOKENS`。
+
+那個結果可以接受（呼叫端兩種都當失敗處理），但**不要因為沒看到 `MAX_TOKENS` 就以為
+不會發生截斷**。
+
+### 用真金鑰實測的結果（2026-07-30）
+
+四件事是實測確認的，不是從文件推論的：
+
+**一、模型代號是 `gemma-4-31b-it`**（Gemma 4 31B）。同一把金鑰列出 50 個模型，
+`gemma-4-31b-it` 與 `gemini-3.6-flash` 都在裡面，兩個都驗過可用。預設值設成
+`gemma-4-31b-it`，因為那是團隊實際在用的。
+
+**二、`generateContent` 那條路完全不能用，而且原因跟我們的規則直接衝突。**
+送 `generationConfig.responseSchema` 會回 400：
+
+```
+Unknown name "additionalProperties" at 'generation_config.response_schema'
+```
+
+也就是說舊端點的 schema 型別**不支援 `additionalProperties`**，而我們的可攜性規則
+**要求它必須是 `false`**（Bedrock 的硬性要求）。兩者無法同時滿足，所以走
+`interactions` 不只是「比較新」，是唯一能同時滿足兩邊的路。
+
+**三、`generation_config` 的欄位名是 snake_case。** 送 `maxOutputTokens` 會回 400 並附
+一句「Did you mean 'max_output_tokens'?」。這個 API 會拒絕未知欄位，所以拼錯不會被默默
+忽略 —— 那其實是好事。`max_output_tokens` 因此已經補上，原本那個待確認事項解決了。
+
+**四、模型會把 JSON 包在 Markdown 程式碼圍籬裡。** 即使指定了
+`mime_type: application/json` 也會發生，指示寫得不夠精確時特別容易。不處理的話那次請求
+會變成「我們沒看懂」，而真正原因只是三個反引號。adapter 因此會拿掉圍籬，但**刻意只做
+這件事** —— 不做「從一段文字裡挖出看起來像 JSON 的部分」，那會把「模型答錯了」硬掰成
+成功。
+
+### 事件辨識在真模型上的實際表現
+
+| 輸入 | 結果 |
+| --- | --- |
+| 我先生上個月過世了 | `spouse_death` |
+| 我太太走了，我不知道該辦什麼 | `spouse_death` |
+| 我媽媽前天在醫院過世 | `parent_death` |
+| 我想問問看有什麼補助可以申請 | 拒絕，不猜 |
+| 今天天氣真好 | 拒絕，不猜 |
+
+**「不准猜」在真模型上生效了。** 後兩個案例回 `unrecognised`，而不是硬挑一個最接近的。
+
+### 一個實測時撞到的問題：測試會打網路
+
+`Settings` 會讀 repository 根目錄的 `.env`，所以**在有金鑰的人的機器上**，
+`create_app()` 會建出真的 adapter，整合測試會真的打網路。實際症狀是測試從 3 秒變成
+46 秒、七個失敗。
+
+修法是 `backend/tests/conftest.py` 的一個 `autouse` fixture，把金鑰清成空的，
+**讓整套測試在結構上不可能用到真實模型**。三個理由都足以單獨成立：測試會花錢、
+測試會不穩（間歇性失敗的測試最後都會被關掉）、以及結果取決於誰在跑。
+
 ### 新增的錯誤代號：`event_not_recognized`
 
 失敗行為是「不准猜」，但原本的契約沒有任何欄位可以表達「我沒看懂」。若只把
@@ -484,12 +593,11 @@ entitlement graph 的 curated 資料，寫死在程式裡等於把政策放進�
 
 | 順序 | 做什麼 | 理由 |
 | --- | --- | --- |
-| 1 | **T23 Gemini adapter** | 第一次真實連線。事件辨識的管路已經通了，接上就能驗證它對真模型也成立 |
-| 2 | T21b 屬性抽取 | 使用者說過的事不必再問一次。需要從欄位登記表生成 schema |
-| 3 | 接上 `EvidenceRepository` | `_do_retrieve_rules` 是空操作，接上之後第三道護欄才成立，示範項目也才會帶官方依據 |
-| 4 | T22 白話解釋 | 必須排在依據之後，否則模型沒有東西可錨定 |
-| 5 | **前端接上那四個端點** | 後端做好了但沒人用。不是後端的工作，但應該優先推動 |
-| 6 | 跟資料層談落差九 | 代號對不上，不解決的話 T18 接完會表現成「問完了還是沒結論」而且不報錯 |
+| 1 | T21b 屬性抽取 | 使用者說過的事不必再問一次。需要從欄位登記表生成 schema |
+| 2 | 接上 `EvidenceRepository` | `_do_retrieve_rules` 是空操作，接上之後第三道護欄才成立，示範項目也才會帶官方依據 |
+| 3 | T22 白話解釋 | 必須排在依據之後，否則模型沒有東西可錨定 |
+| 4 | **前端接上那四個端點** | 後端做好了但沒人用。不是後端的工作，但應該優先推動 |
+| 5 | 跟資料層談落差九 | 代號對不上，不解決的話 T18 接完會表現成「問完了還是沒結論」而且不報錯 |
 | 7 | T18 接真正的 SQLite 規則引擎 | 等 `feat/databaseV3` 合併，且落差九要先有結論 |
 
 順序改成 LLM 先做的理由：**T18 被別人的分支擋著，而 LLM 這一段完全沒有被任何人擋。**
@@ -524,6 +632,7 @@ entitlement graph 的 curated 資料，寫死在程式裡等於把政策放進�
 | 07-30 | T13 | 從延後改為**完成** | T21a 讓那段文字真的被使用，丟棄行為因此有了實質內容 |
 | 07-30 | 對外契約 | 新增 `event_not_recognized` 錯誤代號 | 失敗行為是「不准猜」，但原本沒有任何欄位能表達「我沒看懂」 |
 | 07-30 | 事件代號清單 | 新增 `data/life_events/events.v0.1.json` 登記表 | schema 需要封閉清單，而事件集合屬於政策資料不該寫進程式碼。**暫行**，之後應由 graph 契約供應 |
+| 07-30 | T23 | 端點從 `models/{model}:generateContent` 改成 `v1beta/interactions` | 舊的 `responseMimeType` 那套已在 2026-06-08 移除。照舊教學寫會得到一個直接失敗的 adapter |
 
 ---
 
