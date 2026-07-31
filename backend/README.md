@@ -151,6 +151,8 @@ rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/
 | `app/orchestration/source_refresh.py` | on-demand refresh 的流程組裝，本機佇列、非阻塞、失敗不影響回應 |
 | `app/orchestration/determination.py` | 逐項判定組裝、依 `program_status` 的安全檢查、單項失敗隔離 |
 | `app/orchestration/demo_fixtures.py` | **示範用**資料，只有喪葬給付一項填到底。不得作為預設值。見 ADR-0014 |
+| `app/llm/port.py` | 語言模型的邊界形狀、呼叫契約、以及 schema 可攜性檢查。見 ADR-0015 |
+| `app/llm/fake.py` | 不連網路的模型實作，**預設值**。回登記好的答案，沒登記就拋錯 |
 | `app/privacy/attribute_gate.py` | 屬性值的型別與選項驗證，不合法就拒絕整筆 |
 | `app/schemas/session.py` | 對外的請求與回應形狀 |
 | `app/observability/logging.py` | 結構化 JSON logging 與欄位 allowlist |
