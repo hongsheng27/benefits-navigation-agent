@@ -39,6 +39,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from app.observability.logging import log_event
 from app.orchestration.determination import evaluate_ready_items, visible_items
 from app.orchestration.field_registry import FieldRegistry
 from app.orchestration.protocols import (
@@ -48,7 +49,6 @@ from app.orchestration.protocols import (
     FixtureEligibilityService,
     FixtureEntitlementGraphRepository,
     LocalSourceRefreshService,
-    PassThroughPrivacyGate,
     PrivacyGate,
     SourceRefreshService,
 )
@@ -61,6 +61,7 @@ from app.orchestration.state import (
     SessionState,
     WorkflowState,
 )
+from app.privacy.attribute_gate import RegistryBackedPrivacyGate
 from app.schemas.session import (
     AdvanceInput,
     AttributeAnswersInput,
@@ -254,7 +255,7 @@ def advance(
             else FixtureEntitlementGraphRepository()
         ),
         privacy_gate=(
-            privacy_gate if privacy_gate is not None else PassThroughPrivacyGate()
+            privacy_gate if privacy_gate is not None else RegistryBackedPrivacyGate()
         ),
         # 預設的判定服務沒有任何已核准規則，所以它對每一項都回「需人工協助」。
         # 那是誠實的預設值：離線環境本來就沒有可以下結論的依據。
@@ -486,6 +487,14 @@ def _auto_advance(
         if state.workflow_state == WorkflowState.EVALUATE_ELIGIBILITY:
             state = _check_loop_guardrails(state, state_before_input)
             if state.exit_reason is not None:
+                # 護欄中止流程。`guard` 記的是哪一道護欄，不是任何使用者資料。
+                log_event(
+                    "loop_guardrail_triggered",
+                    session_id=state.session_id,
+                    state=state.workflow_state.value,
+                    guard=state.exit_reason.value,
+                    agent_iterations=state.loop_iterations,
+                )
                 break
 
         # 走到下一步。
@@ -493,6 +502,15 @@ def _auto_advance(
         if next_ws is None:
             break
 
+        # 每一個內部轉換都記一筆。ADR-0007 把除錯手段限縮到只剩狀態轉換 ——
+        # 使用者的文字不留、值不進紀錄檔，所以這些狀態名稱幾乎是唯一能查的東西。
+        log_event(
+            "state_transitioned",
+            session_id=state.session_id,
+            state=state.workflow_state.value,
+            next_state=next_ws.value,
+            transition="auto_advance",
+        )
         state = state.model_copy(update={"workflow_state": next_ws})
 
     return state
@@ -523,6 +541,14 @@ def _resolve_next_state(state: SessionState) -> WorkflowState | None:
     # 在判定完成後，檢查是否需要回到追問欄位（迴圈）。
     if current == WorkflowState.EVALUATE_ELIGIBILITY:
         if _should_loop_back(state):
+            log_event(
+                "loop_iteration_started",
+                session_id=state.session_id,
+                state=current.value,
+                next_state=WorkflowState.COLLECT_MISSING_FIELDS.value,
+                transition="loop_back",
+                agent_iterations=state.loop_iterations,
+            )
             return WorkflowState.COLLECT_MISSING_FIELDS
 
     # 照正常路徑。
@@ -533,6 +559,15 @@ def _resolve_next_state(state: SessionState) -> WorkflowState | None:
     # 檢查守門條件。
     guard = ENTRY_GUARDS.get(next_ws)
     if guard is not None and not guard(state):
+        # 記下「哪個狀態因為哪道守門條件被跳過」。沒有這一筆，之後看到流程直接從
+        # explain_result 跳到 complete 時無法分辨是守門條件生效還是轉換表寫錯。
+        log_event(
+            "state_skipped",
+            session_id=state.session_id,
+            state=current.value,
+            next_state=next_ws.value,
+            guard=f"entry_guard:{next_ws.value}",
+        )
         # 跳過這個狀態，再往後找。
         # 暫存 state 的 workflow_state 設成那個被跳過的，然後遞迴往後。
         skipped = state.model_copy(update={"workflow_state": next_ws})

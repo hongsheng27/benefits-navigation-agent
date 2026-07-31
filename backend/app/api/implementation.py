@@ -36,7 +36,10 @@ PENDING_CAPABILITIES: tuple[PendingCapability, ...] = (
     PendingCapability.PLAIN_LANGUAGE_EXPLANATION,
     # 辦理清單尚未組裝。
     PendingCapability.ACTION_PLAN,
-    # 屬性 allowlist 驗證與原文丟棄的行為尚未實作。
+    # 原文丟棄的行為尚未實作，所以這一項還留著。allowlist 那一半已經完成：未登記的
+    # 欄位代號會讓整筆請求被拒（`unknown_field`），值本身也會依登記表的型別與選項
+    # 驗證。剩下的原文丟棄延後到接上 LLM 時再做 —— 目前事件辨識是寫死的，根本沒有
+    # 收下使用者傳來的文字，現在寫的丟棄邏輯會沒有東西可丟。
     PendingCapability.PRIVACY_GATE,
 )
 
