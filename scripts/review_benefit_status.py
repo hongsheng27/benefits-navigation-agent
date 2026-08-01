@@ -192,6 +192,96 @@ def review_status(database_path: Path) -> None:
         print()
 
 
+def transition_program_status(
+    database_path: Path,
+    program_id: str,
+    to_status: str,
+    reviewer_ref: str,
+    approved_version: str,
+) -> None:
+    """Transition a program's status (human reviewer only).
+
+    Protected transitions (to 'verified') require complete artifacts which
+    must be registered separately before calling this function.
+    """
+    from backend.app.curation.review_service import (
+        ReviewArtifacts,
+        ReviewService,
+        TransitionAuditRecord,
+    )
+
+    class SqlitePersistence:
+        def __init__(self, db_path: Path) -> None:
+            self._db_path = db_path
+
+        def persist_transition(self, record: TransitionAuditRecord) -> None:
+            with closing(sqlite3.connect(self._db_path)) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+                conn.execute(
+                    """
+                    INSERT INTO program_status_history (
+                        history_id, program_id, from_status, to_status,
+                        actor_type, reviewer_ref, reviewed_at, approved_version
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        record.history_id,
+                        record.program_id,
+                        record.from_status,
+                        record.to_status,
+                        record.actor_type,
+                        record.reviewer_ref,
+                        record.reviewed_at,
+                        record.approved_version,
+                    ),
+                )
+                conn.execute(
+                    "UPDATE benefit_programs SET program_status = ?, "
+                    "updated_at = ? WHERE program_id = ?",
+                    (record.to_status, record.reviewed_at, record.program_id),
+                )
+                conn.commit()
+
+        def get_current_status(self, program_id: str) -> str | None:
+            with closing(sqlite3.connect(self._db_path)) as conn:
+                conn.execute("PRAGMA foreign_keys = ON")
+                row = conn.execute(
+                    "SELECT program_status FROM benefit_programs WHERE program_id = ?",
+                    (program_id,),
+                ).fetchone()
+            return row[0] if row else None
+
+    persistence = SqlitePersistence(database_path)
+    service = ReviewService(persistence)
+
+    artifacts = None
+    if to_status == "verified":
+        print(
+            "⚠ Protected transition to 'verified' requires complete artifacts.\n"
+            "  Ensure approved rule, citation, and excerpt are registered first."
+        )
+        artifacts = ReviewArtifacts()  # Will fail validation intentionally
+
+    result = service.transition_status(
+        program_id=program_id,
+        to_status=to_status,
+        actor_type="human_reviewer",
+        reviewer_ref=reviewer_ref,
+        approved_version=approved_version,
+        artifacts=artifacts,
+    )
+
+    if result.success:
+        print(f"✓ Transitioned {program_id} to '{to_status}'")
+        if result.audit_record:
+            print(f"  History ID: {result.audit_record.history_id}")
+            print(f"  Reviewed at: {result.audit_record.reviewed_at}")
+    else:
+        print(f"✗ Transition failed: {result.error_code}")
+        if result.error_message:
+            print(f"  {result.error_message}")
+
+
 def main() -> int:
     if not DEFAULT_DATABASE_PATH.exists():
         print(

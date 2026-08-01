@@ -17,6 +17,8 @@
 - [ADR-0011: Use Frozen Pydantic Models for Session Workflow State](0011-frozen-pydantic-session-workflow-state.md)
 - [ADR-0012: Deterministic State Machine with Loop Guardrails](0012-deterministic-state-machine-with-guardrails.md)
 - [ADR-0013: Use SQLite Runtime Behind Repositories](0013-use-sqlite-runtime-behind-repositories.md) — supersedes ADR-0008
+- [ADR-0014: Target RDS PostgreSQL and S3 for the Hackathon Data Layer](0014-target-rds-postgresql-and-s3.md)
+- [ADR-0015: Preserve Legacy Rule Fields Through a Read-only Bridge](0015-preserve-legacy-rules-through-read-only-bridge.md)
 
 新 ADR 至少記錄背景、決定、理由與後果。候選方案不必逐一列出，除非那個比較本身是
 決策的重點。

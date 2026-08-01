@@ -1,0 +1,803 @@
+{
+  "pbtResults": {
+    "2.5 撰寫 Property 1：immutable contracts 與 amount shape": {
+      "status": "passed",
+      "lastRunTimestamp": 1785397784012
+    },
+    "4.6 撰寫 Property 2：Graph path 保留與排除語意": {
+      "status": "passed",
+      "lastRunTimestamp": 1785420281483
+    },
+    "4.7 撰寫 Property 3：Graph deterministic ordering": {
+      "status": "passed",
+      "lastRunTimestamp": 1785422457007
+    },
+    "5.6 撰寫 Property 5：Missing fields 阻止完整 evaluation": {
+      "status": "passed",
+      "lastRunTimestamp": 1785426808014
+    },
+    "5.5 撰寫 Property 4：Rule DSL recursive semantics": {
+      "status": "passed",
+      "lastRunTimestamp": 1785426624561
+    },
+    "6.4 撰寫 Property 6：Converter deterministic lossless round trip": {
+      "status": "passed",
+      "lastRunTimestamp": 1785432424052
+    },
+    "6.5 撰寫 Property 7：Projection read-only atomic replacement": {
+      "status": "passed",
+      "lastRunTimestamp": 1785433184539
+    },
+    "7.5 撰寫 Property 8：Program status gate matrix": {
+      "status": "passed",
+      "lastRunTimestamp": 1785436416481
+    },
+    "7.6 撰寫 Property 9：Candidate ordering 與 score non-exposure": {
+      "status": "passed",
+      "lastRunTimestamp": 1785463354205
+    },
+    "7.7 撰寫 Property 10：Citation exact mapping 與 completeness": {
+      "status": "passed",
+      "lastRunTimestamp": 1785435563634
+    },
+    "8.5 撰寫 Property 11：Requesting-user response authorization": {
+      "status": "passed",
+      "lastRunTimestamp": 1785495883468
+    },
+    "8.6 撰寫 Property 12：Recursive sanitizer 與 fail-closed observability": {
+      "status": "passed",
+      "lastRunTimestamp": 1785496567816
+    },
+    "8.7 撰寫 Property 13：Raw text disposal": {
+      "status": "passed",
+      "lastRunTimestamp": 1785497126895
+    }
+  },
+  "executionHistory": {
+    "1.2 建立 programs、status history、review 與 field registry schema": [
+      {
+        "executionId": "03c33676-32f5-409b-a4e7-cbe8563ddb14",
+        "chatSessionId": "sess_9d44ada0-1071-4a29-b953-aa72f4bd1c1a",
+        "timestamp": 1785341594447
+      },
+      {
+        "executionId": "03c33676-32f5-409b-a4e7-cbe8563ddb14",
+        "chatSessionId": "sess_9d44ada0-1071-4a29-b953-aa72f4bd1c1a",
+        "timestamp": 1785342029510
+      }
+    ],
+    "2.5 撰寫 Property 1：immutable contracts 與 amount shape": [
+      {
+        "executionId": "a73f0d2b-6b86-4b8c-9d57-75c178fd9455",
+        "chatSessionId": "sess_53bfec28-3cff-46f5-9a35-bb6545408891",
+        "timestamp": 1785397675626
+      },
+      {
+        "executionId": "a73f0d2b-6b86-4b8c-9d57-75c178fd9455",
+        "chatSessionId": "sess_53bfec28-3cff-46f5-9a35-bb6545408891",
+        "timestamp": 1785397799076
+      }
+    ],
+    "2. 對齊既有 orchestration contracts、errors 與四個 Protocol ports": [
+      {
+        "executionId": "a73f0d2b-6b86-4b8c-9d57-75c178fd9455",
+        "chatSessionId": "sess_53bfec28-3cff-46f5-9a35-bb6545408891",
+        "timestamp": 1785397799140
+      }
+    ],
+    "4.6 撰寫 Property 2：Graph path 保留與排除語意": [
+      {
+        "executionId": "9fa22f2a-b880-4ddb-ab06-d8dbb8b39960",
+        "chatSessionId": "sess_d8d4bbc1-e00b-45ae-ac30-612b248f0e87",
+        "timestamp": 1785399984199
+      },
+      {
+        "executionId": "9fa22f2a-b880-4ddb-ab06-d8dbb8b39960",
+        "chatSessionId": "sess_d8d4bbc1-e00b-45ae-ac30-612b248f0e87",
+        "timestamp": 1785420308405
+      }
+    ],
+    "4.7 撰寫 Property 3：Graph deterministic ordering": [
+      {
+        "executionId": "72592c84-7378-41ba-a738-2e65151a9cd5",
+        "chatSessionId": "sess_4fdd47a8-e95f-4050-b4b8-33317b484faf",
+        "timestamp": 1785420349551
+      },
+      {
+        "executionId": "72592c84-7378-41ba-a738-2e65151a9cd5",
+        "chatSessionId": "sess_4fdd47a8-e95f-4050-b4b8-33317b484faf",
+        "timestamp": 1785422481812
+      }
+    ],
+    "4. 實作 SQLite adapters 與 storage mapping": [
+      {
+        "executionId": "72592c84-7378-41ba-a738-2e65151a9cd5",
+        "chatSessionId": "sess_4fdd47a8-e95f-4050-b4b8-33317b484faf",
+        "timestamp": 1785422481869
+      }
+    ],
+    "5.1 建立 canonical immutable DSL tree 與 validator": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426193592
+      },
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426232401
+      },
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426304864
+      }
+    ],
+    "5.2 實作 pure deterministic recursive evaluator": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426193661
+      },
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426312381
+      },
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426368929
+      }
+    ],
+    "5.3 實作 required fields、StructuredReason 與 amount mapping": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426193716
+      },
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426376443
+      },
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426431095
+      }
+    ],
+    "5.4 撰寫 required DSL／evaluator unit tests": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426193757
+      },
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426438630
+      },
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426501811
+      }
+    ],
+    "6.1 實作 canonical projection converter 與 reverse converter": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426193794
+      },
+      {
+        "executionId": "22442967-68f3-49dc-9323-f42b41f1564f",
+        "chatSessionId": "sess_08eeb835-16cb-4122-a8c8-ebbfe37550f7",
+        "timestamp": 1785431940990
+      },
+      {
+        "executionId": "22442967-68f3-49dc-9323-f42b41f1564f",
+        "chatSessionId": "sess_08eeb835-16cb-4122-a8c8-ebbfe37550f7",
+        "timestamp": 1785432010846
+      }
+    ],
+    "6.2 實作 atomic generation persistence 與 read-only view enforcement": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426193833
+      },
+      {
+        "executionId": "22442967-68f3-49dc-9323-f42b41f1564f",
+        "chatSessionId": "sess_08eeb835-16cb-4122-a8c8-ebbfe37550f7",
+        "timestamp": 1785431942178
+      },
+      {
+        "executionId": "22442967-68f3-49dc-9323-f42b41f1564f",
+        "chatSessionId": "sess_08eeb835-16cb-4122-a8c8-ebbfe37550f7",
+        "timestamp": 1785432012043
+      }
+    ],
+    "6.3 撰寫 migration comparison 與 cutover tests": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426193914
+      },
+      {
+        "executionId": "22442967-68f3-49dc-9323-f42b41f1564f",
+        "chatSessionId": "sess_08eeb835-16cb-4122-a8c8-ebbfe37550f7",
+        "timestamp": 1785431943409
+      },
+      {
+        "executionId": "22442967-68f3-49dc-9323-f42b41f1564f",
+        "chatSessionId": "sess_08eeb835-16cb-4122-a8c8-ebbfe37550f7",
+        "timestamp": 1785432013262
+      }
+    ],
+    "7.1 實作 status gates、rule selection 與 citation completeness orchestration": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426193949
+      },
+      {
+        "executionId": "5a1fd591-c7f8-4b77-aed8-0a06a2a86c82",
+        "chatSessionId": "sess_2b947a4e-27fd-42bc-983a-86753c733280",
+        "timestamp": 1785435949945
+      },
+      {
+        "executionId": "5a1fd591-c7f8-4b77-aed8-0a06a2a86c82",
+        "chatSessionId": "sess_2b947a4e-27fd-42bc-983a-86753c733280",
+        "timestamp": 1785436021867
+      }
+    ],
+    "7.2 實作 deterministic candidate total ordering": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426193990
+      },
+      {
+        "executionId": "5a1fd591-c7f8-4b77-aed8-0a06a2a86c82",
+        "chatSessionId": "sess_2b947a4e-27fd-42bc-983a-86753c733280",
+        "timestamp": 1785435951097
+      },
+      {
+        "executionId": "5a1fd591-c7f8-4b77-aed8-0a06a2a86c82",
+        "chatSessionId": "sess_2b947a4e-27fd-42bc-983a-86753c733280",
+        "timestamp": 1785436023077
+      }
+    ],
+    "7.3 實作 domain→workflow 與 owner-aware API mappers": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194026
+      },
+      {
+        "executionId": "5a1fd591-c7f8-4b77-aed8-0a06a2a86c82",
+        "chatSessionId": "sess_2b947a4e-27fd-42bc-983a-86753c733280",
+        "timestamp": 1785436039294
+      },
+      {
+        "executionId": "5a1fd591-c7f8-4b77-aed8-0a06a2a86c82",
+        "chatSessionId": "sess_2b947a4e-27fd-42bc-983a-86753c733280",
+        "timestamp": 1785436109111
+      }
+    ],
+    "7.4 撰寫 required service／sorting／API compatibility tests": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194058
+      },
+      {
+        "executionId": "5a1fd591-c7f8-4b77-aed8-0a06a2a86c82",
+        "chatSessionId": "sess_2b947a4e-27fd-42bc-983a-86753c733280",
+        "timestamp": 1785436116624
+      },
+      {
+        "executionId": "5a1fd591-c7f8-4b77-aed8-0a06a2a86c82",
+        "chatSessionId": "sess_2b947a4e-27fd-42bc-983a-86753c733280",
+        "timestamp": 1785436214665
+      }
+    ],
+    "8.1 實作 recursive PrivacySanitizer": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194094
+      },
+      {
+        "executionId": "1faa972c-2cf9-4e59-a19b-f0a42c605a40",
+        "chatSessionId": "sess_36d9a521-a5f6-467c-9a15-91080d105370",
+        "timestamp": 1785466792366
+      },
+      {
+        "executionId": "1faa972c-2cf9-4e59-a19b-f0a42c605a40",
+        "chatSessionId": "sess_36d9a521-a5f6-467c-9a15-91080d105370",
+        "timestamp": 1785466882257
+      }
+    ],
+    "8.2 實作 requesting-user authorization mapping 與 RawTextScope disposal": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194131
+      },
+      {
+        "executionId": "1faa972c-2cf9-4e59-a19b-f0a42c605a40",
+        "chatSessionId": "sess_36d9a521-a5f6-467c-9a15-91080d105370",
+        "timestamp": 1785466889873
+      },
+      {
+        "executionId": "1faa972c-2cf9-4e59-a19b-f0a42c605a40",
+        "chatSessionId": "sess_36d9a521-a5f6-467c-9a15-91080d105370",
+        "timestamp": 1785466948921
+      }
+    ],
+    "8.3 將 observability 統一改為 sanitize→validate→serialize→emit": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194165
+      },
+      {
+        "executionId": "1faa972c-2cf9-4e59-a19b-f0a42c605a40",
+        "chatSessionId": "sess_36d9a521-a5f6-467c-9a15-91080d105370",
+        "timestamp": 1785466955448
+      },
+      {
+        "executionId": "1faa972c-2cf9-4e59-a19b-f0a42c605a40",
+        "chatSessionId": "sess_36d9a521-a5f6-467c-9a15-91080d105370",
+        "timestamp": 1785467030703
+      }
+    ],
+    "8.4 撰寫 required privacy lifecycle／authorization tests": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194201
+      },
+      {
+        "executionId": "1faa972c-2cf9-4e59-a19b-f0a42c605a40",
+        "chatSessionId": "sess_36d9a521-a5f6-467c-9a15-91080d105370",
+        "timestamp": 1785467037143
+      },
+      {
+        "executionId": "1faa972c-2cf9-4e59-a19b-f0a42c605a40",
+        "chatSessionId": "sess_36d9a521-a5f6-467c-9a15-91080d105370",
+        "timestamp": 1785467126379
+      }
+    ],
+    "9.1 實作唯一 FastAPI composition root": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194293
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086505
+      },
+      {
+        "executionId": "8e69b137-b4c1-4c9c-8063-f4a106504470",
+        "chatSessionId": "sess_4d85c69f-f481-4af2-80b1-e1725c7a6a16",
+        "timestamp": 1785551965184
+      },
+      {
+        "executionId": "8e69b137-b4c1-4c9c-8063-f4a106504470",
+        "chatSessionId": "sess_4d85c69f-f481-4af2-80b1-e1725c7a6a16",
+        "timestamp": 1785552039350
+      }
+    ],
+    "9.2 建立 no-SQL fakes 並注入 Workflow／state machine": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194325
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086535
+      },
+      {
+        "executionId": "8e69b137-b4c1-4c9c-8063-f4a106504470",
+        "chatSessionId": "sess_4d85c69f-f481-4af2-80b1-e1725c7a6a16",
+        "timestamp": 1785551971691
+      },
+      {
+        "executionId": "8e69b137-b4c1-4c9c-8063-f4a106504470",
+        "chatSessionId": "sess_4d85c69f-f481-4af2-80b1-e1725c7a6a16",
+        "timestamp": 1785552039871
+      }
+    ],
+    "9.3 撰寫 architecture 與 fake-startup tests": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194362
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086589
+      },
+      {
+        "executionId": "8e69b137-b4c1-4c9c-8063-f4a106504470",
+        "chatSessionId": "sess_4d85c69f-f481-4af2-80b1-e1725c7a6a16",
+        "timestamp": 1785551981234
+      },
+      {
+        "executionId": "8e69b137-b4c1-4c9c-8063-f4a106504470",
+        "chatSessionId": "sess_4d85c69f-f481-4af2-80b1-e1725c7a6a16",
+        "timestamp": 1785552040602
+      }
+    ],
+    "10.1 建立只含六個既有 ID 的 catalog scaffold": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194406
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086644
+      },
+      {
+        "executionId": "0c250878-65fb-4b28-b9fa-b0665b910ea4",
+        "chatSessionId": "sess_69b5ceac-c3d1-4f3f-8f70-9295718174e7",
+        "timestamp": 1785553350001
+      },
+      {
+        "executionId": "0c250878-65fb-4b28-b9fa-b0665b910ea4",
+        "chatSessionId": "sess_69b5ceac-c3d1-4f3f-8f70-9295718174e7",
+        "timestamp": 1785555233283
+      }
+    ],
+    "10.2 實作 human review transition scaffolding": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194448
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086678
+      },
+      {
+        "executionId": "0c250878-65fb-4b28-b9fa-b0665b910ea4",
+        "chatSessionId": "sess_69b5ceac-c3d1-4f3f-8f70-9295718174e7",
+        "timestamp": 1785555239883
+      }
+    ],
+    "10.3 撰寫 MVP scaffold 與 synthetic isolation tests": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194482
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086710
+      },
+      {
+        "executionId": "fa6a2db3-963f-4e9d-9fed-0fac0c5786c0",
+        "chatSessionId": "sess_74eb595f-5748-4039-850b-9260eea88c18",
+        "timestamp": 1785557795953
+      }
+    ],
+    "11.1 實作 request-start snapshot 與 non-blocking local worker boundary": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194517
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086739
+      }
+    ],
+    "11.2 實作 timezone-aware concurrency-safe same-day dedup": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194584
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086778
+      }
+    ],
+    "11.3 實作 coverage tracker 與 honest response mapping": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194623
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086811
+      }
+    ],
+    "11.4 撰寫 required refresh／coverage integration tests": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194661
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086842
+      }
+    ],
+    "12.1 實作 registered-source structural discovery": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194763
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086875
+      }
+    ],
+    "12.2 實作 local attachment metadata／extraction handling": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194799
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086915
+      }
+    ],
+    "12.3 實作 local/mock page classification 與 candidate extraction": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194834
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086952
+      }
+    ],
+    "12.4 串接 human review transitions 與 candidate artifacts": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194865
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086979
+      }
+    ],
+    "12.5 撰寫 required local/mock curation 與 governance tests": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194898
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549087012
+      }
+    ],
+    "13.1 實作 deterministic atomic one-way JSON exporter": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194935
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549087040
+      }
+    ],
+    "13.2 撰寫 exporter atomicity 與 zero-runtime-dependency architecture tests": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426194976
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549087069
+      }
+    ],
+    "14.1 實作 catalog validation CLI": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426195032
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549087095
+      }
+    ],
+    "14.2 建立 cross-layer integration suite": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426195078
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549087127
+      }
+    ],
+    "15.1 執行完整 safety checkpoint 與 diff validation": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426195113
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549087153
+      }
+    ],
+    "5. 實作純 recursive Rule DSL validation 與 evaluator": [
+      {
+        "executionId": "fa8f517d-f43e-4d2d-949a-fede303cffef",
+        "chatSessionId": "sess_8af4a20b-6619-4459-96fa-09df7d66a076",
+        "timestamp": 1785426501855
+      }
+    ],
+    "5.5 撰寫 Property 4：Rule DSL recursive semantics": [
+      {
+        "executionId": "5e736aa2-5da4-4856-b5b9-05c5dbf71fe5",
+        "chatSessionId": "sess_539cd294-0875-4ec1-8673-282287ef876c",
+        "timestamp": 1785426524580
+      },
+      {
+        "executionId": "5e736aa2-5da4-4856-b5b9-05c5dbf71fe5",
+        "chatSessionId": "sess_539cd294-0875-4ec1-8673-282287ef876c",
+        "timestamp": 1785426643367
+      }
+    ],
+    "5.6 撰寫 Property 5：Missing fields 阻止完整 evaluation": [
+      {
+        "executionId": "0b2d547b-43d9-4635-bd3c-d85eb65a7fe1",
+        "chatSessionId": "sess_c48014e2-b474-47c5-89b8-8c7a3a5cfc91",
+        "timestamp": 1785426658459
+      },
+      {
+        "executionId": "0b2d547b-43d9-4635-bd3c-d85eb65a7fe1",
+        "chatSessionId": "sess_c48014e2-b474-47c5-89b8-8c7a3a5cfc91",
+        "timestamp": 1785426827251
+      }
+    ],
+    "6. 建立 deterministic、lossless、read-only compatibility projection": [
+      {
+        "executionId": "22442967-68f3-49dc-9323-f42b41f1564f",
+        "chatSessionId": "sess_08eeb835-16cb-4122-a8c8-ebbfe37550f7",
+        "timestamp": 1785432013301
+      }
+    ],
+    "6.4 撰寫 Property 6：Converter deterministic lossless round trip": [
+      {
+        "executionId": "a257911f-39fe-4654-9163-92da28becabe",
+        "chatSessionId": "sess_54d91053-f6f2-4a2d-ab4e-9ffac5fb0f09",
+        "timestamp": 1785432346931
+      },
+      {
+        "executionId": "a257911f-39fe-4654-9163-92da28becabe",
+        "chatSessionId": "sess_54d91053-f6f2-4a2d-ab4e-9ffac5fb0f09",
+        "timestamp": 1785432442867
+      }
+    ],
+    "6.5 撰寫 Property 7：Projection read-only atomic replacement": [
+      {
+        "executionId": "c45fbcbd-2828-4f65-bafd-2446fb8f0ed5",
+        "chatSessionId": "sess_2a964949-2a73-4a15-b407-500147e0160b",
+        "timestamp": 1785433070986
+      },
+      {
+        "executionId": "c45fbcbd-2828-4f65-bafd-2446fb8f0ed5",
+        "chatSessionId": "sess_2a964949-2a73-4a15-b407-500147e0160b",
+        "timestamp": 1785433201685
+      }
+    ],
+    "7. 實作 Eligibility service、sorting 與 API／workflow compatibility mapping": [
+      {
+        "executionId": "5a1fd591-c7f8-4b77-aed8-0a06a2a86c82",
+        "chatSessionId": "sess_2b947a4e-27fd-42bc-983a-86753c733280",
+        "timestamp": 1785436214735
+      }
+    ],
+    "7.5 撰寫 Property 8：Program status gate matrix": [
+      {
+        "executionId": "cd3e9945-c917-46a4-9df4-39ca1f7e43b6",
+        "chatSessionId": "sess_b13e9377-4f97-4a97-a6c4-8157f7c906ef",
+        "timestamp": 1785436326024
+      },
+      {
+        "executionId": "cd3e9945-c917-46a4-9df4-39ca1f7e43b6",
+        "chatSessionId": "sess_b13e9377-4f97-4a97-a6c4-8157f7c906ef",
+        "timestamp": 1785436435786
+      }
+    ],
+    "7.6 撰寫 Property 9：Candidate ordering 與 score non-exposure": [
+      {
+        "executionId": "a5da2e2c-624f-43f3-afdb-49380b5d19ad",
+        "chatSessionId": "sess_703a0bbe-1022-49af-806b-832f354192c8",
+        "timestamp": 1785463174286
+      },
+      {
+        "executionId": "a5da2e2c-624f-43f3-afdb-49380b5d19ad",
+        "chatSessionId": "sess_703a0bbe-1022-49af-806b-832f354192c8",
+        "timestamp": 1785463372993
+      }
+    ],
+    "7.7 撰寫 Property 10：Citation exact mapping 與 completeness": [
+      {
+        "executionId": "517786c6-d51f-4f3b-82a3-42dca211d3c5",
+        "chatSessionId": "sess_f5b58ed0-9cb1-45ac-85a5-df629518fc6b",
+        "timestamp": 1785463409918
+      },
+      {
+        "executionId": "d0d58009-b54d-4926-8b60-a72f22774f36",
+        "chatSessionId": "sess_d7b02a70-5ed5-479c-ad91-f2d68b3042b2",
+        "timestamp": 1785549086382
+      }
+    ],
+    "8. 建立隱私 sanitizer、RawTextScope 與 fail-closed observability": [
+      {
+        "executionId": "1faa972c-2cf9-4e59-a19b-f0a42c605a40",
+        "chatSessionId": "sess_36d9a521-a5f6-467c-9a15-91080d105370",
+        "timestamp": 1785467126443
+      }
+    ],
+    "8.6 撰寫 Property 12：Recursive sanitizer 與 fail-closed observability": [
+      {
+        "executionId": "901a4d88-db89-4c99-bbf4-c382e5f5a07c",
+        "chatSessionId": "sess_de6f957e-1dbb-4ce9-9471-60cc38273527",
+        "timestamp": 1785496155523
+      }
+    ],
+    "8.7 撰寫 Property 13：Raw text disposal": [
+      {
+        "executionId": "19428ec4-b174-4aca-a0bf-a277133a9b61",
+        "chatSessionId": "sess_efa5506b-4e92-4bc8-b328-d74eba9f773c",
+        "timestamp": 1785497011862
+      },
+      {
+        "executionId": "19428ec4-b174-4aca-a0bf-a277133a9b61",
+        "chatSessionId": "sess_efa5506b-4e92-4bc8-b328-d74eba9f773c",
+        "timestamp": 1785497159549
+      }
+    ],
+    "9. 完成 FastAPI composition root、fakes 與 architecture boundaries": [
+      {
+        "executionId": "8e69b137-b4c1-4c9c-8063-f4a106504470",
+        "chatSessionId": "sess_4d85c69f-f481-4af2-80b1-e1725c7a6a16",
+        "timestamp": 1785552040641
+      }
+    ]
+  }
+}

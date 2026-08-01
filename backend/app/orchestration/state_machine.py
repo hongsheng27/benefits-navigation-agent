@@ -41,6 +41,7 @@ from dataclasses import dataclass
 
 from app.orchestration.determination import evaluate_ready_items, visible_items
 from app.orchestration.field_registry import FieldRegistry
+from app.orchestration.local_worker import RefreshWorkerPort
 from app.orchestration.protocols import (
     CoverageScope,
     EligibilityService,
@@ -53,8 +54,8 @@ from app.orchestration.protocols import (
     PrivacyGate,
     SourceRefreshService,
 )
+from app.orchestration.refresh_orchestration import respond_then_refresh
 from app.orchestration.rule_adapter import adapt_graph_candidate
-from app.orchestration.source_refresh import refresh_after_response
 from app.orchestration.state import (
     CandidateItem,
     ExitReason,
@@ -228,6 +229,10 @@ class _Seams:
     # 官方依據的檢索還沒接上（`RETRIEVE_RULES` 仍是空操作）。保留欄位是為了讓資料層
     # 交出 repository 時只需改 `_do_retrieve_rules`，不必再動 `advance()` 的簽章。
     evidence_repository: EvidenceRepository | None = None
+    # 背景 refresh 的交付邊界。`None` 代表只排入 service 的佇列、不再往下交付。
+    # 這個接縫只暴露 `submit()`，所以 request path 在型別上就沒有辦法同步執行
+    # crawl 或 LLM（Req 11.10）。
+    refresh_worker: RefreshWorkerPort | None = None
 
 
 def advance(
@@ -241,6 +246,7 @@ def advance(
     source_refresh_service: SourceRefreshService | None = None,
     coverage_scope: CoverageScope | None = None,
     evidence_repository: EvidenceRepository | None = None,
+    refresh_worker: RefreshWorkerPort | None = None,
 ) -> SessionState:
     """依輸入推進狀態，並自動走完不需要使用者的中間步驟。
 
@@ -286,6 +292,7 @@ def advance(
             else CoverageScope(source_ids=(), domain_tags=())
         ),
         evidence_repository=evidence_repository,
+        refresh_worker=refresh_worker,
     )
 
     # 流程已經結束就不再接受任何輸入（Req 1.5、Req 5.3）。
@@ -674,10 +681,15 @@ def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState
 
     # coverage 目前只用來決定要不要排 refresh。把它露給前端需要新的對外欄位，
     # 那屬於還沒開始的前端契約那一批。
-    refresh_after_response(
+    #
+    # `respond_then_refresh` 保證這裡只做兩件事：讀一次目前的 committed coverage
+    # 狀態、把工作排進佇列。它不等待任何抓取、附件處理或 LLM（Req 11.1、11.10），
+    # 而且 worker 的延遲或失敗都不會改變這一輪的回應（Req 11.8）。
+    respond_then_refresh(
         seams.source_refresh_service,
         state.life_event,
         seams.coverage_scope,
+        worker=seams.refresh_worker,
     )
 
     if not items:

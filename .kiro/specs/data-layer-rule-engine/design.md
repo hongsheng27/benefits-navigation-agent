@@ -582,7 +582,7 @@ Eligibility service 收集 Rule Engine **實際評估**的 distinct `source_refe
 
 ### 10. Read-only compatibility projection
 
-`program_rule_fields` 不再是 writable truth。它是由 canonical Rule DSL 產生的 SQLite view：
+`program_rule_fields` 不再是 writable truth。它是由 canonical Rule DSL 產生的 SQLite view。依 ADR-0015，migration window 內採唯讀 bridge：有 active canonical generation 的 program 只顯示 generation rows；尚未有 active generation 的 program 暫時顯示 frozen `legacy_program_rule_fields_v1` rows。Version 5 若仍是 known legacy table，先以 triggers凍結所有DML；version 6才在單一transaction完成pre-rename inventory、rename與bridge view。Legacy fallback不可寫，且不得被Rule DSL generator當成canonical input。
 
 - 每個 projection generation 帶 `converter_version`、rule version 與 canonical hash。
 - converter 以 preorder traversal 產生 reserved rows，例如 rule metadata、每個 node 的 type/parent/order、每個 condition 的完整欄位與 source reference；legacy scalar aliases 可同時產生，但不能作為反向重建依據。
@@ -776,7 +776,7 @@ Program node 的 `program_id` adapter 會映射成 `item_id`。所有 endpoint �
 | `rule_nodes` | `node_id PK`, `rule_version_id FK`, `parent_node_id FK NULL`, `node_type CHECK(all_of,any_of,condition)`, `child_order`; unique sibling order; root has no parent |
 | `rule_conditions` | `condition_id PK`, `node_id UNIQUE FK`, `field_id FK`, `operator`, typed `expected_value`, `label`, `source_reference`; node must be condition |
 | `rule_required_fields` | `(rule_version_id,field_id) PK`, `canonical_order`; FK to field registry |
-| `rule_version_source_refs` | `(rule_version_id,source_reference) PK`, `evidence_id FK` | all version-level source links |
+| `rule_version_source_refs` | `(rule_version_id,source_reference) PK` | declare all source references used by the version without duplicating evidence links |
 | `approved_amounts` | `rule_version_id PK/FK`, `amount_min`, `amount_max`, `amount_period`, `amount_currency`, `source_reference`; all-or-none and min<=max |
 
 Tree validation 在 verify transition 前檢查：唯一 root、無 cycle、所有 node reachable、group non-empty、condition fields 完整、operator allowlisted、required fields 與 leaf fields 一致、source references 可解析。歷史 versions 不刪除。
@@ -787,19 +787,22 @@ Tree validation 在 verify transition 前檢查：唯一 root、無 cycle、所�
 | --- | --- |
 | `source_registry` | `source_id PK`, official metadata, `official_status`, `entry_url`, refresh policy, crawl fields；index status/due fields |
 | `source_domain_tags` | `(source_id,domain_tag) PK` |
-| `source_documents` | `document_id PK`, `source_id FK`, `canonical_url UNIQUE`, `title`, `publisher`, optional dates, hash/storage refs, review status |
+| `source_documents` | `document_id PK`, `canonical_url UNIQUE`, `title`, `publisher`, optional dates, hash/storage refs, review status；不壓成單一 `source_id` |
+| `document_discoveries` | `(document_id,source_id) PK`；FK to documents/registry；保存同一 canonical document 從多個 registered sources 被發現的 provenance |
 | `evidence_excerpts` | `evidence_id PK`, `document_id FK`, `excerpt`, `review_status`, `reviewer_ref`, `reviewed_at`; verified requires non-empty excerpt and review metadata |
 | `program_evidence_links` | `(program_id,evidence_id,evidence_role) PK`, review status |
-| `source_reference_evidence` | `(rule_version_id,source_reference,evidence_id) PK`; every evaluated ref resolves through this table |
-| `document_attachments` | `attachment_id PK`, `document_id FK`, filename, media type, source URL, local storage ref, hash, extraction status/method/time, review status; indexes by document/status |
+| `source_reference_evidence` | `(rule_version_id,source_reference,evidence_id) PK`; one declared reference may map to multiple evidence rows，every evaluated ref resolves through this table |
+| `document_attachments` | `attachment_id PK`, `document_id FK`, filename, media type, source URL, `storage_backend(local,s3)`, opaque storage ref, hash, extraction status/method/time, review status; indexes by document/status |
 
-Citation 由 `source_documents + evidence_excerpts` exact mapping。Placeholder、AI text 或未核准 excerpt 不能進 verified evidence link。
+Citation 由 `source_documents + evidence_excerpts` exact mapping。Placeholder、AI text 或未核准 excerpt 不能進 verified evidence link。`rule_version_source_refs` 只宣告 version 使用的 reference；`source_reference_evidence` 才保存 reference-to-evidence 多對多 mapping，避免重複真相。
+
+本機 migration 使用 SQLite，但 owner 已核准 Hackathon AWS target 為 RDS PostgreSQL，附件 object target 為 S3。PostgreSQL dialect 將 typed JSON 改為 type tag + `JSONB`、timestamp 改為 `TIMESTAMPTZ`，並保留相同 FK、partial unique index、transaction 與 review semantics。`storage_ref` 對 domain 是 opaque value；`storage_backend='local'` 於本機使用，S3 adapter cutover 後改為 `s3` 與 object key，不把 AWS SDK type 或 bucket path帶入 Workflow。詳見 ADR-0014 與唯一的 AWS migration guide。
 
 ### Coverage and refresh jobs
 
 ```sql
 CREATE TABLE refresh_jobs (
-    job_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
     source_id TEXT NOT NULL REFERENCES source_registry(source_id),
     event_id TEXT NOT NULL,
     local_calendar_date TEXT NOT NULL,
@@ -809,9 +812,12 @@ CREATE TABLE refresh_jobs (
     started_at TEXT,
     completed_at TEXT,
     safe_error_code TEXT,
+    PRIMARY KEY (job_id, source_id),
     UNIQUE (source_id, event_id, local_calendar_date)
 );
 ```
+
+同一batch的per-source rows共用`job_id`，因此`RefreshReceipt.job_id`可代表整批；`source_id + event_id + local_calendar_date`與`dedup_key`各自唯一，確保並行request只建立一筆per-source job。`event_id`可代表event/topic context，此schema階段不強制Graph FK。
 
 | Table | Key fields and constraints / indexes |
 | --- | --- |
@@ -826,10 +832,13 @@ Coverage 可以在單一 read transaction 即時計算，也可保存 snapshot �
 
 | Table/view | Key fields and behavior |
 | --- | --- |
-| `compat_projection_generations` | `generation_id PK`, `rule_version_id FK`, `converter_version`, canonical hash, status |
-| `compat_projection_rows` | `(generation_id,ordinal) PK`, `program_id`, `field_name`, `field_type`, `field_value`; unique field per generation |
-| `compat_projection_active` | `rule_version_id PK`, `generation_id UNIQUE FK`; atomic pointer |
-| `program_rule_fields` | read-only view selecting rows from active generations |
+| `compat_projection_generations` | `generation_id PK`, `rule_version_id FK`, `program_id FK`, `converter_version`, canonical hash, `building/validated` status, row count |
+| `compat_projection_rows` | `(generation_id,ordinal) PK`, `program_id`, legacy-compatible field columns；unique field per generation |
+| `compat_projection_active` | `rule_version_id PK`, `generation_id UNIQUE FK`; validated row-count-matching generation才能atomic啟用 |
+| `legacy_program_rule_fields_v1` | 原始8欄與rows原樣保存，三個triggers拒絕DML |
+| `legacy_rule_migration_inventory` | pre-rename schema/rows SHA-256、row count、converter version |
+| `legacy_rule_conversion_drafts` | per-program deterministic `under_review` manifest；不含推定Rule DSL semantics |
+| `program_rule_fields` | read-only bridge view；active generation優先，否則顯示frozen legacy rows |
 | three `INSTEAD OF` triggers | reject insert/update/delete |
 
 這個 view 只為 migration-era reader compatibility。Rule Engine、Workflow、review UI 的新寫入流程都不讀它作 canonical truth。
@@ -840,10 +849,10 @@ Migration 依序執行，每步有 checksum、transaction 與 rollback：
 
 1. **Inventory and backup marker**：記錄現有 schema version、row counts、legacy table checksum；不複製使用者/session 資料。
 2. **Add new canonical tables**：先新增 graph、field registry、rule version/tree、evidence、coverage、refresh、attachment、review tables，不破壞現有 reader。
-3. **Preserve old rule rows**：將現有 writable `program_rule_fields` rename 為 `legacy_program_rule_fields_v1`，只讀保存；不直接把它宣告為已核准 Rule DSL。
-4. **Human-assisted conversion**：converter 產生 `candidate` Rule DSL draft。若 legacy scalar 無法無損表達 nested semantics，維持 `under_review`，不猜條件、不 verify。
-5. **Validate and approve**：Human Reviewer 核對 rule、source excerpt、citation mapping；只有完整版本才標 approved/current。
-6. **Generate projection**：從 approved canonical Rule DSL 建立 generation，round-trip 驗證後 atomic 啟用 `program_rule_fields` view。
+3. **Freeze and preserve old rule rows**：version 5先拒絕legacy table DML；version 6計算pre-rename schema／row hashes後rename為`legacy_program_rule_fields_v1`，只讀保存。
+4. **Human-assisted conversion manifest**：converter只產生deterministic `under_review` manifest。Legacy scalar無法表達operator、source reference或nested semantics，因此不建立不完整canonical Rule DSL，也不猜條件、不verify。
+5. **Validate and approve**：Human Reviewer核對legacy artifact、rule、source excerpt與citation mapping，另行建立完整canonical version；只有完整版本才標approved/current。
+6. **Generate projection**：從approved canonical Rule DSL建立generation，round-trip驗證後atomic啟用；該program隨即停止從bridge顯示legacy rows。
 7. **Switch adapters**：Eligibility service 改讀 canonical repository；legacy engine 以 temporary adapter 僅供比較測試，不進 runtime path。
 8. **Retire legacy write paths**：review UI、scripts、engine 不再 DML legacy/projection；保留 legacy table 到 agreed compatibility window 後再由獨立 migration 移除。
 

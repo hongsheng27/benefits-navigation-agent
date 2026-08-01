@@ -26,6 +26,13 @@ class Settings(BaseSettings):
 
     environment: str = "local"
 
+    # The calendar that same-day refresh dedup is measured against. Refresh
+    # jobs are deduplicated per source per event per *local* calendar date, so
+    # this value decides where the day boundary falls. Using UTC would move the
+    # boundary to 08:00 local time in Taiwan and silently allow a second crawl
+    # of the same source on the same working day.
+    application_timezone: str = "Asia/Taipei"
+
     # Vite's development server. Deployment origins are added once the
     # deployment platform is decided.
     cors_allow_origins: list[str] = [

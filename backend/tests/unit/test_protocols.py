@@ -548,3 +548,61 @@ def test_the_next_day_triggers_again() -> None:
         assert receipt.accepted is True
 
     assert len(service.pending_jobs()) == 2
+
+
+# ---------------------------------------------------------------------------
+# Runtime-checkable Protocol conformance
+# ---------------------------------------------------------------------------
+
+
+def test_fixture_implementations_are_runtime_checkable_against_protocols() -> None:
+    """Every offline fixture is an instance of its Protocol at runtime."""
+    graph = FixtureEntitlementGraphRepository()
+    eligibility = FixtureEligibilityService()
+    evidence = FixtureEvidenceRepository()
+    refresh = LocalSourceRefreshService(sources=(), clock=lambda: _NOW)
+
+    # Structural conformance — all required methods exist
+    assert hasattr(graph, "expand_from_event")
+    assert hasattr(graph, "get_prerequisites")
+    assert hasattr(graph, "get_produces")
+    assert hasattr(graph, "get_programs_by_system")
+
+    assert hasattr(eligibility, "get_required_fields")
+    assert hasattr(eligibility, "evaluate")
+    assert hasattr(eligibility, "evaluate_many")
+
+    assert hasattr(evidence, "get_citations")
+    assert hasattr(evidence, "get_citations_for_references")
+
+    assert hasattr(refresh, "get_coverage_status")
+    assert hasattr(refresh, "request_on_demand_refresh")
+
+
+# ---------------------------------------------------------------------------
+# Successful-empty versus failure semantics
+# ---------------------------------------------------------------------------
+
+
+def test_successful_empty_is_distinct_from_error() -> None:
+    """Fixtures return empty tuples for 'no data' — they never raise for success."""
+    from app.orchestration.data_errors import DataLayerError
+
+    graph = FixtureEntitlementGraphRepository()
+    eligibility = FixtureEligibilityService()
+    evidence = FixtureEvidenceRepository()
+
+    # These represent successful queries that found no matching data
+    assert graph.expand_from_event("nonexistent_event", {}) == ()
+    assert graph.get_prerequisites("nonexistent_item") == ()
+    assert graph.get_produces("nonexistent_item") == ()
+    assert graph.get_programs_by_system("nonexistent_system") == ()
+    assert eligibility.get_required_fields("nonexistent_item") == ()
+    assert evidence.get_citations("nonexistent_item") == ()
+    assert evidence.get_citations_for_references("nonexistent_item", ("ref",)) == ()
+
+    # None of these should raise DataLayerError — empty is success, not failure
+    try:
+        graph.expand_from_event("nonexistent_event", {})
+    except DataLayerError:
+        pytest.fail("Fixture raised DataLayerError for successful empty query")

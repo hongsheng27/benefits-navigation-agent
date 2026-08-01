@@ -22,7 +22,7 @@
 | 來源刷新組裝 | `backend/app/orchestration/source_refresh.py` | 本機 queue；不阻塞 request |
 | 逐項判定組裝 | `backend/app/orchestration/determination.py` | 狀態閘門與單項失敗隔離已完成；SQLite EligibilityService 尚待接入 |
 | 欄位登記與缺漏計算 | `field_registry.py`、`missing_fields.py` | 已落地，資料內容仍是有限 draft |
-| SQLite migration runner | `backend/app/adapters/sqlite/migrations.py` | data-layer task 1.1 已實作；其餘 migrations 尚待完成 |
+| SQLite migration runner | `backend/app/adapters/sqlite/migrations.py` | data-layer tasks 1.1–1.7 已實作（metadata → programs → graph → rules/evidence → refresh/compatibility → legacy preservation） |
 
 目前 workflow 測試可使用不連 SQLite 的 fixture implementations。這不表示 runtime 已切換到 canonical SQLite repositories。
 

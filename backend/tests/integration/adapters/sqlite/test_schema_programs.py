@@ -112,7 +112,7 @@ def test_fresh_schema_has_required_program_review_and_field_objects(
 
     result = migrate_database(database)
 
-    assert result.current_version == 2
+    assert result.current_version == 7
     with closing(sqlite3.connect(database)) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         assert {
@@ -283,8 +283,16 @@ def test_known_legacy_upgrade_preserves_references_and_audits_status_mapping(
     result = migrate_database(database)
 
     assert result.previous_version == 0
-    assert result.current_version == 2
-    assert result.applied_migration_ids == ("0001_metadata", "0002_programs_fields")
+    assert result.current_version == 7
+    assert result.applied_migration_ids == (
+        "0001_metadata",
+        "0002_programs_fields",
+        "0003_graph",
+        "0004_rules_evidence",
+        "0005_refresh_compatibility",
+        "0006_preserve_legacy_rules",
+        "0007_mvp_catalog_scaffold",
+    )
     with closing(sqlite3.connect(database)) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         program = connection.execute(
@@ -292,6 +300,7 @@ def test_known_legacy_upgrade_preserves_references_and_audits_status_mapping(
             SELECT program_id, canonical_name, summary, jurisdiction_code,
                    program_status, status_note, amount_min, current_revision_id
             FROM benefit_programs
+            WHERE program_id = 'legacy-program'
             """
         ).fetchone()
         history = connection.execute(
@@ -336,7 +345,7 @@ def test_known_legacy_upgrade_preserves_references_and_audits_status_mapping(
     assert source_program == ("legacy-program",)
     assert role_program == ("legacy-program",)
     assert rule_program == ("legacy-program",)
-    assert metadata[SCHEMA_VERSION_KEY] == "2"
+    assert metadata[SCHEMA_VERSION_KEY] == "7"
     assert foreign_key_errors == []
 
 

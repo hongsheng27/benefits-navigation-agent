@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-07-27
 - Supersedes: [ADR-0008: Curate in SQL, Serve from JSON](0008-curate-in-sql-serve-from-json.md)
+- Complemented by: [ADR-0014: 以 RDS PostgreSQL 與 S3 作為 Hackathon 資料層目標](0014-target-rds-postgresql-and-s3.md)
 
 ## 背景
 
@@ -74,7 +75,7 @@ JSON 不是 runtime input、startup prerequisite 或 fallback，也不能回寫 
 
 ### 8. AWS development strategy 與 SQLite lifecycle
 
-依團隊規範，owner 核准後可使用 live AWS 進行準備與驗證；credentials、tokens、`.env` 與 account-specific secrets 永遠不得提交。Data-layer 目前仍使用本機 SQLite、本機檔案與本機背景工作，任何 production database、queue、object storage、LLM hosting 或 deployment service 都需要另立決策，並在同一變更中更新 `docs/aws_migration_guide.md`。Local tests 不得依賴 live AWS 才能執行。
+依團隊規範，AWS 資源開放前仍只使用本機 SQLite、本機檔案與本機背景工作，且不得建立 live connection 或讀取 credentials。Owner 已在 ADR-0014 核准 Hackathon cutover 目標為 RDS PostgreSQL 與 S3；實際 cutover 仍須另行完成 PostgreSQL/S3 adapters、migration、驗證與 rollback，credentials、tokens、`.env` 與 account-specific secrets 永遠不得提交。Local tests 不得依賴 live AWS 才能執行。
 
 所有 SQLite connections 必須使用 `contextlib.closing` 或等價的明確 close guarantee；不能只依賴 `with sqlite3.connect(...)`，因為它管理 transaction 但不保證關閉 connection。
 
@@ -127,9 +128,9 @@ JSON 不是 runtime input、startup prerequisite 或 fallback，也不能回寫 
 
 短期程式碼較少，但會把 schema、row shape 與 transaction 細節帶進 state machine，阻礙測試與未來 adapter 替換，因此不採用。
 
-### 現在選定 production AWS service
+### Production AWS service selection（後續決策）
 
-目前沒有 live AWS 權限與足夠的容量、成本、部署或一致性證據；提前選型會增加不必要承諾，因此延後到獨立 ADR。
+ADR-0013 接受時尚未選定 production AWS service，因此刻意延後。Owner 後續已在 ADR-0014 核准 RDS PostgreSQL 作為 Hackathon relational database target、S3 作為文件／附件 object storage target；本 ADR 的 SQLite local truth 與 storage-neutral repository 原則仍持續有效，直到 adapter cutover 驗證完成。
 
 ## 相關文件
 

@@ -21,9 +21,11 @@ from fastapi import APIRouter, Depends, Header, Request, Response, status
 
 from app.api.errors import ApiError
 from app.api.implementation import implementation_notice
+from app.application.composition import ApplicationDependencies
 from app.observability.logging import log_event
 from app.orchestration import state_machine
 from app.orchestration.missing_fields import compute_question_groups
+from app.orchestration.protocols import CoverageScope
 from app.orchestration.session_store import (
     SESSION_ID_HEADER,
     InMemorySessionStore,
@@ -48,6 +50,14 @@ def get_store(request: Request) -> InMemorySessionStore:
     測試之間不會互相污染。
     """
     return request.app.state.session_store
+
+
+def get_dependencies(request: Request) -> ApplicationDependencies:
+    """從應用程式取出 composition root 建立的 dependencies。
+
+    Routes 不自行建立 adapters (Req 2.5)。
+    """
+    return request.app.state.dependencies
 
 
 def require_session_state(
@@ -121,11 +131,19 @@ def advance_session(
     payload: AdvanceRequest,
     store: Annotated[InMemorySessionStore, Depends(get_store)],
     state: Annotated[SessionState, Depends(require_session_state)],
+    deps: Annotated[ApplicationDependencies, Depends(get_dependencies)],
 ) -> SessionSnapshot:
     """送一筆輸入，推進一步。"""
     try:
         advanced = state_machine.advance(
-            state, payload.input, registry=state_machine.default_registry()
+            state,
+            payload.input,
+            registry=state_machine.default_registry(),
+            entitlement_repository=deps.graph_repository,
+            eligibility_service=deps.eligibility_service,
+            evidence_repository=deps.evidence_repository,
+            source_refresh_service=deps.source_refresh_service,
+            coverage_scope=CoverageScope(source_ids=(), domain_tags=()),
         )
     except state_machine.InvalidTransitionError as error:
         raise ApiError(

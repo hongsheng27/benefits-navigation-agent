@@ -58,7 +58,7 @@ component library 或部署平台。詳見
 
 ### 目前本機資料架構
 
-目前接受的目標架構以本機 SQLite 作為資料策展與 runtime 的單一真相來源，直到另有 owner-approved storage migration ADR 與替代 adapter。FastAPI application composition root 將建立並注入 `EntitlementGraphRepository`、
+目前接受的本機架構以 SQLite 作為資料策展與 runtime 的單一真相來源；ADR-0014 已選定未來 Hackathon shared target，但在替代 adapter 與 cutover validation 完成前仍維持 SQLite。FastAPI application composition root 將建立並注入 `EntitlementGraphRepository`、
 `EligibilityService`、`EvidenceRepository` 與 `SourceRefreshService`；workflow／state machine
 只依賴 storage-neutral contracts，不包含 SQL。Runtime 不讀 JSON，也沒有 JSON fallback。
 這項架構已核准，但 schema migration、repositories、Rule DSL 與 runtime wiring 尚未完成，
@@ -66,7 +66,7 @@ component library 或部署平台。詳見
 [SQLite runtime accepted ADR-0013](docs/decisions/0013-use-sqlite-runtime-behind-repositories.md)
 與 [finalized data-layer rule-engine spec](.kiro/specs/data-layer-rule-engine/requirements.md)。
 
-依團隊規範，owner 核准後可使用 live AWS 進行準備與驗證，但不得提交 credentials、tokens、`.env` 或 account-specific secrets。Data-layer 目前仍使用本機 SQLite、本機檔案與本機背景工作；production AWS database、object storage、queue、LLM hosting 與 deployment service 均尚未決定，任何選型都需另行對齊並記錄 ADR。
+依團隊規範，AWS 資源開放前不得建立 live connections，也不得提交 credentials、tokens、`.env` 或 account-specific secrets。Data-layer 目前仍使用本機 SQLite、本機檔案與本機背景工作；owner 已核准 Hackathon cutover 目標為 **Amazon RDS for PostgreSQL**（shared relational database）與 **Amazon S3**（官方文件／附件 objects），但必須先完成獨立 adapters、PostgreSQL migrations、資料驗證與 rollback 才能切換。Queue、LLM hosting 與 deployment service 仍待決策。詳見 [ADR-0014](docs/decisions/0014-target-rds-postgresql-and-s3.md)。
 
 預計流程狀態：
 
@@ -112,11 +112,11 @@ migration 與 runtime implementation。
 | Agent SDK                 | Strands Agents + Amazon Bedrock                                         | **Trial / 可逆**；包在自有 `AgentRunner` interface 後方 |
 | Agent hosting             | Amazon Bedrock AgentCore Runtime                                        | **後續決定**；先確認比賽帳號權限與現場可用性            |
 | Agent tools               | `resolve_life_event`、`retrieve_official_rules`、`evaluate_eligibility` | MVP 暫定三個核心工具                                    |
-| Document storage          | Amazon S3                                                               | 暫定；存放官方文件與處理後資料                          |
+| Document storage          | 本機資料夾 → Amazon S3                                              | **AWS target 已決定**；目前 local，完成 S3 adapter/hash 驗證後 cutover |
 | RAG                       | Amazon Bedrock Knowledge Bases 或自製 retrieval                         | **後續決定**；先固定 `Retriever` interface              |
 | Relevance metadata        | Backend-only deterministic ordering                                     | **已核准、待完成**；無固定數值範圍，API／frontend 省略且不影響資格判斷 |
 | Vector store / embeddings | 由 Bedrock Knowledge Bases 管理或自選方案                               | **後續決定**；資料量大時疊加語意搜尋                    |
-| Entitlement graph / runtime storage | 本機 SQLite + storage-neutral repositories                    | **架構已核准、migration 待完成**；SQLite 為本機 curation／runtime 單一真相，見 [accepted ADR](docs/decisions/0013-use-sqlite-runtime-behind-repositories.md) |
+| Entitlement graph / runtime storage | 本機 SQLite → Amazon RDS for PostgreSQL behind storage-neutral repositories | **local 與 AWS target 已核准、migration 待完成**；先完成 SQLite vertical slice，再以 PostgreSQL adapter cutover，見 [ADR-0013](docs/decisions/0013-use-sqlite-runtime-behind-repositories.md) 與 [ADR-0014](docs/decisions/0014-target-rds-postgresql-and-s3.md) |
 | Eligibility rules         | Canonical versioned `all_of`／`any_of` Rule DSL                         | **架構已核准、implementation 待完成**；`program_rule_fields` 僅為唯讀 compatibility projection |
 | Session state boundary    | Client / server split                                                   | **已決定**；direct identifiers 留在 client              |
 | Session persistence       | 記憶體，不持久化                                                        | **MVP 已定**；結束即消失，保存政策見 ADR-0007           |
@@ -136,7 +136,7 @@ migration 與 runtime implementation。
 | **LLM (Bedrock)** | 讓系統能「聽懂」使用者的話、產生白話回答的 AI 模型。比賽規定使用 AWS Bedrock 上的模型；owner 核准後可連線驗證，model 仍待實測。 |
 | **Agent SDK (Strands)** | Agent 的執行框架 — 控制 AI 怎麼選工具、怎麼停下來。包在自己的 interface 後面，換框架不影響其他模組。 |
 | **Agent hosting (AgentCore)** | 讓 Agent 跑在 AWS 上面（不是跑在你的電腦）。是否採用仍需依帳號權限與需求另行決定。 |
-| **Document storage (S3)** | 雲端檔案儲存候選方案。目前預設使用本機資料夾；是否採用 S3 仍需 owner 對齊與 ADR。 |
+| **Document storage (S3)** | 官方 HTML、PDF 與附件物件的已核准 AWS target。目前仍使用本機資料夾；完成 S3 adapter、hash 驗證與 rollback 後才 cutover，database 只保存 metadata 與 opaque object key。 |
 | **RAG (Knowledge Bases)** | 語意搜尋 — 讓系統用「意思相近」來找資料，不只靠關鍵字。資料量少時用 SQL + 評分就夠，量大時才需要。 |
 | **Vector store / embeddings** | RAG 的底層技術。把文字轉成數字向量，比較向量距離來判斷「意思接不接近」。需要 embedding model；是否接 Bedrock 與底層 storage 仍待驗證。 |
 | **Guardrails** | AI 的安全圍欄 — 防止 AI 輸出個資、亂下結論、回答無關問題。目前靠 state machine 控制；AWS Guardrails 是否採用仍待決策。 |
@@ -272,8 +272,7 @@ python3 scripts/import_government_oid.py --source-file /path/to/GDS.csv
 
 政府 OID 匯入資料本身可由核准的 importer 與官方來源重新產生；但 accepted target 同時把人工策展
 catalog 與 runtime 最近一次成功 commit 的完整 SQLite 狀態視為 canonical truth，不再把整個
-SQLite 僅視為可重建 reference store。Runtime 透過 storage-neutral adapters 取用資料，未來若有
-shared writes 或 horizontal scaling 需求，另立決策替換 adapter，不預先選定 production database。
+SQLite 僅視為可重建 reference store。Runtime 透過 storage-neutral adapters 取用資料；owner 已核准 shared-write AWS target 為 RDS PostgreSQL，實際替換仍須完成 PostgreSQL adapter、migration、驗證與 rollback，不會讓 Workflow 接觸 database-specific shape。
 這個 catalog 不存放使用者 session、直接識別資料、raw user text 或 credentials；上述架構已核准，
 schema migration 與 runtime wiring 尚未完成。詳見
 [SQLite runtime accepted ADR-0013](docs/decisions/0013-use-sqlite-runtime-behind-repositories.md)
@@ -373,10 +372,11 @@ checkpoints。請每位成員確認想負責的角色、希望獲得的技術經
 - 已接受 SQLite runtime behind storage-neutral repositories：SQLite 是目前本機 curation／runtime
   單一真相，FastAPI composition root 注入四個 ports，workflow 不含 SQL，runtime 無 JSON fallback；
   migration 與 wiring 尚未完成。
+- 已核准 Hackathon AWS data-layer target：shared relational data 使用 Amazon RDS for PostgreSQL，官方文件與附件 objects 使用 Amazon S3；完成 adapters、migration、validation 與 rollback 前仍維持 local path。
 - Relevance metadata 只供 backend deterministic ordering，沒有核准固定數值範圍，API／frontend
   完全省略，且永不影響 eligibility；新 mapping 尚未完成。
 
-Bedrock model、retrieval、AgentCore、production storage 與 deployment 細節仍待技術驗證與獨立決策。Owner 核准後可使用 live AWS 進行準備與驗證，但 credentials、tokens、`.env` 與 account-specific secrets 不得提交；已接受的共同工程決策記錄在
+Bedrock model、retrieval、AgentCore、queue 與 deployment 細節仍待技術驗證與獨立決策。RDS PostgreSQL 與 S3 已是 owner-approved Hackathon data-layer targets，但 AWS 資源開放前不得建立 live connection；之後任何 credentials、tokens、`.env` 與 account-specific secrets 仍不得提交。已接受的共同工程決策記錄在
 [Architecture Decision Records](docs/decisions/README.md)。
 
 技術選型原則：能在有限時間內完成穩定 demo、保留官方依據、可測試，且能清楚說明

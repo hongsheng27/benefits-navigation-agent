@@ -253,8 +253,24 @@ class DecisiveConditionView(_View):
     actual: AttributeValue
 
 
+class StructuredReasonView(_View):
+    """完整結構化原因，與 DecisiveConditionView 並存 (additive compatibility).
+
+    包含 operator、label 與 source_reference，讓前端可以在保留 legacy 格式的
+    同時使用更豐富的結構。`actual` 在 privacy-aware mapping 時可能被移除。
+    """
+
+    condition_id: str
+    field_id: str
+    operator: str
+    expected: str
+    actual: str | None = None
+    label: str
+    source_reference: str
+
+
 class CitationView(_View):
-    """官方依據。六個欄位都是文件本身的資訊，與使用者無關。"""
+    """官方依據。欄位都是文件本身的資訊，與使用者無關。"""
 
     document_id: str
     title: str
@@ -262,6 +278,8 @@ class CitationView(_View):
     published_at: str | None = None
     url: str
     excerpt: str = ""
+    effective_at: str | None = None
+    retrieved_at: str | None = None
 
 
 class ItemView(_View):
@@ -275,8 +293,11 @@ class ItemView(_View):
     kind: ItemKind
     status: ItemStatus
 
+    program_status: str | None = None
+
     missing_field_ids: tuple[str, ...] = ()
     decisive_conditions: tuple[DecisiveConditionView, ...] = ()
+    structured_reasons: tuple[StructuredReasonView, ...] = ()
     citations: tuple[CitationView, ...] = ()
 
     amount_min: int | None = None
@@ -398,6 +419,7 @@ class SessionSnapshot(_View):
                     item_id=item.item_id,
                     kind=item.kind,
                     status=item.status,
+                    program_status=item.program_status,
                     missing_field_ids=item.missing_field_ids,
                     decisive_conditions=tuple(
                         DecisiveConditionView(
@@ -433,6 +455,45 @@ class SessionSnapshot(_View):
             created_at=state.created_at,
             expires_at=state.expires_at,
         )
+
+
+class CoverageSourceView(_View):
+    """一個官方來源目前抓到什麼程度。
+
+    只有可量測的欄位：狀態、上次成功抓取的時間、已索引文件數。刻意沒有
+    「這個來源的資料是否齊全」之類的欄位 —— 那個問題沒有可觀測的答案。
+    """
+
+    source_id: str
+    crawl_status: str
+    last_crawled_at: str | None = None
+    indexed_document_count: int
+    domain_tags: tuple[str, ...] = ()
+
+
+class CoverageView(_View):
+    """一次 coverage 查詢對前端露出的部分。
+
+    四個計數加總必須等於 `registered_source_count`，這由
+    `protocols.CoverageSnapshot` 在建構時強制，前端可以直接相信。
+
+    `gap_categories` 一定要露出：使用者看到「3 個來源、2 個已抓取」時，缺的那一個
+    是因為 robots.txt 還是因為需要登入，決定了他要不要自己去看那個網站。
+
+    刻意**沒有**的欄位：完整度百分比、覆蓋率、「是否已涵蓋全部福利」。這些都需要
+    一個我們沒有的分母（Req 12.6-12.8）。
+    """
+
+    observed_at: str
+    scope_source_ids: tuple[str, ...] = ()
+    scope_domain_tags: tuple[str, ...] = ()
+    registered_source_count: int
+    crawled_source_count: int
+    pending_crawl_source_count: int
+    error_source_count: int
+    indexed_document_count: int
+    gap_categories: tuple[str, ...] = ()
+    sources: tuple[CoverageSourceView, ...] = ()
 
 
 class ErrorResponse(_View):

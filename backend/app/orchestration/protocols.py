@@ -57,6 +57,12 @@ from app.orchestration.data_contracts import (
     FieldRegistryEntry,
     GraphRelation,
 )
+from app.orchestration.data_errors import (  # noqa: F401 — re-exported for visibility
+    DataLayerError,
+    RepositoryMappingError,
+    RepositoryQueryError,
+    RepositoryUnavailableError,
+)
 from app.orchestration.state import AttributeValue
 
 UserAttributes = Mapping[str, Any]

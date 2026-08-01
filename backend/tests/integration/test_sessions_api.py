@@ -13,7 +13,21 @@ from app.schemas.session import MAX_LIFE_EVENT_TEXT_LENGTH
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(create_app())
+    from app.application.composition import ApplicationOverrides
+    from app.orchestration.protocols import (
+        FixtureEligibilityService,
+        FixtureEntitlementGraphRepository,
+        FixtureEvidenceRepository,
+        LocalSourceRefreshService,
+    )
+
+    overrides = ApplicationOverrides(
+        graph_repository=FixtureEntitlementGraphRepository(),
+        eligibility_service=FixtureEligibilityService(),
+        evidence_repository=FixtureEvidenceRepository(),
+        source_refresh_service=LocalSourceRefreshService(),
+    )
+    return TestClient(create_app(overrides))
 
 
 def _create(client: TestClient) -> tuple[str, dict]:

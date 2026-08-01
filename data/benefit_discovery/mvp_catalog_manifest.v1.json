@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "mvp_catalog_manifest_v1",
+  "description": "MVP catalog: 6 known program IDs for the benefits navigation agent. No real benefit facts, thresholds, deadlines, amounts, or source excerpts are included. All programs start as 'candidate' status pending human review.",
+  "reviewed_at": null,
+  "reviewed_by": null,
+  "programs": [
+    {
+      "program_id": "death_registration",
+      "canonical_name": "死亡登記",
+      "category": "administrative",
+      "initial_status": "candidate",
+      "facts_status": "no_human_approved_facts",
+      "notes": "Placeholder only. No threshold, deadline, amount, or source excerpt."
+    },
+    {
+      "program_id": "labor_funeral_grant",
+      "canonical_name": "勞保喪葬津貼",
+      "category": "benefit",
+      "initial_status": "candidate",
+      "facts_status": "no_human_approved_facts",
+      "notes": "Placeholder only. No threshold, deadline, amount, or source excerpt."
+    },
+    {
+      "program_id": "national_pension_funeral_grant",
+      "canonical_name": "國保喪葬給付",
+      "category": "benefit",
+      "initial_status": "candidate",
+      "facts_status": "no_human_approved_facts",
+      "notes": "Placeholder only. No threshold, deadline, amount, or source excerpt."
+    },
+    {
+      "program_id": "labor_survivor_pension",
+      "canonical_name": "勞保遺屬年金",
+      "category": "benefit",
+      "initial_status": "candidate",
+      "facts_status": "no_human_approved_facts",
+      "notes": "Placeholder only. No threshold, deadline, amount, or source excerpt."
+    },
+    {
+      "program_id": "national_pension_survivor_pension",
+      "canonical_name": "國保遺屬年金",
+      "category": "benefit",
+      "initial_status": "candidate",
+      "facts_status": "no_human_approved_facts",
+      "notes": "Placeholder only. No threshold, deadline, amount, or source excerpt."
+    },
+    {
+      "program_id": "nhi_status_change",
+      "canonical_name": "健保資格異動",
+      "category": "administrative",
+      "initial_status": "candidate",
+      "facts_status": "no_human_approved_facts",
+      "notes": "Placeholder only. No threshold, deadline, amount, or source excerpt."
+    }
+  ],
+  "constraints": {
+    "allowed_ids_only": true,
+    "max_programs": 6,
+    "no_real_facts": true,
+    "no_thresholds": true,
+    "no_deadlines": true,
+    "no_amounts": true,
+    "no_source_excerpts": true
+  }
+}

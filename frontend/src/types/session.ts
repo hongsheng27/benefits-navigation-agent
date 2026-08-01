@@ -176,6 +176,17 @@ export type DecisiveConditionView = {
   actual: AttributeValue;
 };
 
+/** 完整結構化原因，與 DecisiveConditionView 並存 (additive compatibility)。 */
+export type StructuredReasonView = {
+  conditionId: string;
+  fieldId: string;
+  operator: string;
+  expected: string;
+  actual: string | null;
+  label: string;
+  sourceReference: string;
+};
+
 /** 官方依據。 */
 export type CitationView = {
   documentId: string;
@@ -184,6 +195,8 @@ export type CitationView = {
   publishedAt: string | null;
   url: string;
   excerpt: string;
+  effectiveAt: string | null;
+  retrievedAt: string | null;
 };
 
 /** 一個候選項目對前端露出的部分。金額只有結構，文字由前端組。 */
@@ -192,8 +205,11 @@ export type ItemView = {
   kind: ItemKind;
   status: ItemStatus;
 
+  programStatus: string | null;
+
   missingFieldIds: string[];
   decisiveConditions: DecisiveConditionView[];
+  structuredReasons: StructuredReasonView[];
   citations: CitationView[];
 
   amountMin: number | null;

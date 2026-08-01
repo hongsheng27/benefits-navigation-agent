@@ -4,6 +4,7 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
+import backend.app.adapters.sqlite.migrations as migrations_module
 import pytest
 from backend.app.adapters.sqlite.migrations import (
     SCHEMA_VERSION_KEY,
@@ -146,8 +147,16 @@ def test_version_migration_preserves_known_legacy_schema_and_rows(
     result = migrate_database(database)
 
     assert result.previous_version == 0
-    assert result.current_version == 2
-    assert result.applied_migration_ids == ("0001_metadata", "0002_programs_fields")
+    assert result.current_version == 7
+    assert result.applied_migration_ids == (
+        "0001_metadata",
+        "0002_programs_fields",
+        "0003_graph",
+        "0004_rules_evidence",
+        "0005_refresh_compatibility",
+        "0006_preserve_legacy_rules",
+        "0007_mvp_catalog_scaffold",
+    )
     assert {
         "schema_metadata",
         "schema_migrations",
@@ -156,23 +165,23 @@ def test_version_migration_preserves_known_legacy_schema_and_rows(
         "benefit_programs",
         "program_sources",
         "program_organization_roles",
-        "program_rule_fields",
+        "legacy_program_rule_fields_v1",
     }.issubset(table_names(database))
     with closing(sqlite3.connect(database)) as connection:
         connection.execute("PRAGMA foreign_keys = ON")
         metadata = dict(connection.execute("SELECT key, value FROM schema_metadata"))
         legacy_rows = connection.execute("SELECT * FROM legacy_records").fetchall()
         program = connection.execute(
-            "SELECT program_id, program_status FROM benefit_programs"
+            "SELECT program_id, program_status FROM benefit_programs WHERE program_id = 'legacy-program'"
         ).fetchone()
-        rule_rows = connection.execute("SELECT * FROM program_rule_fields").fetchall()
+        rule_rows = connection.execute("SELECT * FROM program_rule_fields WHERE program_id = 'legacy-program'").fetchall()
         migration_rows = connection.execute(
             "SELECT migration_id, checksum FROM schema_migrations ORDER BY migration_id"
         ).fetchall()
         foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
     migrations = load_migrations()
     assert metadata["schema_version"] == "legacy-oid-v1"
-    assert metadata[SCHEMA_VERSION_KEY] == "2"
+    assert metadata[SCHEMA_VERSION_KEY] == "7"
     assert legacy_rows == [("legacy-1", "preserve exactly")]
     assert program == ("legacy-program", "under_review")
     assert rule_rows == [
@@ -190,6 +199,11 @@ def test_version_migration_preserves_known_legacy_schema_and_rows(
     assert migration_rows == [
         ("0001_metadata", migrations[0].checksum),
         ("0002_programs_fields", migrations[1].checksum),
+        ("0003_graph", migrations[2].checksum),
+        ("0004_rules_evidence", migrations[3].checksum),
+        ("0005_refresh_compatibility", migrations[4].checksum),
+        ("0006_preserve_legacy_rules", migrations[5].checksum),
+        ("0007_mvp_catalog_scaffold", migrations[6].checksum),
     ]
     assert foreign_key_errors == []
 
@@ -352,7 +366,7 @@ def test_dry_run_uses_disposable_copy_and_never_changes_source(tmp_path: Path) -
     execution = execute_catalog_migration(source, apply=False)
 
     assert execution.mode == "dry-run"
-    assert execution.migration_result.current_version == 2
+    assert execution.migration_result.current_version == 7
     assert execution.working_database_path != source
     assert not execution.working_database_path.exists()
     assert "schema_migrations" not in table_names(source)
@@ -377,17 +391,17 @@ def test_apply_requires_backup_and_preserves_pre_migration_copy(tmp_path: Path) 
     execution = execute_catalog_migration(source, apply=True, backup_path=backup)
 
     assert execution.mode == "apply"
-    assert execution.migration_result.current_version == 2
+    assert execution.migration_result.current_version == 7
     assert execution.backup_path == backup
     assert "schema_migrations" in table_names(source)
     assert "schema_migrations" not in table_names(backup)
     with closing(sqlite3.connect(source)) as connection:
         assert connection.execute(
-            "SELECT program_status FROM benefit_programs"
+            "SELECT program_status FROM benefit_programs WHERE program_id = 'legacy-program'"
         ).fetchone() == ("under_review",)
     with closing(sqlite3.connect(backup)) as connection:
         assert connection.execute(
-            "SELECT program_status FROM benefit_programs"
+            "SELECT program_status FROM benefit_programs WHERE program_id = 'legacy-program'"
         ).fetchone() == ("status_unknown",)
         assert connection.execute("SELECT * FROM program_rule_fields").fetchall() == [
             (
@@ -432,3 +446,19 @@ def test_failed_apply_restores_source_from_backup(tmp_path: Path) -> None:
         assert connection.execute(
             "SELECT program_status FROM benefit_programs"
         ).fetchone() == ("status_unknown",)
+
+
+def test_legacy_converter_version_is_bound_to_migration_checksum(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sql = "CREATE TABLE synthetic_checksum_target (value TEXT);"
+    original = Migration.from_sql("0006_preserve_legacy_rules", 6, sql)
+
+    monkeypatch.setattr(
+        migrations_module,
+        "CONVERTER_VERSION",
+        "legacy-rule-inventory-v2-test",
+    )
+    changed = Migration.from_sql("0006_preserve_legacy_rules", 6, sql)
+
+    assert changed.checksum != original.checksum

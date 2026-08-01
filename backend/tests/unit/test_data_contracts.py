@@ -123,14 +123,16 @@ def test_a_relevance_score_may_be_absent() -> None:
 
 
 def test_a_structured_reason_accepts_values_of_any_shape() -> None:
-    """`expected`／`actual` 的型別是 `Any`，條件的值形狀由資料層決定。"""
+    """Constructor recursively freezes mutable values into FrozenValue tuples."""
     coded = _reason()
     numeric = _reason(expected=15, actual=5)
     nested = _reason(expected={"any_of": ["a", "b"]}, actual=["a"])
 
     assert coded.actual == "none_or_unsure"
     assert numeric.expected == 15
-    assert nested.expected == {"any_of": ["a", "b"]}
+    # dict → sorted tuple of (key, frozen_value) pairs; list → tuple
+    assert nested.expected == (("any_of", ("a", "b")),)
+    assert nested.actual == ("a",)
 
 
 def test_a_decision_keeps_the_amount_split_into_four_fields() -> None:
@@ -220,3 +222,118 @@ def test_coverage_metadata_can_carry_a_crawl_timestamp() -> None:
     )
 
     assert coverage.last_crawled_at == _NOW
+
+
+# ---------------------------------------------------------------------------
+# FrozenValue and recursive freeze
+# ---------------------------------------------------------------------------
+
+
+def test_freeze_value_recursively_converts_mutable_structures() -> None:
+    from app.orchestration.data_contracts import freeze_value
+
+    assert freeze_value(None) is None
+    assert freeze_value(True) is True
+    assert freeze_value(42) == 42
+    assert freeze_value(3.14) == 3.14
+    assert freeze_value("hello") == "hello"
+    assert freeze_value([1, "two", [3]]) == (1, "two", (3,))
+    assert freeze_value({"b": 2, "a": 1}) == (("a", 1), ("b", 2))
+    assert freeze_value({"nested": {"x": [True]}}) == (("nested", (("x", (True,)),)),)
+
+
+def test_freeze_value_rejects_unsupported_types() -> None:
+    from app.orchestration.data_contracts import freeze_value
+
+    with pytest.raises(TypeError, match="does not support"):
+        freeze_value(object())
+
+    with pytest.raises(TypeError, match="does not support"):
+        freeze_value(set())
+
+
+def test_structured_reason_freezes_expected_and_actual_at_construction() -> None:
+    reason = _reason(expected={"key": [1, 2]}, actual=[True, "x"])
+
+    assert reason.expected == (("key", (1, 2)),)
+    assert reason.actual == (True, "x")
+    # Confirm the values are truly frozen (tuples, not lists/dicts)
+    assert isinstance(reason.expected, tuple)
+    assert isinstance(reason.actual, tuple)
+
+
+# ---------------------------------------------------------------------------
+# CandidateItem finite relevance normalization
+# ---------------------------------------------------------------------------
+
+
+def test_candidate_normalizes_nan_relevance_to_none() -> None:
+    candidate = dataclasses.replace(_candidate(), relevance_score=float("nan"))
+
+    assert candidate.relevance_score is None
+
+
+def test_candidate_normalizes_infinity_relevance_to_none() -> None:
+    candidate = dataclasses.replace(_candidate(), relevance_score=float("inf"))
+
+    assert candidate.relevance_score is None
+
+    candidate_neg = dataclasses.replace(_candidate(), relevance_score=float("-inf"))
+
+    assert candidate_neg.relevance_score is None
+
+
+def test_candidate_preserves_finite_relevance_score() -> None:
+    candidate = dataclasses.replace(_candidate(), relevance_score=0.85)
+
+    assert candidate.relevance_score == 0.85
+
+
+# ---------------------------------------------------------------------------
+# EligibilityDecision amount quartet invariant
+# ---------------------------------------------------------------------------
+
+
+def test_decision_requires_amount_quartet_all_or_none() -> None:
+    """When some amount fields are present but not all, construction fails."""
+    with pytest.raises(ValueError, match="amount quartet must be all-or-none"):
+        EligibilityDecision(
+            item_id="x",
+            status="eligible",
+            amount_min=1000,
+            amount_max=None,
+            amount_period=None,
+            amount_currency=None,
+            missing_field_ids=(),
+            reasons=(),
+        )
+
+
+def test_decision_rejects_amount_min_greater_than_max() -> None:
+    with pytest.raises(ValueError, match="amount_min must be <= amount_max"):
+        EligibilityDecision(
+            item_id="x",
+            status="eligible",
+            amount_min=5000,
+            amount_max=1000,
+            amount_period="one_time",
+            amount_currency="TWD",
+            missing_field_ids=(),
+            reasons=(),
+        )
+
+
+def test_decision_with_no_amounts_is_valid() -> None:
+    decision = EligibilityDecision(
+        item_id="x",
+        status="needs_human_review",
+        amount_min=None,
+        amount_max=None,
+        amount_period=None,
+        amount_currency=None,
+        missing_field_ids=(),
+        reasons=(),
+    )
+
+    assert decision.amount_min is None
+    assert decision.amount_max is None

@@ -45,9 +45,42 @@ schema，也不是對外 API 契約。
 - `relevance_score` 只代表相關性，**不代表符合資格的機率或程度**。
 """
 
+import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
+
+type FrozenValue = None | bool | int | float | str | tuple[FrozenValue, ...]
+"""Recursively immutable value for condition expected/actual fields.
+
+Mutable containers (dict, list) passed to contract constructors are automatically
+frozen via `freeze_value`. Unsupported types raise TypeError at construction time.
+"""
+
+
+def freeze_value(value: object) -> FrozenValue:
+    """Recursively convert mutable structures into FrozenValue.
+
+    - dict → tuple of (key, frozen_value) pairs sorted by key
+    - list/tuple → tuple of frozen elements
+    - None, bool, int, float, str → pass through
+    - Anything else → TypeError
+    """
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return tuple(
+            (freeze_value(k), freeze_value(v))
+            for k, v in sorted(value.items(), key=lambda item: str(item[0]))
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(freeze_value(item) for item in value)
+    raise TypeError(f"freeze_value does not support {type(value).__name__}")
+
 
 ProgramStatus = Literal[
     "candidate",
@@ -106,6 +139,9 @@ class CandidateItem:
     與 `state.CandidateItem` 不同：這裡沒有 `ItemStatus`，因為「這位使用者符不符合」
     不是資料層的結論；這裡有 `program_status`，因為「這筆資料可不可信」不是 workflow
     的結論。
+
+    `relevance_score` 接受 finite int/float 或 None。NaN、infinity 與其他非有限值
+    在 adapter boundary 正規化為 None，並只記安全的 data-quality code。
     """
 
     item_id: str
@@ -116,13 +152,21 @@ class CandidateItem:
     prerequisites: tuple[GraphRelation, ...]
     produces: tuple[GraphRelation, ...]
 
+    def __post_init__(self) -> None:
+        score = self.relevance_score
+        if score is not None and (
+            not isinstance(score, (int, float)) or not math.isfinite(score)
+        ):
+            object.__setattr__(self, "relevance_score", None)
+
 
 @dataclass(frozen=True, slots=True)
 class StructuredReason:
     """造成某個結論的單一條件，拆成可以逐段顯示的結構。
 
-    `expected` 與 `actual` 的型別是 `Any`，因為條件的值可能是代號、布林、數字或
-    級距，形狀由資料層的 condition JSON 決定。
+    `expected` 與 `actual` 使用 `FrozenValue`：constructor 會遞迴 freeze mutable
+    containers（dict → sorted tuple of pairs, list → tuple）。這確保跨層傳遞後
+    downstream 無法修改原始條件值。
 
     **`actual` 是使用者的實際情況。** 它可以回傳給提出該請求的使用者，但不得寫入
     log、trace、metric、exception message 或持久化 audit event。
@@ -131,10 +175,14 @@ class StructuredReason:
     condition_id: str
     field_id: str
     operator: str
-    expected: Any
-    actual: Any
+    expected: FrozenValue
+    actual: FrozenValue
     label: str
     source_reference: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "expected", freeze_value(self.expected))
+        object.__setattr__(self, "actual", freeze_value(self.actual))
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +205,25 @@ class EligibilityDecision:
     def __post_init__(self) -> None:
         stable_missing_ids = tuple(sorted(set(self.missing_field_ids)))
         object.__setattr__(self, "missing_field_ids", stable_missing_ids)
+
+        amount_fields = (
+            self.amount_min,
+            self.amount_max,
+            self.amount_period,
+            self.amount_currency,
+        )
+        present = tuple(field is not None for field in amount_fields)
+        if any(present) and not all(present):
+            raise ValueError(
+                "amount quartet must be all-or-none: "
+                "amount_min, amount_max, amount_period, amount_currency"
+            )
+        if (
+            self.amount_min is not None
+            and self.amount_max is not None
+            and self.amount_min > self.amount_max
+        ):
+            raise ValueError("amount_min must be <= amount_max")
 
 
 @dataclass(frozen=True, slots=True)
