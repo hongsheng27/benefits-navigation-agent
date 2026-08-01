@@ -3,9 +3,10 @@
 This is the **single source of truth** for transitioning from local mock
 implementations to live AWS services on August 1st.
 
-> **Status**: All features currently run on local mocks (SQLite, local files,
-> `FakeLanguageModel`). The LLM layer will use Gemini over plain HTTP as an
-> interim real-model path until Bedrock account access is confirmed; see
+> **Status**: Most features still run on local mocks (SQLite, local files).
+> The LLM layer prefers **Amazon Bedrock `InvokeModel`** when
+> `BEDROCK_MODEL_ID` is set, falls back to Gemini when only `GEMINI_API_KEY`
+> is set, and otherwise uses the offline demo. See
 > [ADR-0015](decisions/0015-narrow-llm-port-instead-of-agent-loop.md).
 
 ## How to Use This Guide
@@ -23,28 +24,27 @@ On August 1st, teammates should:
 Add these to your `.env` file when AWS access is available:
 
 ```env
-# AWS General
-AWS_REGION=ap-northeast-1
+# AWS General — competition primary regions: us-east-1, us-west-2
+AWS_REGION=us-east-1
 AWS_ACCOUNT_ID=
 
-# S3 (document storage)
+# S3 (document storage) — keep buckets private (Block Public Access)
 # S3_BUCKET_NAME=
 
 # Database (if migrating from SQLite)
 # DATABASE_URL=
 
-# Bedrock (LLM)
-# BEDROCK_MODEL_ID=
+# Bedrock (preferred LLM). Leave empty to try Gemini, then offline demo.
+# Request access only for the model you will call (competition rule).
+# Example: anthropic.claude-3-haiku-20240307-v1:0
+BEDROCK_MODEL_ID=
 
-# Gemini (interim LLM before Bedrock access is confirmed).
-# Not an AWS variable, listed here so the LLM setup lives in one place.
+# Gemini fallback when Bedrock is not configured.
 # Get a key from Google AI Studio: https://aistudio.google.com/apikey
-# Leave GEMINI_API_KEY empty and the backend falls back to an offline demo
-# implementation instead of failing to start.
 GEMINI_API_KEY=
 GEMINI_MODEL_ID=
 
-# AgentCore (if used)
+# AgentCore (if used) — not required; this project has no agent loop.
 # AGENTCORE_AGENT_ID=
 ```
 
@@ -83,17 +83,28 @@ GEMINI_MODEL_ID=
 
 ## Feature: LLM / Bedrock Integration
 
-| Item | Current (Local) | AWS Target |
-|------|----------------|------------|
-| LLM | Gemini over plain HTTP when `GEMINI_API_KEY` is set, offline demo otherwise | Amazon Bedrock Converse API |
-| Files affected | `backend/app/llm/port.py`, `fake.py`, `gemini.py`, `factory.py` | add `backend/app/llm/bedrock.py`, edit `factory.py` |
-| Endpoint in use | `POST /v1beta/interactions` (Gemini) | `Converse` (Bedrock) |
+| Item | Current | AWS Target |
+|------|---------|------------|
+| LLM | Bedrock when `BEDROCK_MODEL_ID` is set; else Gemini; else offline demo | Amazon Bedrock `InvokeModel` (Anthropic Messages + forced tool_use) |
+| Files | `backend/app/llm/bedrock.py`, `factory.py`, `config.py` | already added |
+| IAM action in use | — | `bedrock:InvokeModel` (listed in Supported Services List; `Converse` is **not**) |
 
 **There is no `AgentRunner`.** ADR-0015 replaced it with a narrow port that has
 no tool loop, because both model tasks are single request/response and giving a
-model tool access would open a path for it to influence eligibility.
-An earlier version of this section referred to an `AgentRunner` in
-`backend/app/orchestration/`; that interface was never built and will not be.
+model a free tool loop would open a path for it to influence eligibility.
+Forced tool_use here is only a **structured-output vehicle**: one tool whose
+`input_schema` is our JSON Schema, and `tool_choice` forces that single tool.
+The model cannot call application tools.
+
+### Competition constraints that this feature must obey
+
+- Regions: `us-east-1` or `us-west-2` (default `us-east-1`).
+- Bedrock throughput: keep under **1 request per second**. The adapter enforces
+  a ≥1.05s gap between calls in-process.
+- Enable only the foundation model(s) you will call — do not open every model.
+- Never commit AWS keys. Use the AWS credential chain / local `.env` (gitignored).
+- Do not send prohibited data categories to AWS (PII, health, etc.). The product
+  already strips direct identifiers before model calls; keep it that way.
 
 ### What the swap has to preserve
 
@@ -103,58 +114,46 @@ An earlier version of this section referred to an `AgentRunner` in
 def generate_structured(self, request: LlmRequest) -> LlmResult: ...
 ```
 
-A Bedrock-backed replacement must keep the same signature and the same failure
-modes, so nothing above it changes:
-
 | Behaviour | Must not change |
 |-----------|-----------------|
 | Failure type | `LanguageModelUnavailableError` for transport, auth, timeout, or missing credentials; `LanguageModelOutputError` when the reply is not a parseable JSON object |
-| Error content | Messages must never contain `user_content` or the model's raw reply. Those reach logs and error responses, which ADR-0007 forbids |
+| Error content | Messages must never contain `user_content` or the model's raw reply |
 | Return value | `LlmResult.payload` only, never the raw text |
 | Schema check | Call `validate_portable_schema()` before sending |
-| Sync | Stay synchronous. The endpoints and `state_machine.advance()` are sync; an async port would force the whole chain to change |
+| Sync | Stay synchronous |
 
-### Migration Steps
+### How to turn Bedrock on today
 
-1. Add `boto3` to `backend/pyproject.toml` dependencies (currently not
-   installed).
-2. Create `backend/app/llm/bedrock.py` with a `BedrockLanguageModel` class
-   implementing `LanguageModelPort`. **Do not modify `port.py`.**
-3. Map `LlmRequest` onto the Converse API request:
+1. Log into the competition AWS account; set region to `us-east-1` (or `us-west-2`).
+2. In Bedrock console, request access for **one** small/cheap chat model you will
+   use (example: `anthropic.claude-3-haiku-20240307-v1:0`). Do not enable all.
+3. Configure credentials via the normal AWS chain (no keys in git).
+4. In repository-root `.env`:
 
-   | `LlmRequest` field | Converse API location |
-   |--------------------|-----------------------|
-   | `instruction`, `user_content` | `messages[].content[].text` (separate text blocks) |
-   | `output_schema` | `outputConfig.textFormat.structure.jsonSchema.schema` — **must be `json.dumps()`-ed into a string**, unlike Gemini which takes an object |
-   | `schema_name` | `outputConfig.textFormat.structure.jsonSchema.name` |
-   | `max_output_tokens`, `temperature` | `inferenceConfig` |
+   ```env
+   AWS_REGION=us-east-1
+   BEDROCK_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+   ```
 
-4. Map the vendor stop reason onto `FinishReason`. Unknown values go to
-   `OTHER` — do not guess a meaning.
-5. Set `BEDROCK_MODEL_ID` and `AWS_REGION` in `.env`.
-6. Change the selection in `backend/app/llm/factory.py`. That function is the
-   only place that decides which implementation runs; `create_app()` calls it
-   once at startup and stores the result on `app.state.language_model`. Neither
-   the state machine nor the route handler changes.
-7. Keep `FakeLanguageModel` as the default for tests. Tests must not require
-   network access or credentials after the migration.
+5. Restart the backend. Startup logs should show
+   `language_model_selected` with your Bedrock model id.
+6. If Bedrock fails, clear `BEDROCK_MODEL_ID` and set `GEMINI_API_KEY` to use the
+   proven Gemini path, or leave both empty for the offline demo.
 
-### One request-shape difference that is easy to get wrong
+### Request shape (InvokeModel)
 
-Gemini's Interactions API takes `input` as a **single string**, so
-`gemini.py` concatenates `instruction` and `user_content` with an explicit
-marker telling the model to treat the user's words as data, not instructions.
+| `LlmRequest` field | InvokeModel (Anthropic Messages) location |
+|--------------------|-------------------------------------------|
+| `instruction` | `system` |
+| `user_content` | `messages[0].content` (marked as data, not instructions) |
+| `output_schema` | `tools[0].input_schema` |
+| `schema_name` | `tools[0].name` + `tool_choice.name` |
+| `max_output_tokens`, `temperature` | `max_tokens`, `temperature` |
 
-Bedrock's Converse API takes a **list of content blocks**, so the Bedrock
-adapter should send them as two separate `text` blocks rather than
-concatenating. Keep the same "treat this as data" wording either way — it is a
-prompt-injection guard, not formatting.
+### Do not remove the Gemini adapter
 
-### Do not remove the Gemini adapter on migration day
-
-Keep `gemini.py` until Bedrock is confirmed working end to end. It is the only
-proven real-model path, and losing it would leave no fallback if the account,
-model access, or region turns out to be a problem mid-demo.
+Keep `gemini.py`. It is the only previously verified live-model path and the
+demo fallback if Bedrock model access or IAM surprises you mid-event.
 
 ### The JSON Schema subset is a hard constraint, already enforced
 
