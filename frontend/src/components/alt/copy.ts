@@ -248,10 +248,16 @@ const ITEM_NAMES: Record<string, string> = {
   funeral_benefit: "喪葬給付",
   survivor_pension: "遺屬年金",
   health_insurance_change: "全民健保身分變更",
+  taipei_green_funeral_incentive: "臺北市多元環保葬鼓勵金",
+  taipei_joint_funeral_service: "臺北市聯合奠祭",
+  new_taipei_green_funeral_incentive: "新北市環保葬鼓勵金",
+  taoyuan_green_funeral_incentive: "桃園市環保葬鼓勵金",
+  penghu_green_funeral_subsidy: "澎湖縣多元環保葬補助",
 };
 
-/** 資格欄位的題目文字。目前是三筆 draft 種子資料。 */
+/** 資格欄位的題目文字。 */
 const FIELD_LABELS: Record<string, string> = {
+  applicant_jurisdiction: "你主要在哪個縣市辦理或居住？",
   deceased_insurance_type: "過世者生前的投保身分是？",
   has_dependent_children: "家中是否有未成年子女？",
   applicant_age_band: "你目前的年齡大約在哪個範圍？",
@@ -259,6 +265,8 @@ const FIELD_LABELS: Record<string, string> = {
 
 /** 「為什麼問這個？」的說明。後端的 purposeId 形狀是 `<fieldId>.purpose`。 */
 const PURPOSE_TEXTS: Record<string, string> = {
+  "applicant_jurisdiction.purpose":
+    "所在縣市決定有哪些地方型補助與受理窗口可以對照。",
   "deceased_insurance_type.purpose":
     "不同投保身分，受理機關與可申請的給付不一樣。",
   "has_dependent_children.purpose": "有沒有未成年子女，會影響遺屬年金是否加給。",
@@ -267,6 +275,12 @@ const PURPOSE_TEXTS: Record<string, string> = {
 
 /** 選項文字。boolean 欄位沒有 optionIds，由畫面自己給「是／否」。 */
 const OPTION_LABELS: Record<string, string> = {
+  TPE: "臺北市",
+  NWT: "新北市",
+  TAO: "桃園市",
+  PEN: "澎湖縣",
+  OTHER_TW: "其他縣市",
+  unsure: "不確定",
   labor_insurance: "勞工保險",
   national_pension: "國民年金",
   farmers_insurance: "農民保險",
@@ -280,6 +294,7 @@ const OPTION_LABELS: Record<string, string> = {
 
 /** 問題分組的標題。 */
 const TOPIC_TITLES: Record<string, string> = {
+  location: "所在地",
   deceased_insurance: "過世者的投保狀況",
   family_situation: "家庭狀況",
   applicant_situation: "你的狀況",
@@ -315,6 +330,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
   unknown_item: "整理結果時出了一點問題，請重新開始再試一次。",
   invalid_transition: "這個步驟現在無法繼續，請重新開始再試一次。",
   event_not_recognized: "我們沒有完全看懂，可以換個說法再說一次嗎？",
+  explanation_unavailable: "說明服務暫時無法回答，請稍後再試，或先閱讀左側資料。",
   internal_error: "服務暫時無法處理，請稍後再試。",
 };
 

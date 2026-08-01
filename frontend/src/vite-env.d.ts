@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   /** 設為 "true" 強制案件追蹤使用 mock */
   readonly VITE_USE_CASE_TRACKING_MOCK?: string;
   readonly VITE_CASES_API_PATH?: string;
+  /** 設為 "true" 強制諮詢後 Copilot 使用本機 stub，不打 explain API */
+  readonly VITE_USE_POST_CONSULT_COPILOT_MOCK?: string;
 }
 
 interface ImportMeta {

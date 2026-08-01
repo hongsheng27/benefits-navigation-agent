@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode, RefObject } from "react";
 
 import { getBackendHealth } from "../api/client";
 import styles from "../components/alt/alt.module.css";
+import { ApplicationGuidePanel } from "../components/alt/ApplicationGuidePanel";
 import {
   BackendStatusLine,
   type BackendConnectionState,
@@ -15,10 +16,13 @@ import {
 import { EventConfirmation } from "../components/alt/EventConfirmation";
 import { ExamplePrompts } from "../components/alt/ExamplePrompts";
 import { PrivacyNotice } from "../components/alt/PrivacyNotice";
+import { AttributeChatPanel } from "../components/alt/AttributeChatPanel";
 import { QuestionGroupList } from "../components/alt/QuestionGroupList";
+import { RelatedProvisionsPanel } from "../components/alt/RelatedProvisionsPanel";
 import { ResultList } from "../components/alt/ResultList";
 import { useBackendSession } from "../hooks/useBackendSession";
 import { INTAKE_DEMO_SCENES } from "../mocks/intakeDemoScript";
+import type { PostConsultPanelKind } from "../types/postConsult";
 import type { SessionSnapshot } from "../types/session";
 import { MAX_LIFE_EVENT_TEXT_LENGTH } from "../types/session";
 
@@ -260,10 +264,13 @@ type IntakeStepsProps = {
   onConfirm?: () => void;
   onRedescribe?: () => void;
   onAnswerFields?: (answers: Record<string, boolean | number | string>) => void;
+  onAnswerChatTurn?: (text: string) => void | Promise<void>;
   onReset?: () => void;
   onGoToTracking?: (lifeEventId: string | null) => void;
   onBack?: () => void;
   onReturnToCurrent?: () => void;
+  /** 正式諮詢 session，供結果頁 Copilot 呼叫 grounded LLM。 */
+  sessionId?: string | null;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   stepHeadingRef?: RefObject<HTMLHeadingElement | null>;
 };
@@ -285,13 +292,16 @@ function IntakeSteps({
   onConfirm,
   onRedescribe,
   onAnswerFields,
+  onAnswerChatTurn,
   onReset,
   onGoToTracking,
   onBack,
   onReturnToCurrent,
+  sessionId = null,
   inputRef,
   stepHeadingRef,
 }: IntakeStepsProps) {
+  const [openPanel, setOpenPanel] = useState<PostConsultPanelKind | null>(null);
   const trimmed = description.trim();
   const actionsLocked = readOnly || isReviewing;
   const canSubmit =
@@ -535,14 +545,27 @@ function IntakeSteps({
             」有關。答完這組就可以繼續。
           </p>
           <div className="mt-6">
-            <QuestionGroupList
-              key={`${uiStep}-${isReviewing ? "review" : "live"}`}
-              disabled={busy || actionsLocked}
-              groups={questionGroups}
-              initialAnswers={demoAnswers ?? snapshot?.attributes}
-              readOnly={readOnly || isReviewing}
-              onSubmit={(answers) => onAnswerFields?.(answers)}
-            />
+            {readOnly || isReviewing || !onAnswerChatTurn ? (
+              <QuestionGroupList
+                key={`${uiStep}-${isReviewing ? "review" : "live"}`}
+                disabled={busy || actionsLocked}
+                groups={questionGroups}
+                initialAnswers={demoAnswers ?? snapshot?.attributes}
+                readOnly={readOnly || isReviewing}
+                onSubmit={(answers) => onAnswerFields?.(answers)}
+              />
+            ) : (
+              <AttributeChatPanel
+                key={`${uiStep}-chat`}
+                groups={questionGroups}
+                collectorQuestion={snapshot?.collectorQuestion ?? null}
+                disabled={busy || actionsLocked}
+                answeredCount={Object.keys(snapshot?.attributes ?? {}).length}
+                initialChoiceAnswers={snapshot?.attributes}
+                onChatTurn={(text) => onAnswerChatTurn(text)}
+                onSubmitChoices={(answers) => onAnswerFields?.(answers)}
+              />
+            )}
           </div>
           {isReviewing && onReturnToCurrent ? (
             <div className="mt-6">
@@ -593,29 +616,65 @@ function IntakeSteps({
             </div>
           )}
 
-          {onGoToTracking || (!actionsLocked && onReset) ? (
-            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              {onGoToTracking && !isReviewing ? (
+          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            {!isReviewing ? (
+              <>
                 <button
                   type="button"
-                  onClick={() => onGoToTracking(snapshot.lifeEvent)}
+                  onClick={() => setOpenPanel("related_provisions")}
                   className="rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
                 >
-                  去追蹤進度看這筆
+                  相關法條
                 </button>
-              ) : null}
-              {!actionsLocked && onReset ? (
                 <button
                   type="button"
-                  onClick={() => onReset()}
-                  className="rounded-sm border border-[#c9c0b0] bg-transparent px-5 py-2.5 text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                  onClick={() => setOpenPanel("application_guide")}
+                  className="rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
                 >
-                  重新開始
+                  申請解說
                 </button>
-              ) : null}
-            </div>
-          ) : null}
+              </>
+            ) : null}
+            {onGoToTracking && !isReviewing ? (
+              <button
+                type="button"
+                onClick={() => onGoToTracking(snapshot.lifeEvent)}
+                className="rounded-sm border border-[#c9c0b0] bg-transparent px-5 py-2.5 text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+              >
+                去追蹤進度看這筆
+              </button>
+            ) : null}
+            {!actionsLocked && onReset ? (
+              <button
+                type="button"
+                onClick={() => onReset()}
+                className="rounded-sm border border-[#c9c0b0] bg-transparent px-5 py-2.5 text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+              >
+                重新開始
+              </button>
+            ) : null}
+          </div>
         </section>
+      ) : null}
+
+      {openPanel === "related_provisions" ? (
+        <RelatedProvisionsPanel
+          lifeEventId={snapshot?.lifeEvent ?? null}
+          jurisdiction={
+            typeof snapshot?.attributes.applicant_jurisdiction === "string"
+              ? snapshot.attributes.applicant_jurisdiction
+              : null
+          }
+          sessionId={sessionId ?? snapshot?.sessionId ?? null}
+          onClose={() => setOpenPanel(null)}
+        />
+      ) : null}
+      {openPanel === "application_guide" ? (
+        <ApplicationGuidePanel
+          lifeEventId={snapshot?.lifeEvent ?? null}
+          sessionId={sessionId ?? snapshot?.sessionId ?? null}
+          onClose={() => setOpenPanel(null)}
+        />
       ) : null}
     </>
   );
@@ -795,6 +854,7 @@ function HomePageLive({
     describeEvent,
     confirmEvent,
     answerFields,
+    answerChatTurn,
     resetSession,
   } = useBackendSession();
 
@@ -958,10 +1018,12 @@ function HomePageLive({
         onConfirm={() => void confirmEvent(true)}
         onRedescribe={() => void handleRedescribe()}
         onAnswerFields={(answers) => void answerFields(answers)}
+        onAnswerChatTurn={(text) => answerChatTurn(text)}
         onReset={() => void handleReset()}
         onGoToTracking={onGoToTracking}
         onBack={uiStep === "landing" ? undefined : handleBack}
         onReturnToCurrent={() => setReviewStep(null)}
+        sessionId={snapshot?.sessionId ?? null}
         inputRef={inputRef}
         stepHeadingRef={stepHeadingRef}
       />

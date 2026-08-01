@@ -22,6 +22,11 @@ from fastapi import APIRouter, Depends, Header, Request, Response, status
 from app.api.errors import ApiError
 from app.api.implementation import implementation_notice
 from app.llm.port import LanguageModelPort
+from app.llm.tasks.answer_with_references import (
+    ExplanationUnavailableError,
+    ReferenceExcerpt,
+    answer_with_references,
+)
 from app.llm.tasks.resolve_life_event import LifeEventNotRecognisedError
 from app.observability.logging import log_event
 from app.orchestration import state_machine
@@ -37,6 +42,8 @@ from app.privacy.attribute_gate import InvalidAttributeValueError
 from app.schemas.session import (
     AdvanceRequest,
     ErrorCode,
+    ExplainRequest,
+    ExplainResponse,
     QuestionGroupView,
     SessionSnapshot,
 )
@@ -212,6 +219,49 @@ def read_current_session(
 ) -> SessionSnapshot:
     """查目前狀態。前端輪詢時用這個。"""
     return _snapshot(state)
+
+
+@router.post("/current/explain", response_model=ExplainResponse)
+def explain_with_references(
+    payload: ExplainRequest,
+    state: Annotated[SessionState, Depends(require_session_state)],
+    language_model: Annotated[LanguageModelPort, Depends(get_language_model)],
+) -> ExplainResponse:
+    """依參考摘錄回答諮詢後問題。
+
+    需要有效 session（持有 `X-Session-Id`），但不推進 workflow，也不把問題寫入 state。
+    失敗回 `explanation_unavailable`，讓前端可退回本機 stub。
+    """
+    references = tuple(
+        ReferenceExcerpt(
+            title=item.title,
+            body=item.body,
+            source_url=item.source_url,
+        )
+        for item in payload.references
+    )
+    try:
+        answer = answer_with_references(
+            payload.question,
+            references,
+            model=language_model,
+            panel_kind=payload.panel_kind,
+        )
+    except ExplanationUnavailableError as error:
+        raise ApiError(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            ErrorCode.EXPLANATION_UNAVAILABLE,
+            current_state=state.workflow_state,
+        ) from error
+
+    log_event(
+        "session_explanation_served",
+        session_id=state.session_id,
+        state=state.workflow_state.value,
+        tool="answer_with_references",
+        source_count=len(references),
+    )
+    return ExplainResponse(answer=answer)
 
 
 @router.delete("/current", status_code=status.HTTP_204_NO_CONTENT)

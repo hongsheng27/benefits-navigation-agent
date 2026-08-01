@@ -368,6 +368,64 @@ Do not read the current behaviour as Option B having been chosen.
 
 ---
 
+## Conversational attribute collection (T21b-style)
+
+| Concern | Local now | Target |
+|---|---|---|
+| Chat turn API | `attribute_chat_turn` on `POST /sessions/advance` + `collect_attributes` task | Same; Bedrock when `BEDROCK_MODEL_ID` set |
+| Jurisdiction filter | `applicant_jurisdiction` + `jurisdiction_items.py` fixtures | Entitlement graph rows with `jurisdiction_code` |
+| MCQ fallback | Frontend `AttributeChatPanel` → `QuestionGroupList` | Keep as offline / low-confidence path |
+
+Reuse `BEDROCK_MODEL_ID` / AWS credentials above. No new frontend env required.
+
+---
+
+## Frontend post-consult panels (related law + application guide)
+
+| Concern | Local mock now | Target |
+|---|---|---|
+| Related provisions UI | `frontend/src/mocks/relatedProvisions.ts` (from `data/benefit_discovery/extracted_candidates.v0.1.json`) | Session / item `citations` with real excerpts via `official_citations` |
+| Application guide UI | `frontend/src/mocks/applicationGuides.ts` | Backend `action_plan` (or equivalent) per life event / item |
+| Copilot chat | `POST /sessions/current/explain` via `frontend/src/api/explainClient.ts` + stub fallback (`copilotStub.ts`) | Same endpoint; Bedrock when `BEDROCK_MODEL_ID` is set |
+
+### What to change
+
+1. **Related provisions**
+   - Stop hard-coding excerpts in `relatedProvisions.ts` once
+     `PendingCapability.official_citations` is implemented.
+   - Prefer `ItemView.citations` / evidence repository text; keep the panel UI
+     (`RelatedProvisionsPanel`, `PostConsultPanel`) and only swap the data loader.
+   - Do not let the model invent article numbers; ground on retrieved excerpts.
+   - The explain request already sends `references[]` (title / body / sourceUrl).
+
+2. **Application guide**
+   - Replace `getApplicationGuide()` fixture with backend action-plan payload
+     when `action_plan` leaves the pending list.
+   - Keep step → documents → agency shape close to
+     `frontend/src/types/postConsult.ts` so the panel can stay thin.
+
+3. **Copilot (already wired)**
+   - Live path: `answer_with_references` task → Bedrock Converse when
+     `BEDROCK_MODEL_ID` is set; otherwise offline demo model answer.
+   - Frontend: `askCopilot()` posts question + panel references; on
+     `explanation_unavailable` falls back to `copilotStub`.
+   - Prompt forbids eligibility determination.
+   - Force stub only when debugging UI without backend:
+
+```env
+# Frontend — post-consult Copilot
+# VITE_USE_POST_CONSULT_COPILOT_MOCK=true
+```
+
+### Files
+
+- Backend: `backend/app/llm/tasks/answer_with_references.py`,
+  `backend/app/api/sessions.py` (`POST /sessions/current/explain`)
+- Frontend: `frontend/src/api/explainClient.ts`, `frontend/src/lib/askCopilot.ts`
+- Stub fallback: `frontend/src/lib/copilotStub.ts`
+
+---
+
 ## Notes
 
 - This file must be updated every time a new feature is added that uses a

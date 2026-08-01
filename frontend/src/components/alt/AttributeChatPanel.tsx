@@ -1,0 +1,278 @@
+import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+
+import type {
+  AttributeValue,
+  QuestionGroupView,
+  QuestionView,
+} from "../../types/session";
+import { fieldLabel, optionLabel } from "./copy";
+import { QuestionGroupList } from "./QuestionGroupList";
+
+type ChatMessage = {
+  id: string;
+  role: "assistant" | "user";
+  content: string;
+};
+
+type ChoiceOption = {
+  label: string;
+  value: AttributeValue;
+};
+
+type AttributeChatPanelProps = {
+  groups: QuestionGroupView[];
+  collectorQuestion: string | null;
+  disabled: boolean;
+  readOnly?: boolean;
+  answeredCount: number;
+  onChatTurn: (text: string) => void | Promise<void>;
+  onSubmitChoices: (answers: Record<string, AttributeValue>) => void;
+  initialChoiceAnswers?: Record<string, AttributeValue>;
+};
+
+function firstMissingQuestion(groups: QuestionGroupView[]): QuestionView | null {
+  return groups[0]?.questions[0] ?? null;
+}
+
+function isChoiceQuestion(question: QuestionView): boolean {
+  if (question.valueKind === "boolean") {
+    return true;
+  }
+  return question.optionIds.length > 0;
+}
+
+function choiceOptionsFor(question: QuestionView): ChoiceOption[] {
+  if (question.valueKind === "boolean") {
+    return [
+      { label: "是", value: true },
+      { label: "否", value: false },
+    ];
+  }
+  return question.optionIds.map((optionId) => ({
+    label: optionLabel(optionId),
+    value: optionId,
+  }));
+}
+
+function seedQuestion(
+  collectorQuestion: string | null,
+  groups: QuestionGroupView[],
+): string {
+  if (collectorQuestion?.trim()) {
+    return collectorQuestion.trim();
+  }
+  const first = firstMissingQuestion(groups);
+  if (first) {
+    return fieldLabel(first.fieldId);
+  }
+  return "請用幾句話補充還需要的條件，例如所在縣市或投保身分。";
+}
+
+/**
+ * 對話式資格蒐集：有選項時像 Claude 一樣可點選（也可打字）；
+ * 開放式才純文字。完整選擇題表單仍可當備援。
+ */
+export function AttributeChatPanel({
+  groups,
+  collectorQuestion,
+  disabled,
+  readOnly = false,
+  answeredCount,
+  onChatTurn,
+  onSubmitChoices,
+  initialChoiceAnswers = {},
+}: AttributeChatPanelProps) {
+  const [mode, setMode] = useState<"chat" | "choices">("chat");
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+    {
+      id: "seed",
+      role: "assistant",
+      content: seedQuestion(collectorQuestion, groups),
+    },
+  ]);
+
+  const currentQuestion = useMemo(
+    () => firstMissingQuestion(groups),
+    [groups],
+  );
+  const showChoiceChips =
+    currentQuestion !== null && isChoiceQuestion(currentQuestion);
+  const choiceOptions = currentQuestion ? choiceOptionsFor(currentQuestion) : [];
+
+  useEffect(() => {
+    if (!collectorQuestion?.trim() || busy) {
+      return;
+    }
+    setMessages((current) => {
+      const last = current[current.length - 1];
+      if (last?.role === "assistant" && last.content === collectorQuestion.trim()) {
+        return current;
+      }
+      return [
+        ...current,
+        {
+          id: `ask_${Date.now()}`,
+          role: "assistant",
+          content: collectorQuestion.trim(),
+        },
+      ];
+    });
+  }, [collectorQuestion, busy]);
+
+  async function submitChatText(text: string) {
+    if (!text || disabled || readOnly || busy) {
+      return;
+    }
+    setBusy(true);
+    setDraft("");
+    setMessages((current) => [
+      ...current,
+      { id: `user_${Date.now()}`, role: "user", content: text },
+    ]);
+    try {
+      await onChatTurn(text);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitChatText(draft.trim());
+  }
+
+  async function handlePickChoice(option: ChoiceOption) {
+    if (!currentQuestion || disabled || readOnly || busy) {
+      return;
+    }
+    setBusy(true);
+    setDraft("");
+    setMessages((current) => [
+      ...current,
+      { id: `user_${Date.now()}`, role: "user", content: option.label },
+    ]);
+    try {
+      onSubmitChoices({ [currentQuestion.fieldId]: option.value });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (mode === "choices") {
+    return (
+      <div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[0.88rem] text-[#5c564e]">
+            一次回答多題。已記錄 {answeredCount} 項條件。
+          </p>
+          <button
+            type="button"
+            disabled={disabled || readOnly}
+            onClick={() => setMode("chat")}
+            className="text-[0.88rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline"
+          >
+            改回一題一題
+          </button>
+        </div>
+        <QuestionGroupList
+          groups={groups}
+          disabled={disabled}
+          readOnly={readOnly}
+          initialAnswers={initialChoiceAnswers}
+          onSubmit={onSubmitChoices}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[0.88rem] leading-[1.7] text-[#5c564e]">
+          {showChoiceChips
+            ? "可直接點選下方選項，或用自己的話打字。選項會寫成條件代號，不會用對話判定資格。"
+            : "這題沒有固定選項，請用自己的話回答。我們會轉成條件代號，不會用對話判定資格。"}{" "}
+          已記錄 {answeredCount} 項。
+        </p>
+        <button
+          type="button"
+          disabled={disabled || readOnly}
+          onClick={() => setMode("choices")}
+          className="shrink-0 text-[0.88rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline"
+        >
+          一次回答多題
+        </button>
+      </div>
+
+      <div className="flex min-h-[14rem] flex-col gap-3 rounded-sm border border-[#e0d8ca] bg-[#f4f0e8] px-4 py-4">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`max-w-[95%] rounded-sm px-3 py-2.5 text-[0.88rem] leading-[1.75] ${
+              message.role === "assistant"
+                ? "self-start bg-[#faf8f4] text-[#3a352e] ring-1 ring-[#e0d8ca]"
+                : "self-end bg-[#2f4f45] text-[#f7f4ee]"
+            }`}
+          >
+            {message.content}
+          </div>
+        ))}
+
+        {showChoiceChips && !busy && !readOnly ? (
+          <div
+            className="flex flex-wrap gap-2 self-start"
+            role="group"
+            aria-label="可選答案"
+          >
+            {choiceOptions.map((option) => (
+              <button
+                key={`${String(option.value)}-${option.label}`}
+                type="button"
+                disabled={disabled || busy}
+                onClick={() => void handlePickChoice(option)}
+                className="rounded-sm border border-[#cfc5b4] bg-[#fffdfa] px-3.5 py-2 text-[0.88rem] leading-[1.6] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {busy ? (
+          <p className="text-[0.82rem] text-[#8b8377]">正在整理你的回答…</p>
+        ) : null}
+      </div>
+
+      <form onSubmit={(event) => void handleSubmit(event)} className="mt-4">
+        <label className="sr-only" htmlFor="attribute-chat-input">
+          {showChoiceChips ? "用文字回答，或上方點選選項" : "用文字回答目前問題"}
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="attribute-chat-input"
+            type="text"
+            value={draft}
+            disabled={disabled || readOnly || busy}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder={
+              showChoiceChips
+                ? "或打字回答，例如：臺北市／有勞保"
+                : "請用幾句話說明"
+            }
+            className="min-w-0 flex-1 rounded-sm border border-[#c9c0b0] bg-[#faf8f4] px-3 py-2.5 text-[0.92rem] outline-none focus:border-[#2f4f45] disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={disabled || readOnly || busy || !draft.trim()}
+            className="shrink-0 rounded-sm bg-[#2f4f45] px-4 py-2.5 text-[0.9rem] font-semibold text-[#f7f4ee] transition-colors hover:bg-[#254038] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
+          >
+            送出
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

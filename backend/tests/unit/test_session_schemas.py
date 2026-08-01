@@ -76,8 +76,8 @@ def test_only_the_life_event_input_carries_free_text() -> None:
             if any(marker in field_name for marker in _FREE_TEXT_MARKERS):
                 text_bearing.add(kind)
 
-    assert text_bearing == {"life_event_text"}
-    assert len(members) == 7
+    assert text_bearing == {"life_event_text", "attribute_chat_turn"}
+    assert len(members) == 8
 
 
 def test_error_response_has_no_field_that_can_hold_a_value() -> None:

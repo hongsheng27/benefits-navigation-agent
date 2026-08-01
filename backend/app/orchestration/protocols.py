@@ -309,11 +309,20 @@ class FixtureEntitlementGraphRepository:
         event_id: str,
         user_attributes: UserAttributes,
     ) -> tuple[CandidateItem, ...]:
-        """查對照表。事件不在表上時回空 tuple。"""
-        # 這份 fixture 不依屬性篩選 —— 依屬性收斂候選集合需要 graph 上的條件邊，
-        # 那屬於資料層。先照樣接收參數，讓 SQLite 實作換進來時簽章不用改。
-        del user_attributes
-        return _FIXTURE_ITEMS_BY_EVENT.get(event_id, ())
+        """查對照表，並在有所在地時附上對應地方方案。
+
+        全國項目一律展開；地方項目由 `jurisdiction_items` 依
+        `applicant_jurisdiction` 收斂。事件不在表上時回空 tuple。
+        """
+        from app.orchestration.jurisdiction_items import local_items_for_attributes
+
+        base = _FIXTURE_ITEMS_BY_EVENT.get(event_id, ())
+        if not base:
+            return ()
+        local = local_items_for_attributes(user_attributes)
+        if not local:
+            return base
+        return base + local
 
     def _find(self, item_id: str) -> CandidateItem | None:
         for items in _FIXTURE_ITEMS_BY_EVENT.values():

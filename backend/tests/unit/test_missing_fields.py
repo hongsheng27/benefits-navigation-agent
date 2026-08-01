@@ -41,13 +41,13 @@ def _state(
     )
 
 
-def test_all_fields_missing_produces_three_groups() -> None:
-    """三筆種子資料分屬三個主題，沒答過任何題，應該產出三組。"""
+def test_all_fields_missing_produces_four_groups() -> None:
+    """種子資料分屬四個主題（含所在地），沒答過任何題，應該產出四組。"""
     groups = compute_question_groups(_state(), _registry())
 
-    assert len(groups) == 3
+    assert len(groups) == 4
     assert groups[0].group_index == 1
-    assert groups[0].group_total == 3
+    assert groups[0].group_total == 4
 
 
 def test_answering_a_field_removes_it_from_the_output() -> None:
@@ -63,6 +63,7 @@ def test_answering_all_fields_returns_empty() -> None:
     """所有欄位都答完了，不需要再問。"""
     state = _state(
         attributes={
+            "applicant_jurisdiction": "TPE",
             "deceased_insurance_type": "labor_insurance",
             "has_dependent_children": True,
             "applicant_age_band": "25_to_55",
@@ -111,6 +112,7 @@ def test_only_fields_for_active_items_are_included() -> None:
     groups = compute_question_groups(_state(items=items), _registry())
 
     all_field_ids = {q.field_id for g in groups for q in g.questions}
+    assert "applicant_jurisdiction" in all_field_ids
     assert "deceased_insurance_type" in all_field_ids
     assert "has_dependent_children" not in all_field_ids
     assert "applicant_age_band" not in all_field_ids
@@ -149,10 +151,15 @@ def test_unlocks_item_ids_lists_active_items_that_need_the_field() -> None:
 
 def test_group_total_reflects_only_groups_with_missing_fields() -> None:
     """group_total 是「有缺漏欄位的主題數」，不是全部主題數。"""
-    state = _state(attributes={"deceased_insurance_type": "labor_insurance"})
+    state = _state(
+        attributes={
+            "applicant_jurisdiction": "TPE",
+            "deceased_insurance_type": "labor_insurance",
+        }
+    )
     groups = compute_question_groups(state, _registry())
 
-    # 答了一個主題的欄位，只剩兩組。
+    # 答了兩個主題的欄位，只剩兩組。
     assert all(g.group_total == 2 for g in groups)
     assert groups[0].group_index == 1
     assert groups[1].group_index == 2
@@ -163,8 +170,8 @@ def test_topic_order_follows_registry_declaration() -> None:
     groups = compute_question_groups(_state(), _registry())
     topic_ids = [g.topic_id for g in groups]
 
-    # 種子資料的宣告順序：deceased_insurance、family_situation、applicant_situation。
     assert topic_ids == [
+        "location",
         "deceased_insurance",
         "family_situation",
         "applicant_situation",

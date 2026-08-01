@@ -135,7 +135,7 @@ class BedrockLanguageModel:
             # boto3 的 ClientError 訊息可能含請求細節。不轉述原文（ADR-0007）。
             error_name = type(error).__name__
             msg = f"呼叫 Bedrock 失敗：{error_name}"
-            raise LanguageModelUnavailableError(msg) from last_error
+            raise LanguageModelUnavailableError(msg) from error
 
         return _parse_response(response, request)
 

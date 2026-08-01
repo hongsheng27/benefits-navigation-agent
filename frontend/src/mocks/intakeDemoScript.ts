@@ -34,6 +34,7 @@ const DEMO_BASE: Omit<
   exitReason: null,
   referralRequested: false,
   isProcessing: false,
+  collectorQuestion: null,
   createdAt: "2026-08-01T00:00:00Z",
   expiresAt: "2026-08-01T02:00:00Z",
   implementation: {
@@ -45,9 +46,29 @@ const DEMO_BASE: Omit<
 
 const QUESTION_GROUPS: SessionSnapshot["questionGroups"] = [
   {
-    topicId: "deceased_insurance",
+    topicId: "location",
     groupIndex: 1,
-    groupTotal: 2,
+    groupTotal: 3,
+    questions: [
+      {
+        fieldId: "applicant_jurisdiction",
+        valueKind: "code",
+        optionIds: ["TPE", "NWT", "TAO", "PEN", "OTHER_TW", "unsure"],
+        required: true,
+        purposeId: "applicant_jurisdiction.purpose",
+        unlocksItemIds: [
+          "death_registration",
+          "funeral_benefit",
+          "survivor_pension",
+          "health_insurance_change",
+        ],
+      },
+    ],
+  },
+  {
+    topicId: "deceased_insurance",
+    groupIndex: 2,
+    groupTotal: 3,
     questions: [
       {
         fieldId: "deceased_insurance_type",
@@ -67,8 +88,8 @@ const QUESTION_GROUPS: SessionSnapshot["questionGroups"] = [
   },
   {
     topicId: "family_situation",
-    groupIndex: 2,
-    groupTotal: 2,
+    groupIndex: 3,
+    groupTotal: 3,
     questions: [
       {
         fieldId: "has_dependent_children",
@@ -128,6 +149,7 @@ export const DEMO_DESCRIPTION =
   "配偶過世一個月了，想確認還有哪些給付來得及申請。";
 
 export const DEMO_ANSWERS: Record<string, AttributeValue> = {
+  applicant_jurisdiction: "TPE",
   deceased_insurance_type: "labor_insurance",
   has_dependent_children: true,
 };

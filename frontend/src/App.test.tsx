@@ -97,9 +97,19 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "看下一步" }));
     expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "相關法條" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "申請解說" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "去追蹤進度看這筆" }),
     ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "相關法條" }));
+    expect(
+      await screen.findByRole("heading", { name: "相關法條與官方依據" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("臺北市多元環保葬鼓勵金")).toBeInTheDocument();
+    expect(screen.queryByText("新北市環保葬鼓勵金")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "關閉" }));
 
     fireEvent.click(screen.getByRole("button", { name: "去追蹤進度看這筆" }));
     expect(await screen.findByText("你正在處理的事")).toBeInTheDocument();

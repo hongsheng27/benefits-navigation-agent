@@ -21,8 +21,8 @@ T17 的要求是「窄而深」，不是「寬而淺」。現在四個項目都�
 條件，所以整條路走不到結局。只把一項填到底才驗證得出管路通不通；四項各填一半，
 等於四條路都不通。
 
-挑喪葬給付（`funeral_benefit`）的理由是它只需要一個資格欄位
-（`deceased_insurance_type`），是最短的完整路徑。
+挑喪葬給付（`funeral_benefit`）的理由是它需要的資格欄位最少
+（所在地 + `deceased_insurance_type`），是最短的完整路徑。
 
 ## 這裡還沒有的東西
 
@@ -190,5 +190,21 @@ def demo_language_model() -> FakeLanguageModel:
     有 `BEDROCK_MODEL_ID` 時會改用真實 adapter，沒有模型設定時才落回這裡。
     """
     return FakeLanguageModel(
-        responses={LlmTask.RESOLVE_LIFE_EVENT: {"event_id": DEMO_EVENT_ID}}
+        responses={
+            LlmTask.RESOLVE_LIFE_EVENT: {"event_id": DEMO_EVENT_ID},
+            # 離線時諮詢後 Copilot 仍要有可測的成功路徑；內容刻意標示為示範。
+            LlmTask.ANSWER_WITH_REFERENCES: {
+                "answer": (
+                    "（離線示範回覆）我只能依你提供的參考資料說明期限、文件與窗口，"
+                    "不能判定你是否符合資格。請對照左側摘錄，並以官方窗口為準。"
+                )
+            },
+            # 對話補欄位：離線時交給 heuristic；模型回 none 讓關鍵字備援接手。
+            LlmTask.COLLECT_ATTRIBUTES: {
+                "field_id": "none",
+                "value": "",
+                "confident": False,
+                "next_question": "方便說一下你主要在哪個縣市辦理嗎？",
+            },
+        }
     )
