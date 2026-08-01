@@ -50,11 +50,17 @@ INSTRUCTION = """你的工作是把一段中文描述對應到一組事件代號
 
 規則：
 1. `event_ids` 只能使用下面清單裡的代號。若完全無關，回單一元素 `{unrecognised}`。
-2. 一段話若同時包含多個生活變故，應全部列出（最多 {max_events} 個），例如「爸爸職災，我失業」→ occupational_injury 與 job_loss。
+2. 一段話若同時包含多個生活變故，應全部列出（最多 {max_events} 個），例如：
+   「爸爸職災，我失業」→ occupational_injury 與 job_loss。
 3. 只有一個變故時只回一個代號。短句也要對，例如「我失業了」→ job_loss。
 4. 有講清楚關係時選更精確的代號（「媽媽過世」→ parent_death）。
-5. 幾乎只有在聊天、天氣、沒有生活變故時才回 unrecognised。
-6. 只輸出工具參數，不要解釋。
+5. 如果工作中或因工作事故受傷、失能，第一個選 `occupational_injury`。
+   若同時明確說需要長期照顧或詢問長照，再加 `long_term_care_need`。
+   「身障該辦哪個」是後續方案脈絡，不因此加 `disability_onset`；
+   照顧幼兒或減少工時也不因此加 `caregiver_burden`。
+6. 幾乎只有在完全無關（聊天、天氣、沒有生活變故）時才回 `unrecognised`。
+   不要因為句子短就回 `unrecognised`。
+7. 只輸出工具參數，不要解釋。
 
 可選的事件代號：
 {event_lines}"""
@@ -157,7 +163,9 @@ def resolve_life_event(
             level=logging.WARNING,
             exc_info=True,
             tool=LlmTask.RESOLVE_LIFE_EVENT.value,
-            error_type=type(root).__name__ if root is not None else type(error).__name__,
+            error_type=type(root).__name__
+            if root is not None
+            else type(error).__name__,
         )
         fallback = _keyword_fallback(text, registry)
         if fallback:
@@ -172,7 +180,12 @@ def resolve_life_event(
         raise LifeEventNotRecognisedError(msg) from error
 
     raw_ids = _extract_event_ids(result.payload)
-    if not raw_ids or raw_ids == [UNRECOGNISED] or UNRECOGNISED in raw_ids and len(raw_ids) == 1:
+    if (
+        not raw_ids
+        or raw_ids == [UNRECOGNISED]
+        or UNRECOGNISED in raw_ids
+        and len(raw_ids) == 1
+    ):
         log_event(
             "life_event_unrecognised",
             level=logging.INFO,

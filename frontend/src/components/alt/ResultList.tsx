@@ -13,6 +13,7 @@ import {
   fieldLabel,
   itemAudience,
   itemCategoryLabel,
+  itemFallbackExplanation,
   itemName,
   lifeEventName,
   optionLabel,
@@ -56,8 +57,7 @@ export function ResultList({
   onGoToTracking,
 }: ResultListProps) {
   const { items, implementation, lifeEvents, lifeEvent } = snapshot;
-  const primaryLifeEvent =
-    lifeEvent ?? (lifeEvents.length > 0 ? lifeEvents[0] : null);
+  const primaryLifeEvent = lifeEvent ?? (lifeEvents.length > 0 ? lifeEvents[0] : null);
 
   useEffect(() => {
     if (!enableItemTracking || items.length === 0) {
@@ -234,13 +234,7 @@ function formatAmountFromItem(item: ItemView): string | null {
   return `最高約 ${item.amountMax!.toLocaleString("zh-TW")} ${currency}${period}`;
 }
 
-function DetailSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function DetailSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="mt-3">
       <h4 className="text-[0.82rem] font-semibold tracking-[0.04em] text-[#2f4f45]">
@@ -268,14 +262,13 @@ function ResultRow({
   const [tracked, setTracked] = useState(() => isBenefitItemTracked(item.itemId));
   const detail = getItemDetail(item.itemId);
   const amountLabel = formatAmountFromItem(item) ?? detail?.amountLabel ?? null;
-  const officialUrl =
-    detail?.officialUrl ?? item.citations[0]?.url ?? null;
+  const officialUrl = detail?.officialUrl ?? item.citations[0]?.url ?? null;
+  const explanation = item.explanation ?? itemFallbackExplanation(item.itemId);
 
   function handleAddTracking() {
     addTrackedBenefitItem(buildTrackedItemFromResult(item, lifeEventId));
     setTracked(true);
   }
-
   return (
     <li className="px-4 py-4 sm:px-5">
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -287,10 +280,8 @@ function ResultRow({
         </span>
       </p>
 
-      {item.explanation ? (
-        <p className="mt-2 text-[0.88rem] leading-[2] text-[#4a453d]">
-          {item.explanation}
-        </p>
+      {explanation ? (
+        <p className="mt-2 text-[0.88rem] leading-[2] text-[#4a453d]">{explanation}</p>
       ) : null}
 
       {item.missingFieldIds.length > 0 ? (

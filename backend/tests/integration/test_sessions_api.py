@@ -6,6 +6,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.llm.fake import FakeLanguageModel
+from app.llm.port import LlmTask
 from app.main import create_app
 from app.orchestration.session_store import SESSION_ID_HEADER
 from app.schemas.session import MAX_LIFE_EVENT_TEXT_LENGTH
@@ -85,6 +87,142 @@ def test_advancing_with_text_then_confirming_reveals_items(
         "health_insurance_change",
     ]
     assert all(item["status"] == "pending" for item in body["items"])
+
+
+def test_case2_text_opens_occupational_injury_confirmation(
+    client: TestClient,
+) -> None:
+    """案例 2：事件辨識後保存職災與長照，並停在確認狀態。"""
+    client.app.state.language_model = FakeLanguageModel(
+        responses={
+            LlmTask.RESOLVE_LIFE_EVENT: {
+                "event_ids": ["occupational_injury", "long_term_care_need"]
+            }
+        }
+    )
+    session_id, _ = _create(client)
+    case_2_text = (
+        "爸爸在工作中發生重大事故後失能，現在需要長期照顧。"
+        "我一邊工作、一邊照顧兩歲的小孩，最近也因為照顧爸爸減少工時，"
+        "不知道職災、身障和長照該先辦哪一個。"
+    )
+
+    response = client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={"input": {"kind": "life_event_text", "text": case_2_text}},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workflowState"] == "understand_event"
+    assert body["lifeEvent"] == "occupational_injury"
+    assert body["lifeEvents"] == ["occupational_injury", "long_term_care_need"]
+    assert body["items"] == []
+    assert case_2_text not in response.text
+
+
+def _advance_case2_to_questions(client: TestClient) -> tuple[str, dict]:
+    client.app.state.language_model = FakeLanguageModel(
+        responses={
+            LlmTask.RESOLVE_LIFE_EVENT: {
+                "event_ids": ["occupational_injury", "long_term_care_need"]
+            }
+        }
+    )
+    session_id, _ = _create(client)
+    client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={"input": {"kind": "life_event_text", "text": "父親工作受傷失能"}},
+    )
+    response = client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={"input": {"kind": "event_confirmation", "confirmed": True}},
+    )
+    assert response.status_code == 200
+    return session_id, response.json()
+
+
+def test_case2_confirmation_questions_and_demo_answers_reach_results(
+    client: TestClient,
+) -> None:
+    """案例 2 的問題與結果都來自 backend snapshot，不靠 frontend demo scene。"""
+    session_id, questions = _advance_case2_to_questions(client)
+
+    assert questions["workflowState"] == "collect_missing_fields"
+    assert len(questions["questionGroups"]) == 4
+    assert sum(len(group["questions"]) for group in questions["questionGroups"]) == 7
+    assert len(questions["items"]) == 7
+
+    response = client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={
+            "input": {
+                "kind": "attribute_answers",
+                "answers": {
+                    "caregiver_relationship": "relationship_child",
+                    "disability_cause": "cause_occupational_injury",
+                    "occupational_injury_recognition": "recognition_processing",
+                    "care_recipient_insurance_type": "occupational_accident_insurance",
+                    "disability_assessment_status": "disability_assessment_not_applied",
+                    "current_care_arrangement": "care_mostly_solo",
+                    "caregiver_employment_impact": "reduced_hours",
+                },
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["workflowState"] == "confirm"
+    assert [item["itemId"] for item in body["items"]] == [
+        "occupational_injury_recognition_follow_up",
+        "occupational_accident_disability_benefit",
+        "disability_assessment",
+        "long_term_care_assessment",
+        "caregiver_support_services",
+        "caregiver_employment_support",
+        "caregiver_support_contact",
+    ]
+    assert {item["status"] for item in body["items"]} == {"needs_human_review"}
+    assert all(item["citations"] == [] for item in body["items"])
+
+
+def test_case2_answers_filter_items_without_making_eligibility_claims(
+    client: TestClient,
+) -> None:
+    """固定答案只做相關性篩選；保留項目仍需人工確認。"""
+    session_id, _ = _advance_case2_to_questions(client)
+
+    response = client.post(
+        "/sessions/advance",
+        headers=_headers(session_id),
+        json={
+            "input": {
+                "kind": "attribute_answers",
+                "answers": {
+                    "caregiver_relationship": "relationship_child",
+                    "disability_cause": "cause_general_accident",
+                    "occupational_injury_recognition": "injury_recognized",
+                    "care_recipient_insurance_type": "no_insurance",
+                    "disability_assessment_status": "disability_certificate_obtained",
+                    "current_care_arrangement": "hired_caregiver",
+                    "caregiver_employment_impact": "no_employment_change",
+                },
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert [item["itemId"] for item in items] == [
+        "long_term_care_assessment",
+        "caregiver_support_contact",
+    ]
+    assert {item["status"] for item in items} == {"needs_human_review"}
 
 
 def test_the_submitted_text_never_appears_in_any_response(

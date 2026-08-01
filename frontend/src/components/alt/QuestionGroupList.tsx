@@ -11,6 +11,8 @@ type QuestionGroupListProps = {
   groups: QuestionGroupView[];
   disabled: boolean;
   onSubmit: (answers: Record<string, AttributeValue>) => void;
+  /** 正式流程可用更明確的送出文案；示範維持原本的「繼續」。 */
+  submitLabel?: string;
   /** 示範／復原時預填的答案。 */
   initialAnswers?: Record<string, AttributeValue>;
   /** 唯讀：顯示答案但不可更改、不可送出。 */
@@ -29,6 +31,7 @@ export function QuestionGroupList({
   onSubmit,
   initialAnswers = {},
   readOnly = false,
+  submitLabel = "繼續",
 }: QuestionGroupListProps) {
   const [answers, setAnswers] =
     useState<Record<string, AttributeValue>>(initialAnswers);
@@ -85,7 +88,7 @@ export function QuestionGroupList({
           disabled={!canSubmit}
           className="rounded-sm bg-[#2f4f45] px-6 py-3 text-[0.95rem] leading-[1.8] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
         >
-          繼續
+          {submitLabel}
         </button>
         <p className="text-[0.82rem] leading-[1.9] text-[#6b6459]">
           {readOnly

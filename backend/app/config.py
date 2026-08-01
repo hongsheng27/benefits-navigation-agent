@@ -43,8 +43,15 @@ class Settings(BaseSettings):
     # the same names can be pasted into `.env` instead. `get_settings()` then
     # copies them into `os.environ` so boto3 can see them.
 
-    aws_region: str = "us-east-1"
-    """AWS region for Bedrock and other AWS clients."""
+    aws_region: str = "us-west-2"
+    """AWS region for Bedrock and other AWS clients.
+
+    us-west-2 is the team default: it is the region the Bedrock path was first
+    verified in and the one `.env.example` and the migration guide name. us-east-1
+    is also verified and works, but keep one answer in one place — a region that
+    differs between the code default, `.env.example`, and a teammate's shell is a
+    slow bug to find.
+    """
 
     aws_default_region: str = ""
     """Optional alias for workshop snippets that set AWS_DEFAULT_REGION."""

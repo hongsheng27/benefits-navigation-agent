@@ -81,6 +81,10 @@ _ADMINISTRATIVE_ITEM_IDS: frozenset[str] = frozenset(
     {
         "death_registration",
         "health_insurance_change",
+        "occupational_injury_recognition_follow_up",
+        "disability_assessment",
+        "long_term_care_assessment",
+        "caregiver_support_contact",
     }
 )
 

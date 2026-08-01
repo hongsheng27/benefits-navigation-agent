@@ -112,9 +112,7 @@ describe("deriveUiStep", () => {
     expect(deriveUiStep(null, false)).toBe("landing");
     expect(deriveUiStep(null, true)).toBe("describe");
     expect(deriveUiStep(snapshot({ lifeEvent: null }), true)).toBe("describe");
-    expect(deriveUiStep(snapshot({ lifeEvent: "spouse_death" }), true)).toBe(
-      "confirm",
-    );
+    expect(deriveUiStep(snapshot({ lifeEvent: "spouse_death" }), true)).toBe("confirm");
     expect(
       deriveUiStep(
         snapshot({
@@ -155,6 +153,158 @@ describe("deriveUiStep", () => {
 });
 
 describe("HomePageAlt", () => {
+  it("ignores a legacy cached session and starts from the landing page", async () => {
+    window.localStorage.setItem("jiezhu.sessionId", "sess_legacy_cached");
+    const calls = stubBackend([]);
+
+    render(<HomePageAlt />);
+
+    expect(
+      await screen.findByRole("button", { name: "開始說明我的情況" }),
+    ).toBeInTheDocument();
+    expect(calls.some((call) => call.url.endsWith("/sessions/current"))).toBe(false);
+  });
+
+  it("shows the occupational injury confirmation for case 2", async () => {
+    const calls = stubBackend([
+      jsonResponse(
+        snapshot({
+          lifeEvent: "occupational_injury",
+          lifeEvents: ["occupational_injury", "long_term_care_need"],
+        }),
+      ),
+    ]);
+    const case2Text =
+      "爸爸在工作中發生重大事故後失能，現在需要長期照顧。我一邊工作、一邊照顧兩歲的小孩，最近也因為照顧爸爸減少工時，不知道職災、身障和長照該先辦哪一個。";
+
+    render(<HomePageAlt />);
+    await screen.findByText("服務已就緒");
+    await startIntake();
+    describeSituation(case2Text);
+
+    expect(await screen.findByText("我們理解成以下情況（可多選）")).toBeInTheDocument();
+    expect(screen.getByText("職業災害")).toBeInTheDocument();
+    expect(screen.getByText("長照需求")).toBeInTheDocument();
+    expect(screen.getByText(/單次查詢最多選 5 個情況/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "對，就是這些情況" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "不太對，我再說明一次" }),
+    ).toBeInTheDocument();
+
+    const advanceCall = calls.find((call) => call.url.endsWith("/sessions/advance"));
+    expect(JSON.parse(String(advanceCall?.init?.body))).toEqual({
+      input: { kind: "life_event_text", text: case2Text },
+    });
+  });
+
+  it("renders the backend-driven case 2 questions and grouped results", async () => {
+    const case2Questions: SessionSnapshot["questionGroups"] = [
+      {
+        topicId: "care_relationship",
+        groupIndex: 1,
+        groupTotal: 1,
+        questions: [
+          {
+            fieldId: "caregiver_relationship",
+            valueKind: "code",
+            optionIds: ["relationship_child"],
+            required: true,
+            purposeId: "caregiver_relationship.purpose",
+            unlocksItemIds: ["caregiver_support_services"],
+          },
+        ],
+      },
+    ];
+    const baseItem = {
+      status: "needs_human_review" as const,
+      missingFieldIds: [],
+      decisiveConditions: [],
+      citations: [],
+      amountMin: null,
+      amountMax: null,
+      amountPeriod: null,
+      amountCurrency: null,
+      explanation: null,
+      sourceLifeEvents: [],
+    };
+    const calls = stubBackend([
+      jsonResponse(
+        snapshot({
+          lifeEvent: "long_term_care_need",
+          lifeEvents: ["long_term_care_need", "occupational_injury"],
+        }),
+      ),
+      jsonResponse(
+        snapshot({
+          lifeEvent: "long_term_care_need",
+          lifeEvents: ["long_term_care_need", "occupational_injury"],
+          workflowState: "collect_missing_fields",
+          questionGroups: case2Questions,
+        }),
+      ),
+      jsonResponse(
+        snapshot({
+          lifeEvent: "long_term_care_need",
+          lifeEvents: ["long_term_care_need", "occupational_injury"],
+          workflowState: "confirm",
+          attributes: { caregiver_relationship: "relationship_child" },
+          items: [
+            {
+              ...baseItem,
+              itemId: "long_term_care_assessment",
+              kind: "administrative",
+            },
+            {
+              ...baseItem,
+              itemId: "caregiver_support_services",
+              kind: "benefit",
+            },
+          ],
+        }),
+      ),
+    ]);
+
+    render(<HomePageAlt />);
+    await screen.findByText("服務已就緒");
+    await startIntake();
+    describeSituation("爸爸工作受傷後失能，需要長期照顧。");
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這些情況" }));
+
+    expect(await screen.findByText("你和需要照顧的人是什麼關係？")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "子女" }));
+
+    expect(screen.getByText("再請你回答幾個問題")).toBeInTheDocument();
+    expect(screen.queryByText("給父親（被照顧者）")).not.toBeInTheDocument();
+    expect(calls.filter((call) => call.url.endsWith("/sessions/advance"))).toHaveLength(
+      2,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "送出答案" }));
+
+    expect(await screen.findByText(/我們好像已經掌握夠多了/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "查看結果" }));
+
+    expect(await screen.findByText("給父親（被照顧者）")).toBeInTheDocument();
+    expect(screen.getByText("給你（照顧者）")).toBeInTheDocument();
+    expect(screen.getByText("長照需求評估")).toBeInTheDocument();
+    expect(screen.getByText("家庭照顧者支持與喘息服務")).toBeInTheDocument();
+    expect(screen.getByText(/可聯絡 1966 詢問長照需求評估/)).toBeInTheDocument();
+    expect(
+      JSON.parse(
+        String(
+          calls.filter((call) => call.url.endsWith("/sessions/advance"))[2]?.init?.body,
+        ),
+      ),
+    ).toEqual({
+      input: {
+        kind: "attribute_answers",
+        answers: { caregiver_relationship: "relationship_child" },
+      },
+    });
+  });
+
   it("walks the real session flow from description through questions to results", async () => {
     const calls = stubBackend([
       jsonResponse(snapshot({ lifeEvent: "spouse_death" })),
@@ -219,12 +369,12 @@ describe("HomePageAlt", () => {
     describeSituation("我先生上個月過世了。");
 
     expect(
-      await screen.findByRole("button", { name: "對，就是這些" }),
+      await screen.findByRole("button", { name: "對，就是這件事" }),
     ).toBeInTheDocument();
     expect(screen.getByText("我們這樣理解，對嗎？")).toBeInTheDocument();
     expect(screen.queryByLabelText("發生了什麼事？")).not.toBeInTheDocument();
     expect(screen.getByText("配偶過世")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "對，就是這些" }));
+    fireEvent.click(screen.getByRole("button", { name: "對，就是這件事" }));
 
     expect(await screen.findByText("再請你回答幾個問題")).toBeInTheDocument();
     expect(screen.queryByText("我們這樣理解，對嗎？")).not.toBeInTheDocument();
@@ -233,9 +383,7 @@ describe("HomePageAlt", () => {
     // 有選項時可直接點 chips，不必先切到整頁選擇題。
     fireEvent.click(screen.getByRole("button", { name: "是" }));
 
-    expect(
-      await screen.findByText(/我們好像已經掌握夠多了/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/我們好像已經掌握夠多了/)).toBeInTheDocument();
     expect(screen.getByText("再確認一下就可以了")).toBeInTheDocument();
     expect(screen.queryByText("我們先幫你整理到這裡")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "查看結果" }));
@@ -317,7 +465,7 @@ describe("HomePageAlt", () => {
     await screen.findByText("服務已就緒");
     await startIntake();
     describeSituation("我先生上個月過世了。");
-    fireEvent.click(await screen.findByRole("button", { name: "對，就是這些" }));
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
 
     expect(await screen.findByText("再請你回答幾個問題")).toBeInTheDocument();
     expect(screen.getByText("你主要在哪個縣市辦理或居住？")).toBeInTheDocument();
@@ -327,9 +475,7 @@ describe("HomePageAlt", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "送出" }));
 
-    expect(
-      await screen.findByText(/我們好像已經掌握夠多了/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/我們好像已經掌握夠多了/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "查看結果" }));
     expect(await screen.findByText("我們先幫你整理到這裡")).toBeInTheDocument();
     const advanceCalls = calls.filter((call) => call.url.endsWith("/sessions/advance"));
@@ -404,7 +550,7 @@ describe("HomePageAlt", () => {
     describeSituation("我生病了");
 
     expect(
-      await screen.findByRole("button", { name: "對，就是這些" }),
+      await screen.findByRole("button", { name: "對，就是這件事" }),
     ).toBeInTheDocument();
     expect(screen.getByText("重大傷病")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -428,11 +574,9 @@ describe("HomePageAlt", () => {
     await startIntake();
     describeSituation("我失業了");
 
-    fireEvent.click(await screen.findByRole("button", { name: "對，就是這些" }));
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
 
-    expect(
-      await screen.findByText(/我們好像已經掌握夠多了/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/我們好像已經掌握夠多了/)).toBeInTheDocument();
     expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "查看結果" }));
     expect(await screen.findByText("我們先幫你整理到這裡")).toBeInTheDocument();
@@ -456,23 +600,17 @@ describe("HomePageAlt", () => {
     await screen.findByText("服務已就緒");
     await startIntake();
     describeSituation("我先生上個月過世了。");
-    fireEvent.click(await screen.findByRole("button", { name: "對，就是這些" }));
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
 
-    expect(
-      await screen.findByText(/我們好像已經掌握夠多了/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/我們好像已經掌握夠多了/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "我還有其他情況想說" }));
-    expect(
-      screen.getByText("確定要從頭再說一次嗎？"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("確定要從頭再說一次嗎？")).toBeInTheDocument();
     expect(
       screen.getByText(/前面在對話裡輸入與選擇過的內容都會清掉/),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "先不要，再想想" }));
-    expect(
-      screen.queryByText("確定要從頭再說一次嗎？"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("確定要從頭再說一次嗎？")).not.toBeInTheDocument();
     expect(screen.getByText(/我們好像已經掌握夠多了/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "我還有其他情況想說" }));

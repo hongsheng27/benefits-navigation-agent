@@ -36,7 +36,7 @@ fixture**（等資料層的 SQLite repository）。每一處都有註解說明�
 的具名參數）。目前注入的是不需要 SQLite 的離線實作，換成真實來源時這個模組不用改。
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 from app.llm.fake import FakeLanguageModel
@@ -47,6 +47,7 @@ from app.llm.tasks.collect_attributes import (
 )
 from app.llm.tasks.resolve_life_event import resolve_life_event
 from app.observability.logging import log_event
+from app.orchestration.data_contracts import CandidateItem as GraphCandidateItem
 from app.orchestration.determination import evaluate_ready_items, visible_items
 from app.orchestration.field_registry import FieldRegistry
 from app.orchestration.life_event_selection import (
@@ -417,9 +418,7 @@ def _confirm_event(
         if state.life_event:
             allowed.add(state.life_event)
         if user_input.event_ids is not None:
-            chosen = normalize_life_event_ids(
-                user_input.event_ids, seams.life_events
-            )
+            chosen = normalize_life_event_ids(user_input.event_ids, seams.life_events)
         elif state.life_events:
             chosen = state.life_events
         elif state.life_event:
@@ -427,9 +426,9 @@ def _confirm_event(
         else:
             chosen = ()
         # 只能勾建議或候補裡的代號；過濾未知項。
-        chosen = tuple(
-            event_id for event_id in chosen if event_id in allowed
-        )[:MAX_CONFIRMED_LIFE_EVENTS]
+        chosen = tuple(event_id for event_id in chosen if event_id in allowed)[
+            :MAX_CONFIRMED_LIFE_EVENTS
+        ]
         if not chosen:
             raise InvalidTransitionError(state.workflow_state)
         updated = _apply_life_events(
@@ -454,12 +453,67 @@ def _confirm_event(
     return cleared.model_copy(update={"event_retry_count": retries})
 
 
-def _merge_local_entitlements(state: SessionState, seams: _Seams) -> SessionState:
-    """所在地就緒後，只增刪地方方案；不重寫全國項目清單。
+def _resolved_event_ids(state: SessionState) -> tuple[str, ...]:
+    """取得權威事件清單；舊測試與 fixture 只有單數欄位時仍可運作。"""
+    if state.life_events:
+        return state.life_events
+    if state.life_event is not None:
+        return (state.life_event,)
+    return ()
 
-    全國項目在 RESOLVE_ENTITLEMENTS 已展開。此處若整表重展開，會把測試／退回
-    修改時刻意保留的精簡 items 撐大，並誤觸「有進展」護欄。
+
+def _expand_all_events(
+    state: SessionState, seams: _Seams
+) -> Iterator[GraphCandidateItem]:
+    """依事件順序展開候選項目，並以 item ID 去重。"""
+    seen_item_ids: set[str] = set()
+    for event_id in _resolved_event_ids(state):
+        for candidate in seams.entitlement_repository.expand_from_event(
+            event_id, state.attributes
+        ):
+            if candidate.item_id in seen_item_ids:
+                continue
+            seen_item_ids.add(candidate.item_id)
+            yield candidate
+
+
+def _refresh_entitlements(state: SessionState, seams: _Seams) -> SessionState:
+    """用最新結構化答案重查相關項目，同時保留仍存在項目的判定狀態。
+
+    這是 repository 的一般能力：目前 fixture 用它篩 Case 2、配偶過世 fixture 用它加入
+    地方項目；未來 SQLite adapter 也會在同一個呼叫點依 graph conditions 回傳結果。
     """
+    event_ids = _resolved_event_ids(state)
+    if not event_ids:
+        return state
+    if "occupational_injury" not in event_ids:
+        return _merge_local_entitlements(state)
+
+    existing_by_id = {item.item_id: item for item in state.items}
+    refreshed: list[CandidateItem] = []
+    for candidate in _expand_all_events(state, seams):
+        incoming = adapt_graph_candidate(candidate)
+        existing = existing_by_id.get(incoming.item_id)
+        if existing is None:
+            refreshed.append(incoming)
+            continue
+        refreshed.append(
+            existing.model_copy(
+                update={
+                    "program_status": incoming.program_status,
+                    "missing_field_ids": incoming.missing_field_ids,
+                }
+            )
+        )
+
+    visible = visible_items(tuple(refreshed))
+    if visible == state.items:
+        return state
+    return state.model_copy(update={"items": visible})
+
+
+def _merge_local_entitlements(state: SessionState) -> SessionState:
+    """既有配偶過世流程只依所在地增刪地方項目，避免重展開全國項目。"""
     from app.orchestration.jurisdiction_items import (
         LOCAL_ITEM_IDS,
         local_items_for_attributes,
@@ -469,9 +523,7 @@ def _merge_local_entitlements(state: SessionState, seams: _Seams) -> SessionStat
     life_event_ids = state.life_events or (
         (state.life_event,) if state.life_event else ()
     )
-    local = local_items_for_attributes(
-        state.attributes, life_event_ids=life_event_ids
-    )
+    local = local_items_for_attributes(state.attributes, life_event_ids=life_event_ids)
     if not local:
         if len(kept) == len(state.items):
             return state
@@ -493,9 +545,13 @@ def _merge_local_entitlements(state: SessionState, seams: _Seams) -> SessionStat
 # 文案與 frontend `FIELD_LABELS` 對齊；查不到時退回簡短正面句，絕不貼 purpose。
 _COLLECTOR_FIELD_QUESTIONS: dict[str, str] = {
     "applicant_jurisdiction": "你主要在哪個縣市辦理或居住？",
-    "care_relationship": "你和需要照顧的人是什麼關係？",
+    "caregiver_relationship": "你和需要照顧的人是什麼關係？",
     "disability_cause": "造成失能的原因是？",
-    "occupational_recognition_status": "是否已經取得職業災害認定？",
+    "occupational_injury_recognition": "是否已經取得職業災害認定？",
+    "care_recipient_insurance_type": "被照顧者目前是哪一種投保身分？",
+    "disability_assessment_status": "目前是否已辦理身心障礙鑑定？",
+    "current_care_arrangement": "目前主要由誰照顧？",
+    "caregiver_employment_impact": "照顧目前如何影響你的工作？",
     "involuntary_job_loss": "這次是否屬於非自願離職？",
     "deceased_insurance_type": "過世者生前的投保身分是？",
     "has_dependent_children": "家中是否有未成年子女？",
@@ -552,7 +608,7 @@ def _record_answers(
             "collector_question": None,
         }
     )
-    return _merge_local_entitlements(updated, seams)
+    return _refresh_entitlements(updated, seams)
 
 
 def _collect_from_chat(
@@ -599,13 +655,11 @@ def _collect_from_chat(
     merged = dict(state.attributes)
     merged.update(accepted)
     updated = state.model_copy(update={"attributes": merged})
-    updated = _merge_local_entitlements(updated, seams)
+    updated = _refresh_entitlements(updated, seams)
 
     still_missing = compute_question_groups(updated, seams.registry)
     if still_missing:
-        next_q = collected.next_question or _default_collector_question(
-            updated, seams
-        )
+        next_q = collected.next_question or _default_collector_question(updated, seams)
         return updated.model_copy(
             update={
                 "workflow_state": WorkflowState.COLLECT_MISSING_FIELDS,
@@ -913,9 +967,7 @@ def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState
             if existing is None:
                 merged_by_id[adapted.item_id] = adapted
                 continue
-            sources = tuple(
-                dict.fromkeys([*existing.source_life_events, event_id])
-            )
+            sources = tuple(dict.fromkeys([*existing.source_life_events, event_id]))
             merged_by_id[adapted.item_id] = existing.model_copy(
                 update={"source_life_events": sources}
             )

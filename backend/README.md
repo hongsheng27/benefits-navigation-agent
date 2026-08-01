@@ -41,22 +41,23 @@ python ../scripts/dev_backend.py          # 等同 make backend
 
 互動式 API 文件在 `http://127.0.0.1:8000/docs`。目前可用的端點：
 
-| 方法 | 路徑 | 用途 |
-| --- | --- | --- |
-| `GET` | `/health` | 存活檢查 |
-| `POST` | `/sessions` | 建立一次諮詢，回應含 `sessionId` |
-| `POST` | `/sessions/advance` | 送一筆輸入，推進一步 |
-| `GET` | `/sessions/current` | 查目前狀態（前端輪詢用） |
-| `DELETE` | `/sessions/current` | 立刻清除這次諮詢 |
+| 方法     | 路徑                | 用途                             |
+| -------- | ------------------- | -------------------------------- |
+| `GET`    | `/health`           | 存活檢查                         |
+| `POST`   | `/sessions`         | 建立一次諮詢，回應含 `sessionId` |
+| `POST`   | `/sessions/advance` | 送一筆輸入，推進一步             |
+| `GET`    | `/sessions/current` | 查目前狀態（前端輪詢用）         |
+| `DELETE` | `/sessions/current` | 立刻清除這次諮詢                 |
 
 除了 `POST /sessions` 之外，每次呼叫都必須帶 header `X-Session-Id`。
 **路徑裡沒有 session id**：它是持有即通行的憑證，放在網址會被瀏覽記錄、referrer
 與伺服器日誌帶走。
 
-> **端點目前回的是佔位資料。** 不管輸入什麼文字，事件都會判定成 `spouse_death`；
-> 候選項目固定四筆，來自離線的 entitlement graph 實作；沒有官方依據或金額。
-> 狀態機會真的按規則推進、回答欄位會讓項目逐項定案，但**離線流程目前不會產出
-> `eligible`**：那四筆示範資料的資料治理狀態是 `candidate`，依安全檢查一律回
+> **福利資料目前仍是佔位資料。** 有設定 `BEDROCK_MODEL_ID` 時事件由 Bedrock
+> 萃取，沒有才使用離線示範模型。Entitlement fixture 目前包含配偶過世四筆，以及
+> 父親職災失能七筆候選方向與七個固定選項問題；沒有官方依據或金額。
+> 狀態機會真的按規則推進、Case 2 答案也會做 deterministic relevance filter，
+> 但**離線流程目前不會產出 `eligible`**：示範資料的治理狀態都是 `candidate`，一律回
 > `needs_human_review`。
 > 每個回應都帶 `implementation` 物件說明哪些能力還沒實作，前端可據此在畫面上標示。
 > 未實作的能力清單見 `app/api/implementation.py`。
@@ -135,42 +136,42 @@ rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/
 
 ### 已完成
 
-| 檔案 | 內容 |
-| --- | --- |
-| `app/main.py` | `create_app()` factory、CORS、router wiring、session store 建立 |
-| `app/config.py` | 環境變數設定 |
-| `app/api/health.py` | `GET /health` |
-| `app/api/sessions.py` | 四個 session 端點，只做傳輸 |
-| `app/api/errors.py` | 錯誤轉成契約形狀，且不外洩使用者輸入 |
-| `app/orchestration/state.py` | Workflow state 的資料形狀（frozen Pydantic） |
-| `app/orchestration/session_store.py` | 記憶體 session 儲存，2 小時過期 |
-| `app/orchestration/state_machine.py` | 八個狀態的轉換、守門條件、自動推進與迴圈護欄。見 ADR-0012 |
-| `app/orchestration/data_contracts.py` | 資料層與 workflow 之間的邊界格式（七個 dataclass、三組固定值） |
-| `app/orchestration/protocols.py` | 四個資料層接口（graph、判定、證據、來源刷新）與各自的離線實作 |
-| `app/orchestration/source_refresh.py` | on-demand refresh 的流程組裝，本機佇列、非阻塞、失敗不影響回應 |
-| `app/orchestration/determination.py` | 逐項判定組裝、依 `program_status` 的安全檢查、單項失敗隔離 |
-| `app/orchestration/demo_fixtures.py` | **示範用**資料，只有喪葬給付一項填到底。不得作為預設值。見 ADR-0014 |
-| `app/llm/port.py` | 語言模型的邊界形狀、呼叫契約、以及 schema 可攜性檢查。見 ADR-0015 |
-| `app/llm/fake.py` | 不連網路的模型實作，**預設值**。回登記好的答案，沒登記就拋錯 |
-| `app/llm/bedrock.py` | Bedrock Converse adapter；forced tool choice 取得結構化輸出 |
-| `app/llm/factory.py` | 有 `BEDROCK_MODEL_ID` 用 Bedrock，沒有才用示範實作。啟動時決定一次 |
-| `app/llm/tasks/resolve_life_event.py` | 把一段文字對應成事件代號。**系統唯一持有原文的地方**，用完即丟 |
-| `app/orchestration/life_events.py` | 生命事件登記表的讀取，讀 `data/life_events/events.v0.1.json` |
-| `app/privacy/attribute_gate.py` | 屬性值的型別與選項驗證，不合法就拒絕整筆 |
-| `app/schemas/session.py` | 對外的請求與回應形狀 |
-| `app/observability/logging.py` | 結構化 JSON logging 與欄位 allowlist |
-| `app/rules/engine.py` | 通用規則引擎與相關性評分（資料層負責） |
-| `app/services/` | benefit catalog、來源同步、連結探勘（資料層負責） |
+| 檔案                                  | 內容                                                                                                  |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `app/main.py`                         | `create_app()` factory、CORS、router wiring、session store 建立                                       |
+| `app/config.py`                       | 環境變數設定                                                                                          |
+| `app/api/health.py`                   | `GET /health`                                                                                         |
+| `app/api/sessions.py`                 | 四個 session 端點，只做傳輸                                                                           |
+| `app/api/errors.py`                   | 錯誤轉成契約形狀，且不外洩使用者輸入                                                                  |
+| `app/orchestration/state.py`          | Workflow state 的資料形狀（frozen Pydantic）                                                          |
+| `app/orchestration/session_store.py`  | 記憶體 session 儲存，2 小時過期                                                                       |
+| `app/orchestration/state_machine.py`  | 八個狀態的轉換、守門條件、自動推進與迴圈護欄。見 ADR-0012                                             |
+| `app/orchestration/data_contracts.py` | 資料層與 workflow 之間的邊界格式（七個 dataclass、三組固定值）                                        |
+| `app/orchestration/protocols.py`      | 四個資料層接口（graph、判定、證據、來源刷新）與各自的離線實作                                         |
+| `app/orchestration/source_refresh.py` | on-demand refresh 的流程組裝，本機佇列、非阻塞、失敗不影響回應                                        |
+| `app/orchestration/determination.py`  | 逐項判定組裝、依 `program_status` 的安全檢查、單項失敗隔離                                            |
+| `app/orchestration/demo_fixtures.py`  | **示範用**資料，只有喪葬給付一項填到底。不得作為預設值。見 ADR-0014                                   |
+| `app/llm/port.py`                     | 語言模型的邊界形狀、呼叫契約、以及 schema 可攜性檢查。見 ADR-0015                                     |
+| `app/llm/fake.py`                     | 不連網路的模型實作，**預設值**。回登記好的答案，沒登記就拋錯                                          |
+| `app/llm/bedrock.py`                  | Bedrock Converse adapter；forced tool choice 取得結構化輸出                                           |
+| `app/llm/factory.py`                  | 有 `BEDROCK_MODEL_ID` 用 Bedrock，沒有才用示範實作。啟動時決定一次                                    |
+| `app/llm/tasks/resolve_life_event.py` | 把一段文字對應成有順序的事件代號清單。Case 2 同時保留職災與長照；**系統唯一持有原文的地方**，用完即丟 |
+| `app/orchestration/life_events.py`    | 生命事件登記表的讀取，讀 `data/life_events/events.v0.1.json`                                          |
+| `app/privacy/attribute_gate.py`       | 屬性值的型別與選項驗證，不合法就拒絕整筆                                                              |
+| `app/schemas/session.py`              | 對外的請求與回應形狀                                                                                  |
+| `app/observability/logging.py`        | 結構化 JSON logging 與欄位 allowlist                                                                  |
+| `app/rules/engine.py`                 | 通用規則引擎與相關性評分（資料層負責）                                                                |
+| `app/services/`                       | benefit catalog、來源同步、連結探勘（資料層負責）                                                     |
 
 `app/orchestration/state.py` 的設計理由見
 [ADR-0011](../docs/decisions/0011-frozen-pydantic-session-workflow-state.md)。
 
 ### 佔位，之後整個刪除
 
-| 檔案 | 說明 |
-| --- | --- |
-| `app/api/implementation.py` | 回應裡「哪些能力還沒實作」的宣告。全部實作完成後連同 `ImplementationNotice` 一起從契約移除 |
-| `app/orchestration/protocols.py` 裡的 `Fixture*` / `Local*` 類別 | 四個接口的離線實作。資料層交出 SQLite 實作後，改注入參數即可換掉，介面本身保留 |
+| 檔案                                                             | 說明                                                                                       |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `app/api/implementation.py`                                      | 回應裡「哪些能力還沒實作」的宣告。全部實作完成後連同 `ImplementationNotice` 一起從契約移除 |
+| `app/orchestration/protocols.py` 裡的 `Fixture*` / `Local*` 類別 | 四個接口的離線實作。資料層交出 SQLite 實作後，改注入參數即可換掉，介面本身保留             |
 
 ### 接上真的語言模型（Bedrock）
 
@@ -195,6 +196,15 @@ rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/
 `BEDROCK_MODEL_ID`，但發生權限、模型、region、timeout、throttling 或回應格式錯誤，
 後端會明確失敗，不會把離線示範結果冒充成正式模型結果。
 
+「父親因工作事故失能且需長期照顧」案例已接成完整 backend-fixture 流程：模型回
+`[occupational_injury, long_term_care_need]` 後先等使用者確認，確認後由 backend 回傳四組七題；答案寫入
+session 後由 fixture repository 做 deterministic relevance filter，最後回傳最多七項
+`needs_human_review` 結果。第一段描述只萃取 `event_ids`，不抽取資格 attributes，
+也不讓模型判斷 eligibility。2026-08-01 的 live Bedrock 實測使用舊單數契約並回傳
+`occupational_injury`；multi-event schema 需再做一次 live 驗證。福利與問題資料仍是離線
+fixture，未宣稱完成正式
+資格或法規審查。
+
 接上真模型之後才會出現 `event_not_recognized` 這個錯誤（描述對應不到任何已登記的
 事件）。示範實作永遠成功，所以那條路徑在沒有金鑰時測不到。
 
@@ -205,7 +215,7 @@ rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/
 ### 預設跑起來為什麼每一項都是「需人工協助」
 
 這不是壞掉。`determination.py` 規定只有資料治理狀態是 `verified`（有人真的審查過）
-的方案才可以下完整結論，而離線的預設資料全部是 `candidate`（候選），所以四項一律
+的方案才可以下完整結論，而離線的預設資料全部是 `candidate`（候選），所以所有項目一律
 降級。理由與取捨見
 [ADR-0014](../docs/decisions/0014-keep-fixture-data-out-of-verified-status.md)。
 

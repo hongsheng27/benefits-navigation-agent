@@ -107,7 +107,7 @@ export async function advanceSession(
   return readSnapshot(response);
 }
 
-/** 查目前狀態。重新載入頁面後用來復原，也用於輪詢。 */
+/** 查目前狀態，供需要取得最新快照的呼叫端使用。 */
 export async function getCurrentSession(
   sessionId: string,
   signal?: AbortSignal,

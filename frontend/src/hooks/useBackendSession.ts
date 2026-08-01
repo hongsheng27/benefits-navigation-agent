@@ -5,19 +5,15 @@
  * `snapshot.workflowState` 決定顯示什麼。
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import {
   SessionApiError,
   advanceSession,
   createSession,
   deleteSession,
-  getCurrentSession,
 } from "../api/sessionClient";
 import type { AttributeValue, SessionSnapshot } from "../types/session";
-
-/** session id 存在 localStorage，重新載入頁面後可以接回同一次諮詢。 */
-const SESSION_STORAGE_KEY = "jiezhu.sessionId";
 
 /** 這兩種錯誤代表本機存的 id 已經沒用了，清掉重新開始。 */
 function isStaleSessionError(error: unknown): boolean {
@@ -27,28 +23,7 @@ function isStaleSessionError(error: unknown): boolean {
   );
 }
 
-function readStoredSessionId(): string | null {
-  try {
-    return window.localStorage.getItem(SESSION_STORAGE_KEY);
-  } catch {
-    // 隱私模式或使用者關閉儲存時會拋錯。沒有 id 就當成新的一次諮詢。
-    return null;
-  }
-}
-
-function writeStoredSessionId(sessionId: string | null): void {
-  try {
-    if (sessionId === null) {
-      window.localStorage.removeItem(SESSION_STORAGE_KEY);
-    } else {
-      window.localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
-    }
-  } catch {
-    // 存不進去不影響本次流程，只是重新載入後接不回來。
-  }
-}
-
-export type BackendSessionStatus = "idle" | "restoring" | "working" | "error";
+export type BackendSessionStatus = "idle" | "working" | "error";
 
 export type BackendSession = {
   snapshot: SessionSnapshot | null;
@@ -70,10 +45,7 @@ export type BackendSession = {
 
 export function useBackendSession(): BackendSession {
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
-  // 掛載時就知道要不要復原，所以用初始值表示，而不是在 effect 裡再 setState 一次。
-  const [status, setStatus] = useState<BackendSessionStatus>(() =>
-    readStoredSessionId() ? "restoring" : "idle",
-  );
+  const [status, setStatus] = useState<BackendSessionStatus>("idle");
   const [errorCode, setErrorCode] = useState<SessionApiError["errorCode"] | null>(null);
   const [eventNotRecognized, setEventNotRecognized] = useState(false);
 
@@ -82,7 +54,6 @@ export function useBackendSession(): BackendSession {
 
   const applySnapshot = useCallback((next: SessionSnapshot) => {
     sessionIdRef.current = next.sessionId;
-    writeStoredSessionId(next.sessionId);
     setSnapshot(next);
     setStatus("idle");
     setErrorCode(null);
@@ -91,47 +62,8 @@ export function useBackendSession(): BackendSession {
 
   const forgetSession = useCallback(() => {
     sessionIdRef.current = null;
-    writeStoredSessionId(null);
     setSnapshot(null);
   }, []);
-
-  // 掛載時若本機有 id 就試著接回同一次諮詢。
-  useEffect(() => {
-    const storedId = readStoredSessionId();
-    if (!storedId) {
-      return;
-    }
-
-    const controller = new AbortController();
-
-    getCurrentSession(storedId, controller.signal)
-      .then((restored) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-        applySnapshot(restored);
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-        if (isStaleSessionError(error)) {
-          // 過期或已清除：靜靜地當成新的一次諮詢，不要用錯誤訊息嚇使用者。
-          forgetSession();
-          setStatus("idle");
-          return;
-        }
-        if (error instanceof SessionApiError) {
-          setErrorCode(error.errorCode);
-          setStatus("error");
-          return;
-        }
-        setErrorCode("internal_error");
-        setStatus("error");
-      });
-
-    return () => controller.abort();
-  }, [applySnapshot, forgetSession]);
 
   /**
    * 包住一次 API 呼叫：設定進行中狀態、成功就套用快照、失敗就分類處理。
@@ -175,7 +107,6 @@ export function useBackendSession(): BackendSession {
           const created = await createSession();
           sessionId = created.sessionId;
           sessionIdRef.current = sessionId;
-          writeStoredSessionId(sessionId);
         }
         return advanceSession(sessionId, { kind: "life_event_text", text });
       };
@@ -195,10 +126,7 @@ export function useBackendSession(): BackendSession {
           }
           // 常見於：後端重啟後記憶體 session 已沒了，或本機還握著已往下走的舊諮詢，
           // 卻又在第一步送 life_event_text → invalid_transition。清掉後開新的再送一次。
-          if (
-            isStaleSessionError(error) ||
-            error.errorCode === "invalid_transition"
-          ) {
+          if (isStaleSessionError(error) || error.errorCode === "invalid_transition") {
             forgetSession();
             try {
               applySnapshot(await advanceLifeEventText());
@@ -240,9 +168,7 @@ export function useBackendSession(): BackendSession {
         advanceSession(sessionId, {
           kind: "event_confirmation",
           confirmed,
-          ...(confirmed && eventIds && eventIds.length > 0
-            ? { eventIds }
-            : {}),
+          ...(confirmed && eventIds && eventIds.length > 0 ? { eventIds } : {}),
         }),
       );
     },
@@ -268,9 +194,7 @@ export function useBackendSession(): BackendSession {
       if (!sessionId) {
         return;
       }
-      await run(() =>
-        advanceSession(sessionId, { kind: "attribute_chat_turn", text }),
-      );
+      await run(() => advanceSession(sessionId, { kind: "attribute_chat_turn", text }));
     },
     [run],
   );
