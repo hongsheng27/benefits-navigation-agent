@@ -22,6 +22,11 @@ describe("HomePageAlt demo mode", () => {
     fireEvent.click(screen.getByRole("button", { name: "看下一步" }));
     expect(screen.getByRole("button", { name: "對，就是這件事" })).toBeDisabled();
 
+    const backButtons = screen.getAllByRole("button", { name: "← 上一步" });
+    fireEvent.click(backButtons[0]);
+    expect(screen.getByLabelText("發生了什麼事？")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "看下一步" }));
     fireEvent.click(screen.getByRole("button", { name: "看下一步" }));
     expect(screen.getByRole("button", { name: "繼續" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "勞工保險" })).toBeDisabled();

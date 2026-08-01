@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SessionSnapshot } from "../types/session";
-import { deriveUiStep, HomePageAlt } from "./HomePageAlt";
+import { deriveUiStep, HomePageAlt, previousUiStep } from "./HomePageAlt";
 
 const SESSION_ID = "sess_test_1234";
 
@@ -91,6 +91,16 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   window.localStorage.clear();
+});
+
+describe("previousUiStep", () => {
+  it("walks the wizard backwards", () => {
+    expect(previousUiStep("landing")).toBeNull();
+    expect(previousUiStep("describe")).toBe("landing");
+    expect(previousUiStep("confirm")).toBe("describe");
+    expect(previousUiStep("questions")).toBe("confirm");
+    expect(previousUiStep("result")).toBe("questions");
+  });
 });
 
 describe("deriveUiStep", () => {

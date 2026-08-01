@@ -51,10 +51,31 @@ export type IntakeUiStep = "landing" | "describe" | "confirm" | "questions" | "r
 
 export type IntakeMode = "live" | "demo";
 
+const STEP_ORDER: IntakeUiStep[] = [
+  "landing",
+  "describe",
+  "confirm",
+  "questions",
+  "result",
+];
+
+/** 線性精靈的上一步；已在第一屏則回 null。 */
+export function previousUiStep(step: IntakeUiStep): IntakeUiStep | null {
+  const index = STEP_ORDER.indexOf(step);
+  if (index <= 0) {
+    return null;
+  }
+  return STEP_ORDER[index - 1] ?? null;
+}
+
 type HomePageAltProps = {
   mode?: IntakeMode;
   /** 示範結束或跳過時回到正式諮詢。 */
   onExitDemo?: () => void;
+  /** 在諮詢頁內切換正式／示範。 */
+  onToggleMode?: () => void;
+  /** 外層已有 AppNav 時隱藏頁內品牌列，避免重複。 */
+  hideBrandHeader?: boolean;
 };
 
 const STEP_META: Record<
@@ -129,31 +150,76 @@ function StepProgress({ step }: { step: Exclude<IntakeUiStep, "landing"> }) {
   );
 }
 
+function ModeToggle({
+  mode,
+  onToggle,
+}: {
+  mode: IntakeMode;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="absolute right-4 top-3 z-20 rounded-sm border border-[#c9c0b0] bg-[#f7f4ee]/95 px-3 py-1.5 text-[0.72rem] font-semibold tracking-[0.02em] text-[#4a453d] shadow-sm backdrop-blur transition hover:border-[#2f4f45] hover:text-[#2f4f45] sm:right-6 sm:top-4"
+    >
+      {mode === "live" ? "切換到示範完整流程" : "回到正式諮詢"}
+    </button>
+  );
+}
+
+function BackLink({
+  disabled,
+  onBack,
+}: {
+  disabled?: boolean;
+  onBack: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onBack}
+      className="mb-4 text-[0.88rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:text-[#a89f90] disabled:no-underline"
+    >
+      ← 上一步
+    </button>
+  );
+}
+
 function PageChrome({
   children,
   footerExtra,
   demoBanner,
+  hideBrandHeader = false,
+  modeToggle,
 }: {
   children: ReactNode;
   footerExtra?: ReactNode;
   demoBanner?: ReactNode;
+  hideBrandHeader?: boolean;
+  modeToggle?: ReactNode;
 }) {
   return (
     <div
-      className={`${styles.page} flex min-h-screen flex-col text-[#171513] antialiased`}
+      className={`${styles.page} relative flex min-h-[calc(100vh-4rem)] flex-col text-[#171513] antialiased`}
     >
-      <header className="mx-auto w-full max-w-[40rem] px-5 pt-8 sm:px-8 sm:pt-12">
-        <div className="flex items-baseline gap-3">
-          <span
-            className={`${styles.serif} text-[1.35rem] leading-none tracking-[0.18em] text-[#2f4f45]`}
-          >
-            接住
-          </span>
-          <span className="text-[0.78rem] leading-[1.6] text-[#8b8377]">
-            生活變故時，幫你理出下一步
-          </span>
-        </div>
-      </header>
+      {modeToggle}
+
+      {hideBrandHeader ? null : (
+        <header className="mx-auto w-full max-w-[40rem] px-5 pt-8 sm:px-8 sm:pt-12">
+          <div className="flex items-baseline gap-3">
+            <span
+              className={`${styles.serif} text-[1.35rem] leading-none tracking-[0.18em] text-[#2f4f45]`}
+            >
+              接住
+            </span>
+            <span className="text-[0.78rem] leading-[1.6] text-[#8b8377]">
+              生活變故時，幫你理出下一步
+            </span>
+          </div>
+        </header>
+      )}
 
       {demoBanner}
 
@@ -181,7 +247,11 @@ type IntakeStepsProps = {
   eventNotRecognized?: boolean;
   busy?: boolean;
   readOnly: boolean;
+  /** 回看稍早步驟時，禁止再送出以免打亂後端狀態。 */
+  isReviewing?: boolean;
   demoAnswers?: Record<string, boolean | number | string>;
+  /** 結果頁回看問題時使用（後端結果快照可能已清空 questionGroups）。 */
+  cachedQuestionGroups?: SessionSnapshot["questionGroups"];
   onStart?: () => void;
   onSubmitDescribe?: (event: FormEvent<HTMLFormElement>) => void;
   onExampleSelect?: (prompt: string) => void;
@@ -189,6 +259,8 @@ type IntakeStepsProps = {
   onRedescribe?: () => void;
   onAnswerFields?: (answers: Record<string, boolean | number | string>) => void;
   onReset?: () => void;
+  onBack?: () => void;
+  onReturnToCurrent?: () => void;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   stepHeadingRef?: RefObject<HTMLHeadingElement | null>;
 };
@@ -201,7 +273,9 @@ function IntakeSteps({
   eventNotRecognized = false,
   busy = false,
   readOnly,
+  isReviewing = false,
   demoAnswers,
+  cachedQuestionGroups = [],
   onStart,
   onSubmitDescribe,
   onExampleSelect,
@@ -209,24 +283,49 @@ function IntakeSteps({
   onRedescribe,
   onAnswerFields,
   onReset,
+  onBack,
+  onReturnToCurrent,
   inputRef,
   stepHeadingRef,
 }: IntakeStepsProps) {
   const trimmed = description.trim();
+  const actionsLocked = readOnly || isReviewing;
   const canSubmit =
-    !readOnly &&
+    !actionsLocked &&
     trimmed.length > 0 &&
     trimmed.length <= MAX_LIFE_EVENT_TEXT_LENGTH &&
     !busy;
 
-  const questionGroups = snapshot?.questionGroups ?? [];
+  const questionGroups =
+    (snapshot?.questionGroups?.length ?? 0) > 0
+      ? (snapshot?.questionGroups ?? [])
+      : cachedQuestionGroups;
   const hasNoQuestionsYet =
     uiStep === "result" &&
     (snapshot?.items.length ?? 0) === 0 &&
     questionGroups.length === 0;
 
+  const showBack = uiStep !== "landing" && onBack !== undefined;
+
   return (
     <>
+      {showBack ? <BackLink disabled={busy} onBack={onBack} /> : null}
+
+      {isReviewing ? (
+        <div className="mb-6 rounded-sm border border-[#e2d3b5] bg-[#f8f3ea] px-4 py-3 text-[0.88rem] leading-[1.85] text-[#4a453d]">
+          <p>你正在回看稍早的步驟。若要繼續，請先回到目前進度。</p>
+          {onReturnToCurrent ? (
+            <button
+              type="button"
+              onClick={onReturnToCurrent}
+              className="mt-2 text-[0.88rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline"
+            >
+              回到目前進度
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {uiStep === "landing" ? (
         <section>
           <p
@@ -254,7 +353,7 @@ function IntakeSteps({
               </li>
             ))}
           </ul>
-          {!readOnly && onStart ? (
+          {!actionsLocked && onStart ? (
             <button
               type="button"
               onClick={onStart}
@@ -281,7 +380,7 @@ function IntakeSteps({
           </p>
           <form
             onSubmit={(event) => {
-              if (readOnly) {
+              if (actionsLocked) {
                 event.preventDefault();
                 return;
               }
@@ -298,7 +397,7 @@ function IntakeSteps({
               id="intake-description"
               ref={inputRef}
               value={description}
-              readOnly={readOnly}
+              readOnly={actionsLocked}
               onChange={(event) => setDescription?.(event.target.value)}
               aria-describedby="intake-hint intake-privacy"
               maxLength={MAX_LIFE_EVENT_TEXT_LENGTH}
@@ -321,7 +420,7 @@ function IntakeSteps({
 
             <PrivacyNotice id="intake-privacy" />
 
-            {!readOnly && onExampleSelect ? (
+            {!actionsLocked && onExampleSelect ? (
               <ExamplePrompts
                 labelId="intake-examples"
                 prompts={EXAMPLE_PROMPTS}
@@ -340,9 +439,11 @@ function IntakeSteps({
               <p className="mt-3 text-[0.82rem] leading-[1.8] text-[#8b8377]">
                 {readOnly
                   ? "示範中無法送出。正式使用時，寫下一點內容就可以繼續。"
-                  : canSubmit
-                    ? "送出後我們只留下「發生哪一類事」，你寫的原文不會保存。"
-                    : "寫下一點內容後，就可以繼續。"}
+                  : isReviewing
+                    ? "回看中無法重新送出，請先回到目前進度。"
+                    : canSubmit
+                      ? "送出後我們只留下「發生哪一類事」，你寫的原文不會保存。"
+                      : "寫下一點內容後，就可以繼續。"}
               </p>
             </div>
           </form>
@@ -363,7 +464,7 @@ function IntakeSteps({
             先確認這一步，後面才不會問到不相干的問題。
           </p>
           <EventConfirmation
-            disabled={busy || readOnly}
+            disabled={busy || actionsLocked}
             lifeEvent={snapshot.lifeEvent}
             onConfirm={() => onConfirm?.()}
             onRedescribe={() => onRedescribe?.()}
@@ -388,10 +489,11 @@ function IntakeSteps({
           </p>
           <div className="mt-6">
             <QuestionGroupList
-              disabled={busy || readOnly}
+              key={`${uiStep}-${isReviewing ? "review" : "live"}`}
+              disabled={busy || actionsLocked}
               groups={questionGroups}
-              initialAnswers={demoAnswers}
-              readOnly={readOnly}
+              initialAnswers={demoAnswers ?? snapshot?.attributes}
+              readOnly={actionsLocked}
               onSubmit={(answers) => onAnswerFields?.(answers)}
             />
           </div>
@@ -432,7 +534,7 @@ function IntakeSteps({
             </div>
           )}
 
-          {!readOnly && onReset ? (
+          {!actionsLocked && onReset ? (
             <div className="mt-10">
               <button
                 type="button"
@@ -454,6 +556,8 @@ function DemoNavBar({
   total,
   narration,
   isLast,
+  canGoBack,
+  onBack,
   onNext,
   onSkip,
   onFinish,
@@ -462,6 +566,8 @@ function DemoNavBar({
   total: number;
   narration: string;
   isLast: boolean;
+  canGoBack: boolean;
+  onBack: () => void;
   onNext: () => void;
   onSkip: () => void;
   onFinish: () => void;
@@ -477,6 +583,15 @@ function DemoNavBar({
           {narration}
         </p>
         <div className="flex flex-wrap items-center gap-3">
+          {canGoBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-sm border border-[#c9c0b0] bg-transparent px-4 py-2.5 text-[0.88rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+            >
+              ← 上一步
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onSkip}
@@ -507,7 +622,15 @@ function DemoNavBar({
   );
 }
 
-function HomePageDemo({ onExitDemo }: { onExitDemo?: () => void }) {
+function HomePageDemo({
+  onExitDemo,
+  onToggleMode,
+  hideBrandHeader,
+}: {
+  onExitDemo?: () => void;
+  onToggleMode?: () => void;
+  hideBrandHeader?: boolean;
+}) {
   const [sceneIndex, setSceneIndex] = useState(0);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const scene = INTAKE_DEMO_SCENES[sceneIndex];
@@ -525,6 +648,12 @@ function HomePageDemo({ onExitDemo }: { onExitDemo?: () => void }) {
 
   return (
     <PageChrome
+      hideBrandHeader={hideBrandHeader}
+      modeToggle={
+        onToggleMode && sceneIndex === 0 ? (
+          <ModeToggle mode="demo" onToggle={onToggleMode} />
+        ) : null
+      }
       demoBanner={
         <div className="mx-auto w-full max-w-[40rem] px-5 pt-4 sm:px-8">
           <p className="rounded-sm border border-[#e2d3b5] bg-[#f8f3ea] px-4 py-3 text-[0.88rem] leading-[1.85] text-[#4a453d]">
@@ -543,12 +672,19 @@ function HomePageDemo({ onExitDemo }: { onExitDemo?: () => void }) {
         readOnly
         demoAnswers={scene.answers}
         stepHeadingRef={stepHeadingRef}
+        onBack={
+          sceneIndex > 0
+            ? () => setSceneIndex((i) => Math.max(0, i - 1))
+            : undefined
+        }
       />
       <DemoNavBar
         sceneIndex={sceneIndex}
         total={INTAKE_DEMO_SCENES.length}
         narration={scene.narration}
         isLast={isLast}
+        canGoBack={sceneIndex > 0}
+        onBack={() => setSceneIndex((i) => Math.max(0, i - 1))}
         onNext={() => setSceneIndex((i) => Math.min(i + 1, INTAKE_DEMO_SCENES.length - 1))}
         onSkip={exit}
         onFinish={exit}
@@ -557,13 +693,24 @@ function HomePageDemo({ onExitDemo }: { onExitDemo?: () => void }) {
   );
 }
 
-function HomePageLive() {
+function HomePageLive({
+  hideBrandHeader,
+  onToggleMode,
+}: {
+  hideBrandHeader?: boolean;
+  onToggleMode?: () => void;
+}) {
   const [description, setDescription] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
   const [connection, setConnection] = useState<BackendConnectionState>("checking");
+  const [reviewStep, setReviewStep] = useState<IntakeUiStep | null>(null);
+  const [cachedQuestionGroups, setCachedQuestionGroups] = useState<
+    SessionSnapshot["questionGroups"]
+  >([]);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const naturalStepRef = useRef<IntakeUiStep>("landing");
 
   const {
     snapshot,
@@ -606,7 +753,22 @@ function HomePageLive() {
     }
   }, [snapshot]);
 
-  const uiStep = deriveUiStep(snapshot, hasStarted);
+  useEffect(() => {
+    if ((snapshot?.questionGroups.length ?? 0) > 0) {
+      setCachedQuestionGroups(snapshot!.questionGroups);
+    }
+  }, [snapshot]);
+
+  const naturalStep = deriveUiStep(snapshot, hasStarted);
+  const uiStep = reviewStep ?? naturalStep;
+  const isReviewing = reviewStep !== null && reviewStep !== naturalStep;
+
+  useEffect(() => {
+    if (naturalStep !== naturalStepRef.current) {
+      naturalStepRef.current = naturalStep;
+      setReviewStep(null);
+    }
+  }, [naturalStep]);
 
   useEffect(() => {
     if (uiStep !== "landing") {
@@ -632,17 +794,60 @@ function HomePageLive() {
   async function handleReset() {
     setDescription("");
     setHasStarted(false);
+    setReviewStep(null);
+    setCachedQuestionGroups([]);
     await resetSession();
   }
 
   async function handleRedescribe() {
+    setReviewStep(null);
     await confirmEvent(false);
     setDescription("");
     inputRef.current?.focus();
   }
 
+  function handleBack() {
+    const prev = previousUiStep(uiStep);
+    if (prev === null || busy) {
+      return;
+    }
+
+    // 仍在後端「確認事件」狀態時，上一步用正式拒絕確認回到描述。
+    if (uiStep === "confirm" && naturalStep === "confirm" && !isReviewing) {
+      void handleRedescribe();
+      return;
+    }
+
+    // 尚無 session 的描述頁 → 說明頁
+    if (uiStep === "describe" && naturalStep === "describe" && snapshot === null) {
+      setHasStarted(false);
+      return;
+    }
+
+    // 結果頁若沒有可回看的問題，直接回到確認
+    if (
+      uiStep === "result" &&
+      prev === "questions" &&
+      (snapshot?.questionGroups.length ?? 0) === 0 &&
+      cachedQuestionGroups.length === 0
+    ) {
+      setReviewStep("confirm");
+      return;
+    }
+
+    setReviewStep(prev);
+  }
+
   return (
-    <PageChrome footerExtra={<BackendStatusLine state={connection} />}>
+    <PageChrome
+      hideBrandHeader={hideBrandHeader}
+      modeToggle={
+        onToggleMode && uiStep === "landing" ? (
+          <ModeToggle mode="live" onToggle={onToggleMode} />
+        ) : null
+      }
+      footerExtra={<BackendStatusLine state={connection} />}
+    >
       {errorCode ? (
         <div
           role="alert"
@@ -667,6 +872,8 @@ function HomePageLive() {
         eventNotRecognized={eventNotRecognized}
         busy={busy}
         readOnly={false}
+        isReviewing={isReviewing}
+        cachedQuestionGroups={cachedQuestionGroups}
         onStart={() => setHasStarted(true)}
         onSubmitDescribe={(event) => void handleSubmit(event)}
         onExampleSelect={(prompt) => {
@@ -677,6 +884,8 @@ function HomePageLive() {
         onRedescribe={() => void handleRedescribe()}
         onAnswerFields={(answers) => void answerFields(answers)}
         onReset={() => void handleReset()}
+        onBack={uiStep === "landing" ? undefined : handleBack}
+        onReturnToCurrent={() => setReviewStep(null)}
         inputRef={inputRef}
         stepHeadingRef={stepHeadingRef}
       />
@@ -684,9 +893,22 @@ function HomePageLive() {
   );
 }
 
-export function HomePageAlt({ mode = "live", onExitDemo }: HomePageAltProps) {
+export function HomePageAlt({
+  mode = "live",
+  onExitDemo,
+  onToggleMode,
+  hideBrandHeader = false,
+}: HomePageAltProps) {
   if (mode === "demo") {
-    return <HomePageDemo onExitDemo={onExitDemo} />;
+    return (
+      <HomePageDemo
+        hideBrandHeader={hideBrandHeader}
+        onExitDemo={onExitDemo}
+        onToggleMode={onToggleMode}
+      />
+    );
   }
-  return <HomePageLive />;
+  return (
+    <HomePageLive hideBrandHeader={hideBrandHeader} onToggleMode={onToggleMode} />
+  );
 }
