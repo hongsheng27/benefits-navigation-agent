@@ -59,37 +59,23 @@ class Settings(BaseSettings):
     """Session token for workshop / STS temporary credentials."""
 
     bedrock_model_id: str = ""
-    """Bedrock foundation model ID. Empty means Bedrock is not selected.
+    """Bedrock model or inference profile ID. Empty means Bedrock is not selected.
 
     Request access only for the model you actually use (competition rule).
-    Example: anthropic.claude-haiku-4-5-20251001-v1:0
+    Verified example: us.anthropic.claude-haiku-4-5-20251001-v1:0
     """
-
-    # --- Gemini (fallback while Bedrock is unavailable) --------------------
-    #
-    # Empty means no Gemini key. Used only when Bedrock is not configured.
-
-    gemini_api_key: str = ""
-    """Gemini API key. Never commit a real value; keep it in a local `.env`."""
-
-    gemini_model_id: str = "gemma-4-31b-it"
-    """Model identifier, configurable because models get retired."""
 
     def has_bedrock_language_model(self) -> bool:
         """Whether a Bedrock model ID is configured."""
         return bool(self.bedrock_model_id.strip())
 
-    def has_gemini_language_model(self) -> bool:
-        """Whether a Gemini API key is configured."""
-        return bool(self.gemini_api_key.strip())
-
     def has_live_language_model(self) -> bool:
-        """Whether any real model is configured (Bedrock preferred, else Gemini).
+        """Whether the Bedrock live model is configured.
 
         `strip()` because an accidental `BEDROCK_MODEL_ID=" "` in `.env` should
         count as absent rather than produce a failed call on every request.
         """
-        return self.has_bedrock_language_model() or self.has_gemini_language_model()
+        return self.has_bedrock_language_model()
 
 
 def apply_aws_credentials_to_environ(settings: Settings) -> None:

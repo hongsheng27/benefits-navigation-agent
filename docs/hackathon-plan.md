@@ -105,35 +105,36 @@ Demo 只需要**一個**「不符合」的時刻。四項都寫規則會吃掉�
 
 ## 風險與備案
 
-### 1. Bedrock 權限未經驗證
+### 1. Bedrock 權限已驗證
 
-主辦回覆「應有」,但無具體清單。**必須自行驗證**,重點是實際呼叫一次
-(`converse`),而非只確認模型列得出來 —— 列得出不代表帳號已獲授權。
-
-若受限:調整模型優先序(`BEDROCK_MODEL_ID` 已是環境變數),或啟用 fallback。
+2026-08-01 已在競賽帳號 `us-west-2` 以
+`us.anthropic.claude-haiku-4-5-20251001-v1:0` 實際呼叫 `Converse` 成功，並以 forced
+tool choice 取得已登記的 `spouse_death` 事件代號。這不是只確認模型列得出來；正式模型
+路徑已經打通。
 
 ### 2. 現場網路 / 服務失效
 
-**這一項已經備好了,不需要現場做。** 把 `GEMINI_API_KEY` 留空,後端就會自動落回
+**這一項已經備好了,不需要現場做。** 不設定 `BEDROCK_MODEL_ID`，後端就會使用
 不連網路的示範實作(`app/llm/factory.py`),事件辨識回一個寫死的代號。
+
+若已設定 `BEDROCK_MODEL_ID`，Bedrock 執行中失敗會明確回錯，不會在同一次請求中偷偷
+切到示範實作。要切換成離線 demo 必須由現場人員明確清除模型設定並重啟後端。
 
 因為資格判定在規則引擎、資料在本機 JSON,**沒有模型也能跑完整條流程**——
 [positioning.md](positioning.md) 的「移除 LLM 系統仍可運作」正好就是 demo 保險。
 真的用上時應誠實說明:回應裡的 `implementation.pending` 會帶著
 `life_event_extraction`,啟動紀錄也會記 `model_id: demo_fixture`。
 
-### 3. 模型供應商的不確定性
+### 3. 模型供應商策略
 
 **已經不是 Strands 的問題了。** 2026-07-30 改用窄的 LLM port
 ([ADR-0015](decisions/0015-narrow-llm-port-instead-of-agent-loop.md)),
 沒有 agent 迴圈也沒有第三方 agent 框架,所以那一層不確定性消失了。
 
-現在的不確定性只有一個:**Bedrock 帳號權限**。目前跑的是自己的 Gemini 金鑰
-(`gemma-4-31b-it`,已實測)。Bedrock adapter(T28)還沒寫,遷移步驟寫在
-[AWS 遷移指南](aws_migration_guide.md)。
-
-**遷移那天不要刪掉 Gemini adapter** —— 它是唯一驗證過的真實模型路徑,
-如果現場帳號或模型出問題,那是唯一的退路。
+正式 live provider 已統一為 Amazon Bedrock Converse，Gemini adapter 與設定已移除。
+沒有 `BEDROCK_MODEL_ID` 時仍保留 offline demo；有設定時不做 runtime silent fallback。
+完整設定與現場切換步驟寫在 [AWS 遷移指南](aws_migration_guide.md)，決策記錄在
+[ADR-0016](decisions/0016-use-bedrock-only-live-llm-provider.md)。
 
 ### 4. 現場整合爆炸
 

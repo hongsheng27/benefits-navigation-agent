@@ -108,7 +108,7 @@ UNDERSTAND_EVENT
 | Backend                   | Python、Pydantic、boto3                                                 | 暫定；API、結構化資料與 AWS 整合                        |
 | Backend topology          | Modular monolith                                                        | **已決定**；模組分離，單一 deployment unit              |
 | API framework             | FastAPI                                                                 | **已決定**；核心 application logic 不依賴 framework     |
-| LLM                       | 目前 Gemini（`gemma-4-31b-it`），目標 Amazon Bedrock                    | **已實作**；隔離在自有 LLM port 後方，換廠商只動一個檔案 |
+| LLM                       | Amazon Bedrock Converse（Claude Haiku 4.5）                             | **已實作並實測**；未設定模型時保留離線示範              |
 | Agent orchestration       | Policy-governed hybrid                                                  | **已決定**；state machine 控制，模型僅限兩個指定節點     |
 | Agent SDK                 | 無 —— 不做 agent 迴圈                                                   | **已決定**；改用窄的 LLM port，見 ADR-0015              |
 | Agent hosting             | Amazon Bedrock AgentCore Runtime                                        | **後續決定**；先確認比賽帳號權限與現場可用性            |
@@ -134,7 +134,7 @@ UNDERSTAND_EVENT
 
 | 項目 | 白話說明 |
 | --- | --- |
-| **LLM** | 讓系統能「聽懂」使用者的話、產生白話回答的 AI 模型。目前接自己的 Gemini 金鑰（已實測可用），目標是換成 AWS Bedrock。呼叫方式關在一個介面後面，換模型只動一個檔案。 |
+| **LLM** | 讓系統能「聽懂」使用者的話、產生白話回答的 AI 模型。目前使用 AWS Bedrock Converse 與 Claude Haiku 4.5，已在競賽帳號 `us-west-2` 實測。未設定模型時才使用離線示範。 |
 | **Agent SDK** | **不用了。** 原本打算用 Strands 做一個「會自己決定下一步」的 agent。後來判定不做 — 我們只有兩個問一次答一次的任務，而讓模型能自己呼叫功能會開出一條它可以影響資格判定的路。見 ADR-0015。 |
 | **Agent hosting (AgentCore)** | 讓 Agent 跑在 AWS 上面（不是跑在你的電腦）。是否用要看比賽帳號有沒有開放權限。 |
 | **Document storage (S3)** | 雲端檔案儲存。目前用本機資料夾放 HTML；8/1 後改放 S3，讓所有人都讀得到。 |
@@ -346,9 +346,11 @@ agent 迴圈（[ADR-0004](docs/decisions/0004-trial-strands-agent-runner.md)）�
 系統裡只有兩個模型任務、兩個都是單次問答；而給模型工具就是開出一條它可以影響資格判定
 的路，**不存在的能力不需要用 prompt 或護欄去防守**。
 
-模型呼叫關在 `backend/app/llm/` 底下：`port.py` 定形狀、`gemini.py` 是目前的實作
-（唯一 import `httpx`、唯一知道 Gemini 存在的模組）、`fake.py` 讓測試不需要網路。
-換成 Bedrock 只需要新增一個 adapter 並改 `factory.py` 一行，遷移步驟寫在
+模型呼叫關在 `backend/app/llm/` 底下：`port.py` 定形狀、`bedrock.py` 透過 boto3
+`Converse` 呼叫正式模型、`fake.py` 讓測試與離線示範不需要網路。設定
+`BEDROCK_MODEL_ID` 時只走 Bedrock；沒有設定時才使用離線示範。Bedrock 執行中失敗會
+明確回錯，不會偷偷改用示範結果。詳見
+[ADR-0016](docs/decisions/0016-use-bedrock-only-live-llm-provider.md) 與
 [AWS 遷移指南](docs/aws_migration_guide.md)。
 
 ## 四人初步分工

@@ -2,16 +2,15 @@
 
 選擇順序：
 
-1. 有 `BEDROCK_MODEL_ID` → Bedrock（比賽日正式路徑）
-2. 否則有 `GEMINI_API_KEY` → Gemini（已驗證的退路）
-3. 否則 → 離線示範實作
+1. 有 `BEDROCK_MODEL_ID` → Bedrock Converse（比賽日正式路徑）
+2. 否則 → 離線示範實作
 
 **沒有金鑰／模型不是錯誤。** 隊友沒有你的憑證時仍要能跑前端與整合測試。
 
 ## 為什麼執行中失敗不會偷偷換實作
 
 這裡只在**啟動組裝時**做一次選擇。如果 Bedrock 在執行中失敗，
-**不會**偷偷改用 Gemini 或示範實作 —— 那會把「我們沒看懂」變成另一個
+**不會**偷偷改用示範實作 —— 那會把「我們沒看懂」變成另一個
 看起來正常但可能錯誤的結果。失敗就是失敗，走 `event_not_recognized`。
 """
 
@@ -19,7 +18,6 @@ import logging
 
 from app.config import Settings
 from app.llm.bedrock import BedrockLanguageModel
-from app.llm.gemini import GeminiLanguageModel
 from app.llm.port import LanguageModelPort
 from app.observability.logging import log_event
 from app.orchestration.demo_fixtures import demo_language_model
@@ -38,17 +36,9 @@ def build_language_model(settings: Settings) -> LanguageModelPort:
         )
         return BedrockLanguageModel(
             model_id=settings.bedrock_model_id,
-            region_name=settings.aws_region,
-        )
-
-    if settings.has_gemini_language_model():
-        log_event(
-            "language_model_selected",
-            model_id=settings.gemini_model_id,
-        )
-        return GeminiLanguageModel(
-            api_key=settings.gemini_api_key,
-            model_id=settings.gemini_model_id,
+            region_name=(
+                settings.aws_default_region.strip() or settings.aws_region.strip()
+            ),
         )
 
     log_event(
