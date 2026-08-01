@@ -63,7 +63,7 @@ describe("ProfileScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "永久刪除" }));
 
     expect(
-      await screen.findByPlaceholderText("請描述目前的狀況……"),
+      await screen.findByPlaceholderText("例如：家人剛過世、被資遣、需要長照……"),
     ).toBeInTheDocument();
   });
 });

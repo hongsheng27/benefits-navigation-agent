@@ -34,10 +34,10 @@ export function PrivacyNotice({ id }: PrivacyNoticeProps) {
             id={headingId}
             className="text-[0.95rem] leading-[1.9] font-semibold tracking-[0.02em] text-[#171513]"
           >
-            請不要寫進來的資訊
+            這些資料請不要寫進來
           </h3>
           <p className="mt-1 text-[0.9rem] leading-[2] text-[#4a453d]">
-            {`${FORBIDDEN.join("、")}都不要輸入。判斷資格靠的是關係、年齡區間、投保狀況這類條件，不需要知道你是誰。`}
+            {`${FORBIDDEN.join("、")}都不必填。我們只需要了解關係、年齡區間、投保狀況這類條件，就能幫你判斷方向。`}
           </p>
         </div>
       </div>

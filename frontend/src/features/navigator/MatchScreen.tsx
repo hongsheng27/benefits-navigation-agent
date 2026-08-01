@@ -92,7 +92,7 @@ export function MatchScreen() {
             <div>
               <p className="text-sm font-bold text-[#153f3b]">問題都回答完了</p>
               <p className="mt-1 text-xs text-[#27756c]">
-                下方是依你的情況評估的結果與文件備妥率，想調整答案可以按右邊的按鈕。
+                下方是依你的情況整理的結果與文件準備進度，想調整答案可以按右邊的按鈕。
               </p>
             </div>
             <div className="flex gap-2">
@@ -275,7 +275,7 @@ function QuestionCard({
     <div className="rounded-3xl border-2 border-[#0d7360] bg-white p-7 shadow-md">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-bold text-[#0d7360]">✎ 回答問題來完成評估</p>
+          <p className="text-xs font-bold text-[#0d7360]">✎ 回答問題來完成整理</p>
           <p className="mt-1 text-xs text-slate-400">
             每回答一題，下方的判定結果、可領金額與文件備妥率都會即時更新。
           </p>

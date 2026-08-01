@@ -27,7 +27,7 @@ export function DetailScreen() {
           onClick={backToMatch}
           type="button"
         >
-          ← 回媒合結果
+          ← 回結果列表
         </button>
       </div>
     );
@@ -53,7 +53,7 @@ export function DetailScreen() {
         onClick={backToMatch}
         type="button"
       >
-        ← 回媒合結果
+        ← 回結果列表
       </button>
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">

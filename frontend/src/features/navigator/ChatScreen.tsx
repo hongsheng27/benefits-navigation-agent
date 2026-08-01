@@ -112,28 +112,28 @@ export function ChatScreen() {
 
           {awaitingConfirmation && (
             <div className="mx-6 mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-[#153f3b] px-6 py-5">
-              <p className="text-sm font-bold text-white">這樣理解你的狀況對嗎？</p>
+              <p className="text-sm font-bold text-white">我們這樣理解，對嗎？</p>
               <div className="flex gap-2">
                 <button
                   className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-[#153f3b] transition hover:bg-[#f0faf7]"
                   onClick={confirmUnderstanding}
                   type="button"
                 >
-                  對，這樣理解沒錯
+                  對，就是這件事
                 </button>
                 <button
                   className="rounded-xl border border-white/50 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/10"
                   onClick={reviseUnderstanding}
                   type="button"
                 >
-                  不太對，我想再說明
+                  不太對，我再說明一次
                 </button>
               </div>
             </div>
           )}
 
           <p className="border-t border-slate-200 bg-slate-50/60 px-6 pt-3 text-xs text-slate-400">
-            請不要輸入姓名、身分證字號、地址、電話或 email。
+            請不要輸入姓名、身分證字號、地址、電話或電子郵件。
           </p>
           <form
             className="flex items-end gap-3 bg-slate-50/60 px-6 pb-4 pt-2"
@@ -144,7 +144,7 @@ export function ChatScreen() {
               className="min-h-12 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-[15px] leading-6 outline-none focus:border-[#5da79e] focus:ring-4 focus:ring-[#5da79e]/15"
               disabled={state.isTyping}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="請描述目前的狀況……"
+              placeholder="例如：家人剛過世、被資遣、需要長照……"
               value={draft}
             />
             <button
@@ -175,7 +175,7 @@ export function ChatScreen() {
             </div>
           ) : (
             <p className="mt-3 text-sm italic text-slate-400">
-              還沒有偵測到明確的情境標籤
+              多說一點發生的事，這裡會慢慢出現重點
             </p>
           )}
           <p className="mt-4 border-t border-slate-200 pt-3 text-xs leading-6 text-slate-400">

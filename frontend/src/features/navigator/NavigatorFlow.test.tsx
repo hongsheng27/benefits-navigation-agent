@@ -15,7 +15,9 @@ describe("NavigatorFlow", () => {
     render(<NavigatorFlow />);
 
     expect(
-      screen.getByRole("heading", { name: "先說說你的狀況，我幫你找出可以申請的補助" }),
+      screen.getByRole("heading", {
+        name: "突然發生大事時，先不用自己查完所有規定",
+      }),
     ).toBeInTheDocument();
 
     sendViaTextarea("家人剛過世，不知道接下來要辦什麼");
@@ -23,7 +25,7 @@ describe("NavigatorFlow", () => {
     expect(await screen.findByText("喪偶")).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", {
-        name: "先說說你的狀況，我幫你找出可以申請的補助",
+        name: "突然發生大事時，先不用自己查完所有規定",
       }),
     ).not.toBeInTheDocument();
   });
@@ -37,7 +39,7 @@ describe("NavigatorFlow", () => {
     fireEvent.click(await screen.findByRole("button", { name: "有兩個小孩要養" }));
     fireEvent.click(await screen.findByRole("button", { name: "最近也失業了" }));
 
-    fireEvent.click(await screen.findByRole("button", { name: "對，這樣理解沒錯" }));
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
 
     expect(
       await screen.findByRole("heading", { name: "我們理解到：喪偶" }),
@@ -54,7 +56,7 @@ describe("NavigatorFlow", () => {
     fireEvent.click(await screen.findByRole("button", { name: "只有我自己" }));
     fireEvent.click(await screen.findByRole("button", { name: "還在工作" }));
 
-    fireEvent.click(await screen.findByRole("button", { name: "不太對，我想再說明" }));
+    fireEvent.click(await screen.findByRole("button", { name: "不太對，我再說明一次" }));
 
     expect(
       await screen.findByText("好的，那我們再多聊一點，還有什麼想補充的嗎？"),
@@ -71,7 +73,7 @@ describe("NavigatorFlow", () => {
     fireEvent.click(await screen.findByRole("button", { name: "只有我自己" }));
     fireEvent.click(await screen.findByRole("button", { name: "還在工作" }));
 
-    await screen.findByRole("button", { name: "對，這樣理解沒錯" });
+    await screen.findByRole("button", { name: "對，就是這件事" });
     expect(screen.queryByText("收入中斷")).not.toBeInTheDocument();
   });
 

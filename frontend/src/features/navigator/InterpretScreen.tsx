@@ -2,16 +2,16 @@ import { useNavigator } from "./NavigatorContext";
 
 const NEXT_STEPS = [
   {
-    title: "媒合可能相關的福利與行政事項",
-    body: "依你目前描述的情況，篩選出可能相關、且可能跨機關的福利與待辦事項。",
+    title: "找出可能相關的補助與手續",
+    body: "依你目前描述的情況，篩出可能相關、也可能跨機關的項目。",
   },
   {
-    title: "只追問還缺的資格資訊",
-    body: "只會問判斷資格所必要、且你還沒提供過的問題，其他的不會重複問。",
+    title: "只再問還缺的條件",
+    body: "只問判斷資格真正需要、且你還沒提過的事，不會重複問。",
   },
   {
-    title: "附上官方來源與申請順序",
-    body: "每一項都會標示負責機關、法規依據與建議的辦理順序，重要步驟仍會請你確認。",
+    title: "附上官方來源與建議順序",
+    body: "每一項會標示負責機關、依據與建議辦理順序；重要步驟仍請你自行確認。",
   },
 ];
 
@@ -65,9 +65,9 @@ export function InterpretScreen() {
 
       <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
         <div>
-          <p className="text-sm font-bold text-slate-700">以上的解讀正確嗎？</p>
+          <p className="text-sm font-bold text-slate-700">我們這樣理解，對嗎？</p>
           <p className="mt-1 text-xs leading-5 text-slate-400">
-            確認後才會開始判斷你可能符合哪些補助；理解有誤可以回去補充。
+            確認後才會開始整理可能相關的補助；若不對，可以再補充說明。
           </p>
         </div>
         <div className="flex gap-2">
@@ -76,14 +76,14 @@ export function InterpretScreen() {
             onClick={reviseUnderstanding}
             type="button"
           >
-            回去補充說明
+            不太對，我再補充
           </button>
           <button
             className="rounded-xl bg-[#153f3b] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#1c504b]"
             onClick={goToMatch}
             type="button"
           >
-            正確，開始媒合評估 →
+            對，繼續整理
           </button>
         </div>
       </section>

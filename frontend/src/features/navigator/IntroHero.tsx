@@ -1,25 +1,25 @@
 const HOW_IT_WORKS = [
   {
-    step: "描述狀況",
-    detail: "說說發生了什麼事，用你自己的話就好，我會慢慢問清楚。",
+    step: "說說發生的事",
+    detail: "用你平常說話的方式寫就好，不通順也沒關係。",
   },
   {
-    step: "狀況解讀",
-    detail: "確認我有沒有理解錯，理解錯了可以隨時重新描述。",
+    step: "確認我們理解對不對",
+    detail: "先對齊狀況，後面才不會問到不相干的問題。",
   },
   {
-    step: "媒合與評估",
-    detail: "回答幾個必要問題，只問判定資格真正需要的欄位。",
+    step: "回答幾個問題",
+    detail: "只問判斷資格真正需要知道的事。",
   },
   {
-    step: "準備清單",
-    detail: "拿到應備文件、辦理順序與受理機關，可列印帶去辦理。",
+    step: "取得準備清單",
+    detail: "整理文件、辦理順序與受理機關，方便你帶去辦理。",
   },
 ];
 
 const TRUST_NOTES = [
   { label: "免費", detail: "不收任何費用" },
-  { label: "不代辦", detail: "僅提供查詢與準備，申請仍由你自行送件" },
+  { label: "不代辦", detail: "我們協助你準備，送件仍由你自己完成" },
   { label: "可隨時刪除", detail: "你的資料由你控制" },
 ];
 
@@ -178,12 +178,11 @@ export function IntroHero() {
       <BannerIllustration />
       <div className="px-7 py-6">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          先說說你的狀況，我幫你找出可以申請的補助
+          突然發生大事時，先不用自己查完所有規定
         </h1>
         <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-500">
-          遇到親人過世、失去工作、獨自照顧家人這類突然的變動時，往往不知道政府有哪些補助、
-          該去哪個機關、要準備什麼文件。接住會先聽你說明處境，再幫你判斷可能符合的項目，
-          並整理成一份可以帶去辦理的清單。
+          親人過世、失去工作、需要長照……這類變動常常不知道有哪些補助、該去哪、要準備什麼。
+          接住會先聽你說明處境，再幫你整理可能相關的項目與辦理清單。
         </p>
 
         <div className="mt-6 grid gap-4 border-y border-slate-100 py-5 sm:grid-cols-2 lg:grid-cols-4">

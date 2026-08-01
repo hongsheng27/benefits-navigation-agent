@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SessionSnapshot } from "../types/session";
-import { HomePageAlt } from "./HomePageAlt";
+import { deriveUiStep, HomePageAlt } from "./HomePageAlt";
 
 const SESSION_ID = "sess_test_1234";
 
@@ -68,11 +68,19 @@ function stubBackend(advanceResponses: ReturnType<typeof jsonResponse>[]) {
   return calls;
 }
 
+async function startIntake() {
+  expect(
+    await screen.findByRole("button", { name: "開始說明我的情況" }),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "開始說明我的情況" }));
+  expect(await screen.findByLabelText("發生了什麼事？")).toBeInTheDocument();
+}
+
 function describeSituation(text: string) {
   fireEvent.change(screen.getByLabelText("發生了什麼事？"), {
     target: { value: text },
   });
-  fireEvent.click(screen.getByRole("button", { name: "整理我的下一步" }));
+  fireEvent.click(screen.getByRole("button", { name: "下一步" }));
 }
 
 beforeEach(() => {
@@ -85,12 +93,57 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
+describe("deriveUiStep", () => {
+  it("maps session snapshots to a single UI step", () => {
+    expect(deriveUiStep(null, false)).toBe("landing");
+    expect(deriveUiStep(null, true)).toBe("describe");
+    expect(deriveUiStep(snapshot({ lifeEvent: null }), true)).toBe("describe");
+    expect(deriveUiStep(snapshot({ lifeEvent: "spouse_death" }), true)).toBe(
+      "confirm",
+    );
+    expect(
+      deriveUiStep(
+        snapshot({
+          lifeEvent: "spouse_death",
+          workflowState: "collect_missing_fields",
+          questionGroups: [
+            {
+              topicId: "family_situation",
+              groupIndex: 1,
+              groupTotal: 1,
+              questions: [
+                {
+                  fieldId: "has_dependent_children",
+                  valueKind: "boolean",
+                  optionIds: [],
+                  required: true,
+                  purposeId: "has_dependent_children.purpose",
+                  unlocksItemIds: ["survivor_pension"],
+                },
+              ],
+            },
+          ],
+        }),
+        true,
+      ),
+    ).toBe("questions");
+    expect(
+      deriveUiStep(
+        snapshot({
+          lifeEvent: "job_loss",
+          workflowState: "collect_missing_fields",
+          questionGroups: [],
+        }),
+        true,
+      ),
+    ).toBe("result");
+  });
+});
+
 describe("HomePageAlt", () => {
   it("walks the real session flow from description through questions to results", async () => {
     const calls = stubBackend([
-      // life_event_text → event recognised, still awaiting confirmation
       jsonResponse(snapshot({ lifeEvent: "spouse_death" })),
-      // event_confirmation → moves on to collecting fields
       jsonResponse(
         snapshot({
           lifeEvent: "spouse_death",
@@ -115,7 +168,6 @@ describe("HomePageAlt", () => {
           ],
         }),
       ),
-      // attribute_answers → a determination comes back
       jsonResponse(
         snapshot({
           lifeEvent: "spouse_death",
@@ -142,30 +194,35 @@ describe("HomePageAlt", () => {
     ]);
 
     render(<HomePageAlt />);
-    expect(await screen.findByText("後端已連線")).toBeInTheDocument();
+    expect(await screen.findByText("服務已就緒")).toBeInTheDocument();
+
+    await startIntake();
+    // Only the current step is on screen.
+    expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
+    expect(screen.queryByText("目前整理出的方向")).not.toBeInTheDocument();
 
     describeSituation("我先生上個月過世了。");
 
-    // Step 1 turns into a confirmation prompt using the recognised event.
-    // Prefer the confirm control: the catalog also shows the label as a chip.
     expect(
       await screen.findByRole("button", { name: "對，就是這件事" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("我讀到的是")).toBeInTheDocument();
+    expect(screen.getByText("我們這樣理解，對嗎？")).toBeInTheDocument();
+    expect(screen.queryByLabelText("發生了什麼事？")).not.toBeInTheDocument();
     expect(screen.getByText("配偶過世")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "對，就是這件事" }));
 
-    // Step 2 renders the backend's question with the frontend's own wording.
-    expect(await screen.findByText("家中是否有未成年子女？")).toBeInTheDocument();
+    expect(await screen.findByText("再請你回答幾個問題")).toBeInTheDocument();
+    expect(screen.queryByText("我們這樣理解，對嗎？")).not.toBeInTheDocument();
+    expect(screen.getByText("家中是否有未成年子女？")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "是" }));
-    fireEvent.click(screen.getByRole("button", { name: "送出這組答案" }));
+    fireEvent.click(screen.getByRole("button", { name: "繼續" }));
 
-    // Step 3 groups the item under the status section the backend returned.
-    expect(await screen.findByText("需要人工協助確認")).toBeInTheDocument();
+    expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
+    expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
+    expect(screen.getByText("建議再向承辦確認")).toBeInTheDocument();
     expect(screen.getByText("喪葬給付")).toBeInTheDocument();
-    expect(screen.getByText("（此為後端傳來的暫時資料）")).toBeInTheDocument();
+    expect(screen.getByText(/目前結果仍是示範資料/)).toBeInTheDocument();
 
-    // The session id travels in a header, never in the path.
     const advanceCalls = calls.filter((call) => call.url.endsWith("/sessions/advance"));
     expect(advanceCalls).toHaveLength(3);
     for (const call of advanceCalls) {
@@ -190,18 +247,17 @@ describe("HomePageAlt", () => {
     ]);
 
     render(<HomePageAlt />);
-    await screen.findByText("後端已連線");
+    await screen.findByText("服務已就緒");
+    await startIntake();
 
     describeSituation("今天天氣真好。");
 
-    // Not an error: the input stays, and the copy invites another attempt.
-    expect(await screen.findByText(/我們沒有看懂剛才的描述/)).toBeInTheDocument();
+    expect(await screen.findByText(/我們沒有完全看懂/)).toBeInTheDocument();
     expect(screen.getByLabelText("發生了什麼事？")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("shows a plain error message when the session has expired", async () => {
-    // describeEvent retries once after a stale/expired session; both attempts fail.
     stubBackend([
       jsonResponse(
         { errorCode: "session_expired", fieldIds: [], currentState: null },
@@ -214,7 +270,8 @@ describe("HomePageAlt", () => {
     ]);
 
     render(<HomePageAlt />);
-    await screen.findByText("後端已連線");
+    await screen.findByText("服務已就緒");
+    await startIntake();
 
     describeSituation("我先生上個月過世了。");
 
@@ -237,7 +294,8 @@ describe("HomePageAlt", () => {
     ]);
 
     render(<HomePageAlt />);
-    await screen.findByText("後端已連線");
+    await screen.findByText("服務已就緒");
+    await startIntake();
 
     describeSituation("我生病了");
 
@@ -246,5 +304,30 @@ describe("HomePageAlt", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("重大傷病")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("skips the questions step when the backend returns no question groups", async () => {
+    stubBackend([
+      jsonResponse(snapshot({ lifeEvent: "job_loss" })),
+      jsonResponse(
+        snapshot({
+          lifeEvent: "job_loss",
+          workflowState: "collect_missing_fields",
+          questionGroups: [],
+          items: [],
+        }),
+      ),
+    ]);
+
+    render(<HomePageAlt />);
+    await screen.findByText("服務已就緒");
+    await startIntake();
+    describeSituation("我失業了");
+
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
+
+    expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
+    expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
+    expect(screen.getByText(/資料還在補齊中/)).toBeInTheDocument();
   });
 });

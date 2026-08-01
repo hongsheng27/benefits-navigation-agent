@@ -41,13 +41,13 @@ export function ResultList({ snapshot }: ResultListProps) {
     <div>
       {implementation.isMock ? (
         <p className="border-l-2 border-[#8a5a1a] bg-[#f6f1e6] px-4 py-3.5 text-[0.85rem] leading-[2] text-[#4a453d] sm:px-5">
-          {implementation.placeholderNotice}
+          目前結果仍是示範資料，請先當作參考；送件前仍以承辦單位說明為準。
         </p>
       ) : null}
 
       {grouped.length === 0 ? (
         <p className="mt-4 border border-dashed border-[#d8cfc0] bg-[#f7f4ee] px-4 py-6 text-[0.88rem] leading-[2] text-[#6b6459]">
-          後端還沒有回傳任何候選項目。
+          目前還沒有整理出可辦的項目。你可以重新開始，或改用其他說法再試一次。
         </p>
       ) : (
         grouped.map((group) => (

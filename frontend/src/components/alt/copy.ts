@@ -260,9 +260,9 @@ const FIELD_LABELS: Record<string, string> = {
 /** 「為什麼問這個？」的說明。後端的 purposeId 形狀是 `<fieldId>.purpose`。 */
 const PURPOSE_TEXTS: Record<string, string> = {
   "deceased_insurance_type.purpose":
-    "投保身分決定由哪個機關受理，以及適用哪一套給付規則。",
-  "has_dependent_children.purpose": "遺屬年金有加給條件，依據是否有未成年子女。",
-  "applicant_age_band.purpose": "遺屬年金有年齡條件，不同年齡區間適用不同規定。",
+    "不同投保身分，受理機關與可申請的給付不一樣。",
+  "has_dependent_children.purpose": "有沒有未成年子女，會影響遺屬年金是否加給。",
+  "applicant_age_band.purpose": "遺屬年金依年齡有不同規定，我們需要大致了解你的年齡區間。",
 };
 
 /** 選項文字。boolean 欄位沒有 optionIds，由畫面自己給「是／否」。 */
@@ -287,18 +287,18 @@ const TOPIC_TITLES: Record<string, string> = {
 
 /** 結果分區的標題。 */
 const STATUS_SECTION_TITLES: Record<ItemStatus, string> = {
-  eligible: "你可能符合",
-  needs_information: "需要補充資訊",
-  ineligible: "不符合",
-  needs_human_review: "需要人工協助確認",
-  pending: "待確認",
+  eligible: "你可能可以申請",
+  needs_information: "還需要再確認",
+  ineligible: "目前看起來不符合",
+  needs_human_review: "建議再向承辦確認",
+  pending: "尚待確認",
   declined_by_user: "你選擇不辦理",
 };
 
 /** 項目是義務還是權利，畫面上要分得出來。 */
 const ITEM_KIND_LABELS: Record<ItemKind, string> = {
-  benefit: "可申請的福利",
-  administrative: "應辦理的行政事項",
+  benefit: "補助／給付",
+  administrative: "行政手續",
 };
 
 /**
@@ -310,17 +310,17 @@ const ITEM_KIND_LABELS: Record<ItemKind, string> = {
 const ERROR_MESSAGES: Record<ErrorCode, string> = {
   session_not_found: "這次諮詢已經找不到了，請重新開始。",
   session_expired: "這次諮詢已經超過保存時間，請重新開始。",
-  unknown_field: "系統送出的欄位有誤，請回報這個問題。",
-  invalid_field_value: "系統送出的答案格式有誤，請回報這個問題。",
-  unknown_item: "系統指定的項目有誤，請回報這個問題。",
-  invalid_transition: "這個步驟現在不能執行，請重新載入後再試。",
-  event_not_recognized: "我們沒有看懂剛才的描述，可以換個說法再說一次嗎？",
-  internal_error: "系統暫時無法處理，請稍後再試。",
+  unknown_field: "送出的內容有一點問題，請重新開始再試一次。",
+  invalid_field_value: "有些答案格式不對，請重新開始再試一次。",
+  unknown_item: "整理結果時出了一點問題，請重新開始再試一次。",
+  invalid_transition: "這個步驟現在無法繼續，請重新開始再試一次。",
+  event_not_recognized: "我們沒有完全看懂，可以換個說法再說一次嗎？",
+  internal_error: "服務暫時無法處理，請稍後再試。",
 };
 
 /** 使用者的描述無法對應到已知事件時顯示的提示。這不是錯誤。 */
 export const EVENT_NOT_RECOGNIZED_MESSAGE =
-  "我們沒有看懂剛才的描述，可以換個說法再說一次嗎？請直接說明發生了什麼事、以及是誰。";
+  "我們沒有完全看懂剛才的描述。可以再說一次發生了什麼、以及是誰嗎？例如「先生上個月過世了」。";
 
 export function lifeEventName(code: string): string {
   return LIFE_EVENT_NAMES[code] ?? code;
