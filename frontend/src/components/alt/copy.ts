@@ -265,6 +265,24 @@ const ITEM_NAMES: Record<string, string> = {
   caregiver_support_contact: "支持專線與人工協助",
 };
 
+/** 後端 fixture 尚未提供摘要欄位時的展示說明；不作為資格或法規依據。 */
+const ITEM_FALLBACK_EXPLANATIONS: Record<string, string> = {
+  occupational_injury_recognition_follow_up:
+    "職災認定仍在申請中，可先確認案件進度與後續需要補交的資料；app 不收公司或事故細節。",
+  occupational_accident_disability_benefit:
+    "父親有職災保險，但是否符合失能給付仍須依職災認定、診斷與失能程度由承辦機關確認。",
+  disability_assessment:
+    "目前還沒申請身心障礙鑑定，可先向所在地公所或醫療院所確認辦理流程；app 只列文件，不收證件。",
+  long_term_care_assessment:
+    "可聯絡 1966 詢問長照需求評估；實際適用服務仍需由照管單位依最新政策與評估結果確認。",
+  caregiver_support_services:
+    "你目前承擔照顧工作，可進一步詢問喘息服務與家庭照顧者支持；是否適用仍需依照顧安排評估。",
+  caregiver_employment_support:
+    "若已因照顧調整工作，可再確認工作安排、就業服務或其他照顧者就業支持方向。",
+  caregiver_support_contact:
+    "不必等所有資格確認完才求助；需要有人一起釐清時，可先聯絡 1966 或所在地家庭照顧者支持窗口。",
+};
+
 /** 資格欄位的題目文字。 */
 const FIELD_LABELS: Record<string, string> = {
   applicant_jurisdiction: "你主要在哪個縣市辦理或居住？",
@@ -285,8 +303,7 @@ const FIELD_LABELS: Record<string, string> = {
 
 /** 「為什麼問這個？」的說明。後端的 purposeId 形狀是 `<fieldId>.purpose`。 */
 const PURPOSE_TEXTS: Record<string, string> = {
-  "applicant_jurisdiction.purpose":
-    "所在縣市決定有哪些地方型補助與受理窗口可以對照。",
+  "applicant_jurisdiction.purpose": "所在縣市決定有哪些地方型補助與受理窗口可以對照。",
   "care_relationship.purpose": "代辦與請領資格依親屬關係認定。",
   "caregiver_relationship.purpose": "代辦與部分請領資格會依親屬關係認定。",
   "disability_cause.purpose":
@@ -296,8 +313,7 @@ const PURPOSE_TEXTS: Record<string, string> = {
   "occupational_injury_recognition.purpose":
     "職災相關給付通常需要確認認定狀態；這裡不詢問公司或事故經過。",
   "involuntary_job_loss.purpose": "非自願離職才是失業給付常見門檻之一。",
-  "deceased_insurance_type.purpose":
-    "不同投保身分，受理機關與可申請的給付不一樣。",
+  "deceased_insurance_type.purpose": "不同投保身分，受理機關與可申請的給付不一樣。",
   "has_dependent_children.purpose": "有沒有未成年子女，會影響遺屬年金是否加給。",
   "applicant_age_band.purpose":
     "遺屬年金依年齡有不同規定，我們需要大致了解你的年齡區間。",
@@ -424,10 +440,7 @@ const ITEM_KIND_LABELS: Record<ItemKind, string> = {
  * 比 benefit／administrative 更贴近使用者理解的「補助、資格認定」等。
  */
 export type ItemCategory =
-  | "benefit"
-  | "recognition"
-  | "administrative"
-  | "consultation";
+  "benefit" | "recognition" | "administrative" | "consultation";
 
 const ITEM_CATEGORY_LABELS: Record<ItemCategory, string> = {
   benefit: "補助／給付",
@@ -487,6 +500,10 @@ export function lifeEventName(code: string): string {
 
 export function itemName(itemId: string): string {
   return ITEM_NAMES[itemId] ?? itemId;
+}
+
+export function itemFallbackExplanation(itemId: string): string | null {
+  return ITEM_FALLBACK_EXPLANATIONS[itemId] ?? null;
 }
 
 export function fieldLabel(fieldId: string): string {

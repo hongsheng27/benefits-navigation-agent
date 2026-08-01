@@ -41,7 +41,7 @@ PENDING_CAPABILITIES: tuple[PendingCapability, ...] = (
 # 已經移除的（續）：
 # - PRIVACY_GATE：三個部分都完成了。未登記的欄位代號會讓整筆請求被拒
 #   （`unknown_field`）、值本身依登記表的型別與選項驗證（`invalid_field_value`）、
-#   而自由文字現在真的被丟棄 —— `resolve_life_event` 只回一個事件代號，原文沒有任何
+#   而自由文字現在真的被丟棄 —— `resolve_life_event` 只回事件代號清單，原文沒有任何
 #   路徑進到 state、紀錄檔或回應裡。
 
 

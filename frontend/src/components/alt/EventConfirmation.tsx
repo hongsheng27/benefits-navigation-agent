@@ -56,6 +56,7 @@ export function EventConfirmation({
   }
 
   const canConfirm = selected.length > 0 && selected.length <= MAX_SELECTED;
+  const hasMultipleEvents = suggested.length > 1;
 
   return (
     <div
@@ -128,7 +129,7 @@ export function EventConfirmation({
           disabled={disabled || !canConfirm}
           className="rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] leading-[1.8] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
         >
-          對，就是這些
+          {hasMultipleEvents ? "對，就是這些情況" : "對，就是這件事"}
         </button>
         <button
           type="button"

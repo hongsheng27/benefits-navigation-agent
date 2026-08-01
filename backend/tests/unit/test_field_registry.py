@@ -37,9 +37,10 @@ def test_loads_the_seed_data_without_error() -> None:
     """種子資料 v0.1.json 能成功讀取。"""
     registry = FieldRegistry.from_json()
 
-    assert registry.count() == 8
+    assert registry.count() == 12
     assert registry.has("applicant_jurisdiction")
-    assert registry.has("care_relationship")
+    assert registry.has("caregiver_relationship")
+    assert registry.has("occupational_injury_recognition")
     assert registry.has("deceased_insurance_type")
     assert registry.has("has_dependent_children")
     assert registry.has("applicant_age_band")

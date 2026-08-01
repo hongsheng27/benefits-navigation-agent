@@ -46,10 +46,10 @@ BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
 
 ## Feature: Government OID & Benefit Catalog Database
 
-| Item | Current (Local) | AWS Target |
-|------|----------------|------------|
-| Database | `data/local/government_oid.db` (SQLite) | TBD (DynamoDB or RDS) |
-| Files affected | `scripts/import_government_oid.py`, `backend/app/services/benefit_catalog.py` | — |
+| Item           | Current (Local)                                                               | AWS Target            |
+| -------------- | ----------------------------------------------------------------------------- | --------------------- |
+| Database       | `data/local/government_oid.db` (SQLite)                                       | TBD (DynamoDB or RDS) |
+| Files affected | `scripts/import_government_oid.py`, `backend/app/services/benefit_catalog.py` | —                     |
 
 ### Migration Steps
 
@@ -61,10 +61,10 @@ BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
 
 ## Feature: Source Document Storage (HTML files)
 
-| Item | Current (Local) | AWS Target |
-|------|----------------|------------|
-| Storage | `data/local/source_documents/` (local folder) | S3 bucket |
-| Files affected | `backend/app/services/source_connector.py` (`_write_raw_page`) | — |
+| Item           | Current (Local)                                                | AWS Target |
+| -------------- | -------------------------------------------------------------- | ---------- |
+| Storage        | `data/local/source_documents/` (local folder)                  | S3 bucket  |
+| Files affected | `backend/app/services/source_connector.py` (`_write_raw_page`) | —          |
 
 ### Migration Steps
 
@@ -77,11 +77,11 @@ BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
 
 ## Feature: LLM / Bedrock Integration
 
-| Item | Current | AWS Target |
-|------|---------|------------|
-| LLM | Bedrock when `BEDROCK_MODEL_ID` is set; otherwise offline demo | Amazon Bedrock `Converse` + forced tool choice |
-| Files | `backend/app/llm/bedrock.py`, `factory.py`, `config.py` | already added |
-| Verified runtime | `us-west-2`, Claude Haiku 4.5 inference profile | `Converse` returned the registered `spouse_death` event ID |
+| Item             | Current                                                         | AWS Target                                                                                                                                                                         |
+| ---------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LLM              | Bedrock when `BEDROCK_MODEL_ID` is set; otherwise offline demo  | Amazon Bedrock `Converse` + forced tool choice                                                                                                                                     |
+| Files            | `backend/app/llm/bedrock.py`, `factory.py`, `config.py`         | already added                                                                                                                                                                      |
+| Verified runtime | `us-west-2` and `us-east-1`, Claude Haiku 4.5 inference profile | `Converse` returned the registered `spouse_death` event ID; the us-east-1 run on 2026-08-01 also returned `applicant_jurisdiction` and `children_count` through forced tool choice |
 
 **There is no `AgentRunner`.** ADR-0015 replaced it with a narrow port that has
 no tool loop, because both model tasks are single request/response and giving a
@@ -108,17 +108,25 @@ The model cannot call application tools.
 def generate_structured(self, request: LlmRequest) -> LlmResult: ...
 ```
 
-| Behaviour | Must not change |
-|-----------|-----------------|
-| Failure type | `LanguageModelUnavailableError` for transport, auth, timeout, or missing credentials; `LanguageModelOutputError` when the reply is not a parseable JSON object |
-| Error content | Messages must never contain `user_content` or the model's raw reply |
-| Return value | `LlmResult.payload` only, never the raw text |
-| Schema check | Call `validate_portable_schema()` before sending |
-| Sync | Stay synchronous |
+| Behaviour     | Must not change                                                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Failure type  | `LanguageModelUnavailableError` for transport, auth, timeout, or missing credentials; `LanguageModelOutputError` when the reply is not a parseable JSON object |
+| Error content | Messages must never contain `user_content` or the model's raw reply                                                                                            |
+| Return value  | `LlmResult.payload` only, never the raw text                                                                                                                   |
+| Schema check  | Call `validate_portable_schema()` before sending                                                                                                               |
+| Sync          | Stay synchronous                                                                                                                                               |
 
 ### How to turn Bedrock on today
 
-1. Log into the competition AWS account and set region to `us-west-2`.
+1. Log into the competition AWS account and set region to `us-west-2` — the team
+   default, matching `config.py` and `.env.example`. `us-east-1` is also verified
+   and works, but do not mix them across teammates.
+
+   Confirm you are in the right account first with `aws sts get-caller-identity`.
+   The competition identity is `WSParticipantRole/Participant`. A laptop with
+   several profiles in `~/.aws/credentials` will otherwise happily run the whole
+   verification against the wrong account.
+
 2. Configure the temporary Workshop Studio credentials via the normal AWS chain
    or a local gitignored `.env` file. Never copy credentials into tracked files.
 3. Use the inference profile that was successfully tested with Converse.
@@ -135,15 +143,43 @@ def generate_structured(self, request: LlmRequest) -> LlmResult: ...
    `BEDROCK_MODEL_ID` and restart the backend. A Bedrock failure during a request
    does not silently switch providers.
 
+### First-time Anthropic enablement can block Converse
+
+The Bedrock "Model access" console page has been retired: serverless foundation
+models enable themselves on first invocation. Anthropic models are the exception
+noted on that page — a first-time account may still have to submit use case
+details, and until the enablement has propagated `Converse` fails with:
+
+```text
+ResourceNotFoundException: Model use case details have not been submitted for
+this account. Fill out the Anthropic use case details form before using the
+model. If you have already filled out the form, try again in 15 minutes.
+```
+
+**The competition account does not have this problem.** On 2026-08-01 the
+`WSParticipantRole` credentials ran `Converse` in `us-east-1` successfully on the
+first attempt, both plain text and with forced tool choice.
+
+The error above was observed in a separate personal account, where single calls
+succeeded and then reverted to it — which is what a still-propagating enablement
+looks like. Recorded here only so the error is recognisable: it is neither an IAM
+problem nor a wrong model ID, and opening the model once in the console
+Playground is the documented way to trigger enablement.
+
+**Do not debug the request shape while this error is showing.** Wait and retry.
+If it persists, check the other note on the retired page: for models served
+through AWS Marketplace, a principal with Marketplace permissions has to invoke
+the model once to enable it account-wide.
+
 ### Request shape (Converse)
 
-| `LlmRequest` field | Converse location |
-|--------------------|-------------------|
-| `instruction` | `system[0].text` |
-| `user_content` | `messages[0].content[0].text` (marked as data, not instructions) |
-| `output_schema` | `toolConfig.tools[0].toolSpec.inputSchema.json` |
-| `schema_name` | `toolSpec.name` + `toolChoice.tool.name` |
-| `max_output_tokens`, `temperature` | `inferenceConfig.maxTokens`, `inferenceConfig.temperature` |
+| `LlmRequest` field                 | Converse location                                                |
+| ---------------------------------- | ---------------------------------------------------------------- |
+| `instruction`                      | `system[0].text`                                                 |
+| `user_content`                     | `messages[0].content[0].text` (marked as data, not instructions) |
+| `output_schema`                    | `toolConfig.tools[0].toolSpec.inputSchema.json`                  |
+| `schema_name`                      | `toolSpec.name` + `toolChoice.tool.name`                         |
+| `max_output_tokens`, `temperature` | `inferenceConfig.maxTokens`, `inferenceConfig.temperature`       |
 
 Gemini has been removed from the runtime, configuration, dependency list, and
 active documentation. Bedrock is the only live provider; the local fixture is
@@ -171,31 +207,73 @@ the same privacy gate as user-submitted answers, the raw text is never stored or
 logged, and the explanation task's return type has no status field so it cannot
 alter a determination.
 
+### Case 2: multi-event recognition
+
+The father-occupational-disability Case 2 reuses this exact Bedrock path. There
+is no local-to-AWS code swap and no new environment variable:
+
+- Local/offline: `demo_language_model()` remains the explicit fixture selected
+  only when `BEDROCK_MODEL_ID` is empty.
+- AWS/live: `backend/app/llm/tasks/resolve_life_event.py` sends the fictional
+  description through `LanguageModelPort` and Bedrock Converse forced tool
+  choice, returning one to five ordered registered IDs in `event_ids`.
+- Configuration: keep using `AWS_REGION`, `AWS_DEFAULT_REGION`, and
+  `BEDROCK_MODEL_ID` documented above.
+
+The event registry retains all existing event IDs. The Case 2 output contract is
+`{"event_ids":["occupational_injury","long_term_care_need"]}`: occupational
+injury remains primary, while the explicit long-term-care need is preserved.
+Disability-service wording, childcare, and reduced hours do not automatically
+add `disability_onset` or `caregiver_burden`, and none of these IDs is an
+eligibility conclusion.
+
+The API exposes the ordered list as `lifeEvents` and temporarily retains
+`lifeEvent` as the first ID for consumers that still accept only one event. An
+AWS-backed session store must persist both fields until those consumers migrate;
+it must not silently discard secondary IDs.
+
+Live verification on 2026-08-01 used the fictional Case 2 description with the
+configured Bedrock model before the multi-event contract was introduced. After
+this schema change, repeat live verification and expect both registered IDs;
+local tests validate the contract without making a network call.
+
+The five-event upper bound was then verified live on 2026-08-01 with the same
+fictional Case 2 description plus a spouse-death sentence. Bedrock returned
+`occupational_injury`, `long_term_care_need`, `caregiver_burden`,
+`childcare_hardship`, and `spouse_death`; the session accepted all five instead
+of mapping the response to `event_not_recognized`.
+
 ---
 
 ## Feature: Session Persistence
 
-| Item | Current (Local) | AWS Target |
-|------|----------------|------------|
-| Sessions | In-process memory, two hour expiry | TBD (DynamoDB or AgentCore Memory) |
-| Files affected | `backend/app/orchestration/session_store.py`, `backend/app/main.py` | — |
+| Item           | Current (Local)                                                     | AWS Target                         |
+| -------------- | ------------------------------------------------------------------- | ---------------------------------- |
+| Sessions       | In-process memory, two hour expiry                                  | TBD (DynamoDB or AgentCore Memory) |
+| Files affected | `backend/app/orchestration/session_store.py`, `backend/app/main.py` | —                                  |
 
 The local mock is `InMemorySessionStore`: a dictionary held on the FastAPI
 application instance. A restart discards every session, which ADR-0005 accepts
 because the persistence choice is still open.
+
+The frontend intentionally keeps `sessionId` in memory only. Reloading the page
+or leaving and re-entering consultation starts a new frontend session and does
+not call `/sessions/current` to restore an abandoned one. Replacing the backend
+store with an AWS service must not silently re-enable browser persistence;
+cross-reload recovery requires a separate privacy and product decision.
 
 ### What the swap has to preserve
 
 `InMemorySessionStore` is the contract. Any AWS-backed replacement must keep the
 same five methods and the same failure modes, so nothing above it changes:
 
-| Method | Behaviour that must not change |
-|--------|-------------------------------|
-| `create()` | Return a new `SessionState` with a `secrets`-generated id and `expires_at` set two hours ahead |
-| `get(session_id)` | Raise `SessionNotFoundError` for unknown ids and `SessionExpiredError` past the TTL, deleting the expired record |
-| `save(state)` | Replace the stored state, stamp `updated_at`, and **not** extend `expires_at` |
-| `delete(session_id)` | Succeed even when the session is already gone |
-| `purge_expired()` | Remove expired records and return how many |
+| Method               | Behaviour that must not change                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `create()`           | Return a new `SessionState` with a `secrets`-generated id and `expires_at` set two hours ahead                   |
+| `get(session_id)`    | Raise `SessionNotFoundError` for unknown ids and `SessionExpiredError` past the TTL, deleting the expired record |
+| `save(state)`        | Replace the stored state, stamp `updated_at`, and **not** extend `expires_at`                                    |
+| `delete(session_id)` | Succeed even when the session is already gone                                                                    |
+| `purge_expired()`    | Remove expired records and return how many                                                                       |
 
 Two constraints carry over from ADR-0005 and ADR-0007 and must survive the swap:
 
@@ -240,26 +318,51 @@ These are the seams the workflow uses to reach the data layer. Until August 1st
 every one of them has an offline implementation that needs no database at all,
 which is why the workflow test suite runs without SQLite.
 
-| Item | Current (Local) | AWS Target |
-|------|----------------|------------|
-| Interfaces | `backend/app/orchestration/protocols.py` | unchanged — this is the contract |
-| Exchange shapes | `backend/app/orchestration/data_contracts.py` | unchanged — this is the contract |
-| Entitlement graph | `FixtureEntitlementGraphRepository` (hardcoded table) | SQLite repository, then TBD cloud database |
-| Eligibility | `FixtureEligibilityService` (decisions passed in) | SQLite rule tables plus the deterministic rule engine |
-| Evidence | `FixtureEvidenceRepository` (empty by default) | SQLite `source_documents` / `program_sources` |
-| Source refresh | `LocalSourceRefreshService` (in-process list) | TBD queue (SQS or EventBridge) |
+| Item              | Current (Local)                                       | AWS Target                                            |
+| ----------------- | ----------------------------------------------------- | ----------------------------------------------------- |
+| Interfaces        | `backend/app/orchestration/protocols.py`              | unchanged — this is the contract                      |
+| Exchange shapes   | `backend/app/orchestration/data_contracts.py`         | unchanged — this is the contract                      |
+| Entitlement graph | `FixtureEntitlementGraphRepository` (hardcoded table) | SQLite repository, then TBD cloud database            |
+| Eligibility       | `FixtureEligibilityService` (decisions passed in)     | SQLite rule tables plus the deterministic rule engine |
+| Evidence          | `FixtureEvidenceRepository` (empty by default)        | SQLite `source_documents` / `program_sources`         |
+| Source refresh    | `LocalSourceRefreshService` (in-process list)         | TBD queue (SQS or EventBridge)                        |
+
+### Case 2 occupational-injury fixture
+
+`FixtureEntitlementGraphRepository` currently contains the seven Case 2
+candidate directions and deterministic relevance predicates. The seven
+question fields live in `data/eligibility_fields/fields.v0.1.json`. This is a
+backend-driven local vertical slice, but it is still mock policy data: retained
+items remain `candidate` and the workflow reports `needs_human_review`.
+
+When the SQLite runtime branch is available:
+
+1. Remove the Case 2 item tuple and `_care_item_is_relevant` predicates from
+   `backend/app/orchestration/protocols.py`; keep the fixture implementation for
+   isolated tests, but load its test data explicitly rather than treating it as
+   runtime truth.
+2. Insert equivalent `occupational_injury` graph nodes, program nodes, field
+   requirements and conditional edges through the SQLite migration/seed path.
+3. Keep the answer-time `expand_from_event(event_id, attributes)` call in
+   `state_machine.py`. It is the storage-neutral point that makes updated
+   answers filter the graph.
+4. Do not promote the migrated Case 2 programs or citations to `verified`.
+   Human review of the Rule DSL and official excerpts is required first.
+5. For the RDS cutover, migrate the same rows to PostgreSQL and inject the RDS
+   adapter at the application composition root. No frontend environment
+   variable is required for this feature.
 
 ### What the swap has to preserve
 
 The four `Protocol` classes in `protocols.py` are the contract. Any SQLite or
 cloud adapter must keep the same method names and the same return types:
 
-| Interface | Methods that must not change |
-|-----------|------------------------------|
+| Interface                    | Methods that must not change                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
 | `EntitlementGraphRepository` | `expand_from_event`, `get_prerequisites`, `get_produces`, `get_programs_by_system` |
-| `EligibilityService` | `get_required_fields`, `evaluate`, `evaluate_many` |
-| `EvidenceRepository` | `get_citations` |
-| `SourceRefreshService` | `get_coverage_status`, `request_on_demand_refresh` |
+| `EligibilityService`         | `get_required_fields`, `evaluate`, `evaluate_many`                                 |
+| `EvidenceRepository`         | `get_citations`                                                                    |
+| `SourceRefreshService`       | `get_coverage_status`, `request_on_demand_refresh`                                 |
 
 Three constraints carry over and must survive the swap:
 
@@ -277,7 +380,7 @@ Three constraints carry over and must survive the swap:
 
 1. Replace the construction sites in `backend/app/orchestration/state_machine.py`
    (`advance()` builds the defaults) with the data layer's SQLite repositories.
-   Every seam is already a named parameter, so no other file changes.
+   Every seam is already a named parameter; keep the API contract unchanged.
 2. Add the SQLite adapters in the data layer, mapping `program_id` to `item_id`
    and decoding stored JSON into the `data_contracts` dataclasses.
 3. Only after the database choice is settled, add a cloud adapter behind the
@@ -286,11 +389,11 @@ Three constraints carry over and must survive the swap:
 
 ### Feature: On-Demand Source Refresh Queue
 
-| Item | Current (Local) | AWS Target |
-|------|----------------|------------|
-| Queue | `LocalSourceRefreshService._queue`, a Python list | TBD (SQS, EventBridge Scheduler, or Step Functions) |
-| Flow | `backend/app/orchestration/source_refresh.py` | unchanged |
-| Dedup | in-memory set keyed by `source_id + event_id + date` | must move to shared storage |
+| Item  | Current (Local)                                      | AWS Target                                          |
+| ----- | ---------------------------------------------------- | --------------------------------------------------- |
+| Queue | `LocalSourceRefreshService._queue`, a Python list    | TBD (SQS, EventBridge Scheduler, or Step Functions) |
+| Flow  | `backend/app/orchestration/source_refresh.py`        | unchanged                                           |
+| Dedup | in-memory set keyed by `source_id + event_id + date` | must move to shared storage                         |
 
 Migration steps:
 
@@ -334,10 +437,10 @@ Do not read the current behaviour as Option B having been chosen.
 
 ## Frontend agency directory and case tracking
 
-| Concern | Local mock now | Target |
-|---|---|---|
-| Agency directory UI | `frontend/src/mocks/agencies.ts` via `frontend/src/api/agencyClient.ts` | `GET /agencies` backed by SQLite / RDS source registry |
-| Case tracking UI | `frontend/src/mocks/trackedCases.ts` via `frontend/src/api/trackingClient.ts` | `GET /cases` (or equivalent) persisted session/case store |
+| Concern             | Local mock now                                                                | Target                                                    |
+| ------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Agency directory UI | `frontend/src/mocks/agencies.ts` via `frontend/src/api/agencyClient.ts`       | `GET /agencies` backed by SQLite / RDS source registry    |
+| Case tracking UI    | `frontend/src/mocks/trackedCases.ts` via `frontend/src/api/trackingClient.ts` | `GET /cases` (or equivalent) persisted session/case store |
 
 ### What to change
 
@@ -383,11 +486,11 @@ No new environment variables.
 
 ## Conversational attribute collection (T21b-style)
 
-| Concern | Local now | Target |
-|---|---|---|
-| Chat turn API | `attribute_chat_turn` on `POST /sessions/advance` + `collect_attributes` task | Same; Bedrock when `BEDROCK_MODEL_ID` set |
-| Jurisdiction filter | `applicant_jurisdiction` + `jurisdiction_items.py` fixtures | Entitlement graph rows with `jurisdiction_code` |
-| MCQ fallback | Frontend `AttributeChatPanel` → `QuestionGroupList` | Keep as offline / low-confidence path |
+| Concern             | Local now                                                                     | Target                                          |
+| ------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------- |
+| Chat turn API       | `attribute_chat_turn` on `POST /sessions/advance` + `collect_attributes` task | Same; Bedrock when `BEDROCK_MODEL_ID` set       |
+| Jurisdiction filter | `applicant_jurisdiction` + `jurisdiction_items.py` fixtures                   | Entitlement graph rows with `jurisdiction_code` |
+| MCQ fallback        | Frontend `AttributeChatPanel` → `QuestionGroupList`                           | Keep as offline / low-confidence path           |
 
 Reuse `BEDROCK_MODEL_ID` / AWS credentials above. No new frontend env required.
 
@@ -395,11 +498,11 @@ Reuse `BEDROCK_MODEL_ID` / AWS credentials above. No new frontend env required.
 
 ## Frontend post-consult panels (related law + application guide)
 
-| Concern | Local mock now | Target |
-|---|---|---|
-| Related provisions UI | `frontend/src/mocks/relatedProvisions.ts` (from `data/benefit_discovery/extracted_candidates.v0.1.json`) | Session / item `citations` with real excerpts via `official_citations` |
-| Application guide UI | `frontend/src/mocks/applicationGuides.ts` | Backend `action_plan` (or equivalent) per life event / item |
-| Copilot chat | `POST /sessions/current/explain` via `frontend/src/api/explainClient.ts` + stub fallback (`copilotStub.ts`) | Same endpoint; Bedrock when `BEDROCK_MODEL_ID` is set |
+| Concern               | Local mock now                                                                                              | Target                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Related provisions UI | `frontend/src/mocks/relatedProvisions.ts` (from `data/benefit_discovery/extracted_candidates.v0.1.json`)    | Session / item `citations` with real excerpts via `official_citations` |
+| Application guide UI  | `frontend/src/mocks/applicationGuides.ts`                                                                   | Backend `action_plan` (or equivalent) per life event / item            |
+| Copilot chat          | `POST /sessions/current/explain` via `frontend/src/api/explainClient.ts` + stub fallback (`copilotStub.ts`) | Same endpoint; Bedrock when `BEDROCK_MODEL_ID` is set                  |
 
 ### What to change
 
@@ -436,6 +539,121 @@ Reuse `BEDROCK_MODEL_ID` / AWS credentials above. No new frontend env required.
   `backend/app/api/sessions.py` (`POST /sessions/current/explain`)
 - Frontend: `frontend/src/api/explainClient.ts`, `frontend/src/lib/askCopilot.ts`
 - Stub fallback: `frontend/src/lib/copilotStub.ts`
+
+---
+
+## Feature: Deployment and Hosting
+
+| Item           | Current (Local)                                                                                         | AWS Target                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Frontend       | `npm run dev` on `localhost:5173`                                                                       | S3 bucket + CloudFront                            |
+| Backend        | `uvicorn` on `localhost:8000`                                                                           | One ECS Fargate task, or Lambda + Mangum          |
+| TLS            | none                                                                                                    | CloudFront default `*.cloudfront.net` certificate |
+| Files affected | `frontend/vite.config.ts`, `frontend/src/api/client.ts`, `backend/app/main.py`, `backend/app/config.py` | —                                                 |
+
+### AWS App Runner is blocked by a Service Control Policy
+
+Tested on 2026-08-01 with the `WSParticipantRole` credentials rather than read
+off the organiser's spreadsheet:
+
+```text
+AccessDeniedException: ... not authorized to perform: apprunner:ListServices
+... because no service control policy allows the apprunner:ListServices action
+```
+
+The organiser's list (`Supported AWS Services List 20260722.xlsx`) is therefore
+**enforced by an SCP**, not advisory. An SCP denial cannot be overridden by any
+IAM policy, so App Runner is out however convenient it looks.
+
+Do not treat the spreadsheet as authoritative in either direction, though. It
+lists IAM _actions_, and `bedrock:Converse` does not appear in it even though
+Converse works — because Converse is authorised by `bedrock:InvokeModel` and no
+`bedrock:Converse` action exists. **When it matters, make the call and read the
+error.** A read-only `list-*` or `describe-*` is enough to tell an SCP denial
+from a missing permission.
+
+Verified available with real calls in the competition account (2026-08-01):
+
+| Service                | Call used                      | Result    |
+| ---------------------- | ------------------------------ | --------- |
+| `ecs`                  | `list-clusters`                | available |
+| `ecr`                  | `describe-repositories`        | available |
+| `logs`                 | `describe-log-groups`          | available |
+| `elasticloadbalancing` | `describe-load-balancers`      | available |
+| `dynamodb`             | `list-tables`                  | available |
+| `iam`                  | `list-roles`                   | available |
+| `s3`                   | bucket created, policy applied | available |
+| `cloudfront`           | distribution and OAC created   | available |
+
+A successful `list-*` proves read access, not create access. The S3 and
+CloudFront rows are stronger because resources were actually created.
+
+### Target shape: one CloudFront distribution
+
+Serve the static bundle and the API through a single distribution:
+
+- default behaviour → S3 origin (the `frontend/dist` upload)
+- `/sessions*` and `/health` → the backend origin
+
+This solves three problems at once rather than one. CloudFront supplies HTTPS on
+its default domain, and an HTTPS page cannot call a plain-HTTP backend. The
+frontend and API become same-origin, so **CORS configuration is no longer needed
+at all**. And `VITE_API_BASE_URL` can stay empty.
+
+### Four things to handle before the first deploy
+
+1. **`VITE_API_BASE_URL` is a build-time value.** `api/client.ts` reads
+   `import.meta.env.VITE_API_BASE_URL` and falls back to
+   `http://localhost:8000`. Vite inlines it during `npm run build`, so changing
+   the variable after deploying does nothing. `vite.config.ts` sets `envDir` to
+   the repository root, so the value belongs in the root `.env`, not
+   `frontend/.env`.
+
+2. **The routers have no `/api` prefix.** `main.py` mounts the health and
+   sessions routers at `/health` and `/sessions`. Either point the CloudFront
+   behaviours at those paths or give FastAPI a `root_path`. Do one, not half of
+   each.
+
+3. **The SPA needs a fallback.** With client-side routing across
+   `ProductHomePage`, `AgenciesPage`, and `TrackedCasesPage`, CloudFront has to
+   map 403/404 to `/index.html`, or reloading any non-root URL returns 404.
+
+4. **Leave the AWS credential variables empty.** `config.py` copies
+   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN` from
+   `.env` into `os.environ` for boto3. That is right for Workshop Studio
+   credentials on a laptop and wrong in a deployed task: leave them empty and let
+   boto3 use the task or execution role. No code change is needed, because boto3
+   falls back to the role when the variables are absent. Workshop credentials
+   expire, so baking them into an image guarantees a broken demo later.
+
+### Session state constrains the backend choice
+
+`InMemorySessionStore` lives on the FastAPI application instance. One
+long-lived process — a single Fargate task, EC2, or Lightsail instance — keeps it
+working with no code change. Lambda does not: each execution environment has its
+own memory, so sessions would be lost between requests. Choosing Lambda means
+doing the work in "Feature: Session Persistence" first.
+
+Suggested order: deploy one Fargate task with no code change, and treat session
+persistence as separate work rather than a prerequisite.
+
+### AgentCore is not required
+
+`bedrock-agentcore` is fully available in the supported-services list
+(`CreateAgentRuntime`, `CreateAgentRuntimeEndpoint`, `CreateMemory`,
+`CreateGateway`), but ADR-0015 removed the agent loop, so AgentCore Runtime has
+nothing to host that a plain container does not. Treat it as optional, and only
+after a repeatable local end-to-end run exists.
+
+### Environment variables
+
+```env
+# Deployment (fill in once the platform is chosen)
+# VITE_API_BASE_URL=    # empty when served through one CloudFront distribution
+#
+# In deployed environments leave AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and
+# AWS_SESSION_TOKEN empty and rely on the task or execution role.
+```
 
 ---
 

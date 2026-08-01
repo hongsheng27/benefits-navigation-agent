@@ -58,12 +58,7 @@ const BOUNDARIES = [
 
 /** 後端串接版的畫面步驟（後端 session 仍是權威來源）。 */
 export type IntakeUiStep =
-  | "landing"
-  | "describe"
-  | "confirm"
-  | "questions"
-  | "ready"
-  | "result";
+  "landing" | "describe" | "confirm" | "questions" | "ready" | "result";
 
 export type IntakeMode = "live" | "demo";
 
@@ -129,11 +124,10 @@ export function deriveUiStep(
     return hasStarted ? "describe" : "landing";
   }
 
-  const { workflowState, lifeEvent, questionGroups } = snapshot;
+  const { workflowState, lifeEvent, lifeEvents, questionGroups } = snapshot;
 
   if (workflowState === "understand_event") {
-    const events = snapshot.lifeEvents ?? [];
-    if (lifeEvent !== null || events.length > 0) {
+    if (lifeEvents.length > 0 || lifeEvent !== null) {
       return "confirm";
     }
     return "describe";
@@ -144,6 +138,18 @@ export function deriveUiStep(
   }
 
   return "result";
+}
+
+function snapshotLifeEvents(snapshot: SessionSnapshot | null): string[] {
+  if (snapshot?.lifeEvents.length) {
+    return snapshot.lifeEvents;
+  }
+  return snapshot?.lifeEvent ? [snapshot.lifeEvent] : [];
+}
+
+function lifeEventSummary(snapshot: SessionSnapshot | null): string {
+  const labels = snapshotLifeEvents(snapshot).map(lifeEventName);
+  return labels.length > 0 ? labels.join("、") : "你的情況";
 }
 
 function StepProgress({ step }: { step: Exclude<IntakeUiStep, "landing"> }) {
@@ -527,7 +533,7 @@ function IntakeSteps({
         </section>
       ) : null}
 
-      {uiStep === "confirm" && snapshot?.lifeEvent ? (
+      {uiStep === "confirm" && snapshotLifeEvents(snapshot).length > 0 ? (
         <section>
           <StepProgress step="confirm" />
           <h1
@@ -576,14 +582,13 @@ function IntakeSteps({
           <p className="mt-2 text-[0.92rem] leading-[1.9] text-[#6b6459]">
             {showResultGate
               ? `關於「${situationLabel}」，我們先在對話裡問你要不要看整理結果。`
-              : `與「${
-                  snapshot?.lifeEvent
-                    ? lifeEventName(snapshot.lifeEvent)
-                    : "你的情況"
-                }」有關。答完這組就可以繼續。`}
+              : `與「${situationLabel}」有關。答完這組就可以繼續。`}
           </p>
           <div className="mt-6">
-            {readOnly || isReviewing || !onAnswerChatTurn ? (
+            {readOnly ||
+            isReviewing ||
+            !onAnswerChatTurn ||
+            snapshotLifeEvents(snapshot).includes("occupational_injury") ? (
               <div>
                 {questionGroups.length > 0 ? (
                   <QuestionGroupList
@@ -591,8 +596,15 @@ function IntakeSteps({
                     disabled={busy || actionsLocked}
                     groups={questionGroups}
                     initialAnswers={demoAnswers ?? snapshot?.attributes}
-                    readOnly={readOnly || isReviewing}
+                    readOnly={readOnly || isReviewing || showResultGate}
                     onSubmit={(answers) => onAnswerFields?.(answers)}
+                    submitLabel={
+                      !readOnly &&
+                      !showResultGate &&
+                      snapshotLifeEvents(snapshot).includes("occupational_injury")
+                        ? "送出答案"
+                        : undefined
+                    }
                   />
                 ) : null}
                 {resultGate ? (
@@ -658,14 +670,15 @@ function IntakeSteps({
             我們先幫你整理到這裡
           </h1>
           <p className="mt-3 max-w-[36rem] text-[0.95rem] leading-[2] text-[#4a453d]">
-            關於「{situationLabel}」。下面是依你目前提供的資訊整理出的方向，可以慢慢看；這不是最後裁定，不確定的地方再向承辦單位確認就好。
+            關於「{situationLabel}
+            」。下面是依你目前提供的資訊整理出的方向，可以慢慢看；這不是最後裁定，不確定的地方再向承辦單位確認就好。
           </p>
 
           {hasNoQuestionsYet ? (
             <div className="mt-8 rounded-sm border border-[#e0d8ca] bg-[#fdfbf7] px-4 py-6 text-[0.95rem] leading-[2] text-[#4a453d]">
               <p>
                 我們已記下這是「
-                {snapshot.lifeEvent ? lifeEventName(snapshot.lifeEvent) : "相關情況"}
+                {lifeEventSummary(snapshot)}
                 」。
               </p>
               <p className="mt-3">
@@ -926,10 +939,7 @@ function HomePageDemo({
     if (historyDemoSceneIndex == null) {
       return;
     }
-    const clamped = Math.min(
-      Math.max(historyDemoSceneIndex, 0),
-      scenes.length - 1,
-    );
+    const clamped = Math.min(Math.max(historyDemoSceneIndex, 0), scenes.length - 1);
     setSceneIndex(clamped);
   }, [historyDemoSceneIndex, scenes.length]);
 
@@ -1088,15 +1098,10 @@ function HomePageLive({
   }, [snapshot]);
 
   const naturalStep = deriveUiStep(snapshot, hasStarted);
-  const awaitingResultConfirm =
-    naturalStep === "result" && !resultGatePassed;
+  const awaitingResultConfirm = naturalStep === "result" && !resultGatePassed;
   // 進度上的「目前步驟」（history／回看用）；畫面上閘門仍留在 questions。
-  const progressStep: IntakeUiStep = awaitingResultConfirm
-    ? "ready"
-    : naturalStep;
-  const displayStep: IntakeUiStep = awaitingResultConfirm
-    ? "questions"
-    : naturalStep;
+  const progressStep: IntakeUiStep = awaitingResultConfirm ? "ready" : naturalStep;
+  const displayStep: IntakeUiStep = awaitingResultConfirm ? "questions" : naturalStep;
   const uiStep = reviewStep ?? displayStep;
   const isReviewing = reviewStep !== null && reviewStep !== progressStep;
   const showResultGate = awaitingResultConfirm && !isReviewing;
@@ -1177,7 +1182,7 @@ function HomePageLive({
     setReviewStep(target);
   }, [historyConsultStep, snapshot, hasStarted, resultGatePassed]);
 
-  const busy = status === "working" || status === "restoring";
+  const busy = status === "working";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1242,16 +1247,6 @@ function HomePageLive({
       return;
     }
 
-    // 結果若沒有可回看的問題，直接回到確認
-    if (
-      uiStep === "result" &&
-      (snapshot?.questionGroups.length ?? 0) === 0 &&
-      cachedQuestionGroups.length === 0
-    ) {
-      setReviewStep("confirm");
-      return;
-    }
-
     setReviewStep(prev);
   }
 
@@ -1301,6 +1296,9 @@ function HomePageLive({
         onRedescribe={() => void handleRedescribe()}
         onAnswerFields={(answers) => void answerFields(answers)}
         onAnswerChatTurn={(text) => answerChatTurn(text)}
+        groupResultsByAudience={snapshotLifeEvents(snapshot).includes(
+          "occupational_injury",
+        )}
         onReset={() => void handleReset()}
         showResultGate={showResultGate}
         onViewResults={() => {

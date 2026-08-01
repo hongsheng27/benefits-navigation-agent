@@ -10,12 +10,7 @@ import type { AttributeValue, SessionSnapshot } from "../types/session";
 
 /** 與正式諮詢 HomePageAlt 的步驟一致。 */
 export type IntakeDemoStep =
-  | "landing"
-  | "describe"
-  | "confirm"
-  | "questions"
-  | "ready"
-  | "result";
+  "landing" | "describe" | "confirm" | "questions" | "ready" | "result";
 
 export type IntakeDemoScene = {
   step: IntakeDemoStep;
@@ -201,7 +196,11 @@ const SPOUSE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       stepIndex: 2,
       lifeEvent: "spouse_death",
       lifeEvents: ["spouse_death"],
-      extraCandidateLifeEvents: ["job_loss", "low_income_hardship", "mental_health_crisis"],
+      extraCandidateLifeEvents: [
+        "job_loss",
+        "low_income_hardship",
+        "mental_health_crisis",
+      ],
       attributes: {},
       items: [],
       questionGroups: [],
@@ -259,6 +258,7 @@ const CARE_DEMO_BASE: Omit<
   SessionSnapshot,
   | "workflowState"
   | "lifeEvent"
+  | "lifeEvents"
   | "attributes"
   | "items"
   | "questionGroups"
@@ -538,18 +538,14 @@ const CARE_DEMO_SCENES: readonly IntakeDemoScene[] = [
   {
     step: "confirm",
     narration:
-      "系統先確認主要事件是職業災害；確認後，後續問題會同時涵蓋父親與照顧者本人。",
+      "系統先確認同時理解到職業災害與長照需求；確認後，後續問題會同時涵蓋父親與照顧者本人。",
     snapshot: {
       ...CARE_DEMO_BASE,
       workflowState: "understand_event",
       stepIndex: 2,
       lifeEvent: "occupational_injury",
-      lifeEvents: ["occupational_injury"],
-      extraCandidateLifeEvents: [
-        "serious_illness",
-        "job_loss",
-        "low_income_hardship",
-      ],
+      lifeEvents: ["occupational_injury", "long_term_care_need"],
+      extraCandidateLifeEvents: ["serious_illness", "job_loss", "low_income_hardship"],
       attributes: {},
       items: [],
       questionGroups: [],
@@ -565,7 +561,7 @@ const CARE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       workflowState: "collect_missing_fields",
       stepIndex: 3,
       lifeEvent: "occupational_injury",
-      lifeEvents: ["occupational_injury"],
+      lifeEvents: ["occupational_injury", "long_term_care_need"],
       attributes: CARE_DEMO_ANSWERS,
       items: [],
       questionGroups: CARE_QUESTION_GROUPS,
@@ -596,7 +592,7 @@ const CARE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       workflowState: "explain_result",
       stepIndex: 6,
       lifeEvent: "occupational_injury",
-      lifeEvents: ["occupational_injury"],
+      lifeEvents: ["occupational_injury", "long_term_care_need"],
       attributes: CARE_DEMO_ANSWERS,
       items: CARE_RESULT_ITEMS,
       questionGroups: [],
