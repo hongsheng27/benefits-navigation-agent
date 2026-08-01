@@ -5,16 +5,18 @@ import { PostConsultPanel } from "./PostConsultPanel";
 
 type RelatedProvisionsPanelProps = {
   lifeEventId: string | null;
+  jurisdiction?: string | null;
   sessionId?: string | null;
   onClose: () => void;
 };
 
 export function RelatedProvisionsPanel({
   lifeEventId,
+  jurisdiction = null,
   sessionId = null,
   onClose,
 }: RelatedProvisionsPanelProps) {
-  const provisions = getProvisionsForLifeEvent(lifeEventId);
+  const provisions = getProvisionsForLifeEvent(lifeEventId, jurisdiction);
   const lifeEventLabel = lifeEventId
     ? lifeEventName(lifeEventId)
     : "目前情況";

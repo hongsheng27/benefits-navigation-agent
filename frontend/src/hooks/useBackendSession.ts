@@ -64,6 +64,7 @@ export type BackendSession = {
   describeEvent: (text: string) => Promise<void>;
   confirmEvent: (confirmed: boolean) => Promise<void>;
   answerFields: (answers: Record<string, AttributeValue>) => Promise<void>;
+  answerChatTurn: (text: string) => Promise<void>;
   resetSession: () => Promise<void>;
 };
 
@@ -255,6 +256,19 @@ export function useBackendSession(): BackendSession {
     [run],
   );
 
+  const answerChatTurn = useCallback(
+    async (text: string) => {
+      const sessionId = sessionIdRef.current;
+      if (!sessionId) {
+        return;
+      }
+      await run(() =>
+        advanceSession(sessionId, { kind: "attribute_chat_turn", text }),
+      );
+    },
+    [run],
+  );
+
   const resetSession = useCallback(async () => {
     const sessionId = sessionIdRef.current;
     forgetSession();
@@ -280,6 +294,7 @@ export function useBackendSession(): BackendSession {
     describeEvent,
     confirmEvent,
     answerFields,
+    answerChatTurn,
     resetSession,
   };
 }

@@ -86,15 +86,30 @@ export const RELATED_PROVISIONS: RelatedProvision[] = [
   },
 ];
 
-/** 依生活事件篩選相關法條；沒對到時回傳死亡相關預設組。 */
+/** provisionId 前綴／對應的縣市代號（與 applicant_jurisdiction 對齊）。 */
+const PROVISION_JURISDICTION: Record<string, string> = {
+  taipei_green_funeral_incentive: "TPE",
+  taipei_joint_funeral_service: "TPE",
+  new_taipei_green_funeral_incentive: "NWT",
+  taoyuan_green_funeral_incentive: "TAO",
+  penghu_green_funeral_subsidy: "PEN",
+};
+
+/** 依生活事件與所在地篩選相關法條。 */
 export function getProvisionsForLifeEvent(
   lifeEventId: string | null,
+  jurisdiction?: string | null,
 ): RelatedProvision[] {
-  if (!lifeEventId) {
-    return RELATED_PROVISIONS;
+  const byEvent = !lifeEventId
+    ? RELATED_PROVISIONS
+    : RELATED_PROVISIONS.filter((item) => item.lifeEventIds.includes(lifeEventId));
+  const base = byEvent.length > 0 ? byEvent : RELATED_PROVISIONS;
+  if (!jurisdiction || jurisdiction === "unsure" || jurisdiction === "OTHER_TW") {
+    return base;
   }
-  const matched = RELATED_PROVISIONS.filter((item) =>
-    item.lifeEventIds.includes(lifeEventId),
-  );
-  return matched.length > 0 ? matched : RELATED_PROVISIONS;
+  // 全國條文一律保留；地方條文只留與所在地相符者。
+  return base.filter((item) => {
+    const code = PROVISION_JURISDICTION[item.provisionId];
+    return code === undefined || code === jurisdiction;
+  });
 }

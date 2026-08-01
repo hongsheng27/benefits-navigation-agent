@@ -19,6 +19,7 @@ function snapshot(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
     exitReason: null,
     referralRequested: false,
     isProcessing: false,
+    collectorQuestion: null,
     createdAt: "2026-07-31T00:00:00Z",
     expiresAt: "2026-07-31T02:00:00Z",
     implementation: {
@@ -224,8 +225,9 @@ describe("HomePageAlt", () => {
     expect(await screen.findByText("再請你回答幾個問題")).toBeInTheDocument();
     expect(screen.queryByText("我們這樣理解，對嗎？")).not.toBeInTheDocument();
     expect(screen.getByText("家中是否有未成年子女？")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "一次回答多題" })).toBeInTheDocument();
+    // 有選項時可直接點 chips，不必先切到整頁選擇題。
     fireEvent.click(screen.getByRole("button", { name: "是" }));
-    fireEvent.click(screen.getByRole("button", { name: "繼續" }));
 
     expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
     expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
@@ -241,6 +243,82 @@ describe("HomePageAlt", () => {
     }
     expect(JSON.parse(String(advanceCalls[2].init?.body))).toEqual({
       input: { kind: "attribute_answers", answers: { has_dependent_children: true } },
+    });
+  });
+
+  it("sends attribute_chat_turn when the user answers in dialog mode", async () => {
+    const calls = stubBackend([
+      jsonResponse(snapshot({ lifeEvent: "spouse_death" })),
+      jsonResponse(
+        snapshot({
+          lifeEvent: "spouse_death",
+          workflowState: "collect_missing_fields",
+          stepIndex: 3,
+          collectorQuestion: "你主要在哪個縣市辦理或居住？",
+          questionGroups: [
+            {
+              topicId: "location",
+              groupIndex: 1,
+              groupTotal: 1,
+              questions: [
+                {
+                  fieldId: "applicant_jurisdiction",
+                  valueKind: "code",
+                  optionIds: ["TPE", "NWT", "TAO", "PEN", "OTHER_TW", "unsure"],
+                  required: true,
+                  purposeId: "applicant_jurisdiction.purpose",
+                  unlocksItemIds: ["funeral_benefit"],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+      jsonResponse(
+        snapshot({
+          lifeEvent: "spouse_death",
+          workflowState: "explain_result",
+          stepIndex: 6,
+          attributes: { applicant_jurisdiction: "TPE" },
+          collectorQuestion: null,
+          questionGroups: [],
+          items: [
+            {
+              itemId: "funeral_benefit",
+              kind: "benefit",
+              status: "needs_human_review",
+              missingFieldIds: [],
+              decisiveConditions: [],
+              citations: [],
+              amountMin: null,
+              amountMax: null,
+              amountPeriod: null,
+              amountCurrency: null,
+              explanation: null,
+            },
+          ],
+        }),
+      ),
+    ]);
+
+    render(<HomePageAlt />);
+    await screen.findByText("服務已就緒");
+    await startIntake();
+    describeSituation("我先生上個月過世了。");
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
+
+    expect(await screen.findByText("再請你回答幾個問題")).toBeInTheDocument();
+    expect(screen.getByText("你主要在哪個縣市辦理或居住？")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "臺北市" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("用文字回答，或上方點選選項"), {
+      target: { value: "我住臺北市" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "送出" }));
+
+    expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
+    const advanceCalls = calls.filter((call) => call.url.endsWith("/sessions/advance"));
+    expect(JSON.parse(String(advanceCalls[2].init?.body))).toEqual({
+      input: { kind: "attribute_chat_turn", text: "我住臺北市" },
     });
   });
 

@@ -107,7 +107,8 @@ describe("App", () => {
     expect(
       await screen.findByRole("heading", { name: "相關法條與官方依據" }),
     ).toBeInTheDocument();
-    expect(await screen.findByText("新北市環保葬鼓勵金")).toBeInTheDocument();
+    expect(await screen.findByText("臺北市多元環保葬鼓勵金")).toBeInTheDocument();
+    expect(screen.queryByText("新北市環保葬鼓勵金")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "關閉" }));
 
     fireEvent.click(screen.getByRole("button", { name: "去追蹤進度看這筆" }));

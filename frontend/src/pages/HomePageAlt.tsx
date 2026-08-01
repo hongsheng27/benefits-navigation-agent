@@ -16,6 +16,7 @@ import {
 import { EventConfirmation } from "../components/alt/EventConfirmation";
 import { ExamplePrompts } from "../components/alt/ExamplePrompts";
 import { PrivacyNotice } from "../components/alt/PrivacyNotice";
+import { AttributeChatPanel } from "../components/alt/AttributeChatPanel";
 import { QuestionGroupList } from "../components/alt/QuestionGroupList";
 import { RelatedProvisionsPanel } from "../components/alt/RelatedProvisionsPanel";
 import { ResultList } from "../components/alt/ResultList";
@@ -263,6 +264,7 @@ type IntakeStepsProps = {
   onConfirm?: () => void;
   onRedescribe?: () => void;
   onAnswerFields?: (answers: Record<string, boolean | number | string>) => void;
+  onAnswerChatTurn?: (text: string) => void | Promise<void>;
   onReset?: () => void;
   onGoToTracking?: (lifeEventId: string | null) => void;
   onBack?: () => void;
@@ -290,6 +292,7 @@ function IntakeSteps({
   onConfirm,
   onRedescribe,
   onAnswerFields,
+  onAnswerChatTurn,
   onReset,
   onGoToTracking,
   onBack,
@@ -542,14 +545,27 @@ function IntakeSteps({
             」有關。答完這組就可以繼續。
           </p>
           <div className="mt-6">
-            <QuestionGroupList
-              key={`${uiStep}-${isReviewing ? "review" : "live"}`}
-              disabled={busy || actionsLocked}
-              groups={questionGroups}
-              initialAnswers={demoAnswers ?? snapshot?.attributes}
-              readOnly={readOnly || isReviewing}
-              onSubmit={(answers) => onAnswerFields?.(answers)}
-            />
+            {readOnly || isReviewing || !onAnswerChatTurn ? (
+              <QuestionGroupList
+                key={`${uiStep}-${isReviewing ? "review" : "live"}`}
+                disabled={busy || actionsLocked}
+                groups={questionGroups}
+                initialAnswers={demoAnswers ?? snapshot?.attributes}
+                readOnly={readOnly || isReviewing}
+                onSubmit={(answers) => onAnswerFields?.(answers)}
+              />
+            ) : (
+              <AttributeChatPanel
+                key={`${uiStep}-chat`}
+                groups={questionGroups}
+                collectorQuestion={snapshot?.collectorQuestion ?? null}
+                disabled={busy || actionsLocked}
+                answeredCount={Object.keys(snapshot?.attributes ?? {}).length}
+                initialChoiceAnswers={snapshot?.attributes}
+                onChatTurn={(text) => onAnswerChatTurn(text)}
+                onSubmitChoices={(answers) => onAnswerFields?.(answers)}
+              />
+            )}
           </div>
           {isReviewing && onReturnToCurrent ? (
             <div className="mt-6">
@@ -644,6 +660,11 @@ function IntakeSteps({
       {openPanel === "related_provisions" ? (
         <RelatedProvisionsPanel
           lifeEventId={snapshot?.lifeEvent ?? null}
+          jurisdiction={
+            typeof snapshot?.attributes.applicant_jurisdiction === "string"
+              ? snapshot.attributes.applicant_jurisdiction
+              : null
+          }
           sessionId={sessionId ?? snapshot?.sessionId ?? null}
           onClose={() => setOpenPanel(null)}
         />
@@ -833,6 +854,7 @@ function HomePageLive({
     describeEvent,
     confirmEvent,
     answerFields,
+    answerChatTurn,
     resetSession,
   } = useBackendSession();
 
@@ -996,6 +1018,7 @@ function HomePageLive({
         onConfirm={() => void confirmEvent(true)}
         onRedescribe={() => void handleRedescribe()}
         onAnswerFields={(answers) => void answerFields(answers)}
+        onAnswerChatTurn={(text) => answerChatTurn(text)}
         onReset={() => void handleReset()}
         onGoToTracking={onGoToTracking}
         onBack={uiStep === "landing" ? undefined : handleBack}
