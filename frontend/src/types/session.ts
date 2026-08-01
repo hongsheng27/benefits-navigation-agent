@@ -100,6 +100,8 @@ export type ErrorCode =
    * 後端刻意不區分「模型壞掉」與「描述看不懂」—— 對使用者而言下一步都一樣。
    */
   | "event_not_recognized"
+  /** 諮詢後 grounded 說明暫時無法產生；前端可退回 stub。 */
+  | "explanation_unavailable"
   | "internal_error";
 
 /** 自由文字的長度上限，與後端的 MAX_LIFE_EVENT_TEXT_LENGTH 相同。 */

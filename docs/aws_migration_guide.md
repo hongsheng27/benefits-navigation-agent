@@ -374,7 +374,7 @@ Do not read the current behaviour as Option B having been chosen.
 |---|---|---|
 | Related provisions UI | `frontend/src/mocks/relatedProvisions.ts` (from `data/benefit_discovery/extracted_candidates.v0.1.json`) | Session / item `citations` with real excerpts via `official_citations` |
 | Application guide UI | `frontend/src/mocks/applicationGuides.ts` | Backend `action_plan` (or equivalent) per life event / item |
-| Copilot chat | `frontend/src/lib/copilotStub.ts` keyword replies | Bedrock (or shared explain endpoint) grounded on the open panel context only |
+| Copilot chat | `POST /sessions/current/explain` via `frontend/src/api/explainClient.ts` + stub fallback (`copilotStub.ts`) | Same endpoint; Bedrock when `BEDROCK_MODEL_ID` is set |
 
 ### What to change
 
@@ -384,6 +384,7 @@ Do not read the current behaviour as Option B having been chosen.
    - Prefer `ItemView.citations` / evidence repository text; keep the panel UI
      (`RelatedProvisionsPanel`, `PostConsultPanel`) and only swap the data loader.
    - Do not let the model invent article numbers; ground on retrieved excerpts.
+   - The explain request already sends `references[]` (title / body / sourceUrl).
 
 2. **Application guide**
    - Replace `getApplicationGuide()` fixture with backend action-plan payload
@@ -391,26 +392,25 @@ Do not read the current behaviour as Option B having been chosen.
    - Keep step → documents → agency shape close to
      `frontend/src/types/postConsult.ts` so the panel can stay thin.
 
-3. **Copilot**
-   - Replace `replyToCopilot()` with a frontend client that calls a narrow
-     explain/chat API backed by Bedrock `Converse`.
-   - Prompt must forbid eligibility determination; answers stay explanatory.
-   - Reuse `BEDROCK_MODEL_ID` / AWS credentials already documented above.
-   - Optional frontend flags when the live chat path exists:
+3. **Copilot (already wired)**
+   - Live path: `answer_with_references` task → Bedrock Converse when
+     `BEDROCK_MODEL_ID` is set; otherwise offline demo model answer.
+   - Frontend: `askCopilot()` posts question + panel references; on
+     `explanation_unavailable` falls back to `copilotStub`.
+   - Prompt forbids eligibility determination.
+   - Force stub only when debugging UI without backend:
 
 ```env
-# Frontend — post-consult Copilot (fill when explain API exists)
-# VITE_USE_POST_CONSULT_COPILOT_MOCK=false
-# VITE_POST_CONSULT_CHAT_API_PATH=/sessions/current/explain
+# Frontend — post-consult Copilot
+# VITE_USE_POST_CONSULT_COPILOT_MOCK=true
 ```
 
-### Files to touch later
+### Files
 
-- Remove or gate: `frontend/src/lib/copilotStub.ts` mock path
-- Keep UI: `frontend/src/components/alt/PostConsultPanel.tsx`,
-  `RelatedProvisionsPanel.tsx`, `ApplicationGuidePanel.tsx`
-- Data seams: `frontend/src/mocks/relatedProvisions.ts`,
-  `frontend/src/mocks/applicationGuides.ts`
+- Backend: `backend/app/llm/tasks/answer_with_references.py`,
+  `backend/app/api/sessions.py` (`POST /sessions/current/explain`)
+- Frontend: `frontend/src/api/explainClient.ts`, `frontend/src/lib/askCopilot.ts`
+- Stub fallback: `frontend/src/lib/copilotStub.ts`
 
 ---
 

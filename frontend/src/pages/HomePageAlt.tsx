@@ -267,6 +267,8 @@ type IntakeStepsProps = {
   onGoToTracking?: (lifeEventId: string | null) => void;
   onBack?: () => void;
   onReturnToCurrent?: () => void;
+  /** 正式諮詢 session，供結果頁 Copilot 呼叫 grounded LLM。 */
+  sessionId?: string | null;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   stepHeadingRef?: RefObject<HTMLHeadingElement | null>;
 };
@@ -292,6 +294,7 @@ function IntakeSteps({
   onGoToTracking,
   onBack,
   onReturnToCurrent,
+  sessionId = null,
   inputRef,
   stepHeadingRef,
 }: IntakeStepsProps) {
@@ -641,12 +644,14 @@ function IntakeSteps({
       {openPanel === "related_provisions" ? (
         <RelatedProvisionsPanel
           lifeEventId={snapshot?.lifeEvent ?? null}
+          sessionId={sessionId ?? snapshot?.sessionId ?? null}
           onClose={() => setOpenPanel(null)}
         />
       ) : null}
       {openPanel === "application_guide" ? (
         <ApplicationGuidePanel
           lifeEventId={snapshot?.lifeEvent ?? null}
+          sessionId={sessionId ?? snapshot?.sessionId ?? null}
           onClose={() => setOpenPanel(null)}
         />
       ) : null}
@@ -995,6 +1000,7 @@ function HomePageLive({
         onGoToTracking={onGoToTracking}
         onBack={uiStep === "landing" ? undefined : handleBack}
         onReturnToCurrent={() => setReviewStep(null)}
+        sessionId={snapshot?.sessionId ?? null}
         inputRef={inputRef}
         stepHeadingRef={stepHeadingRef}
       />

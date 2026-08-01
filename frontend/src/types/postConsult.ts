@@ -53,10 +53,19 @@ export type CopilotMessage = {
   content: string;
 };
 
+/** 送給後端／模型的一筆參考資料。 */
+export type CopilotReference = {
+  title: string;
+  body: string;
+  sourceUrl?: string | null;
+};
+
 export type CopilotContext = {
   kind: PostConsultPanelKind;
   lifeEventId: string | null;
   lifeEventLabel: string;
   provisionTitles: string[];
   guideTitle: string | null;
+  /** 提問時一併送給 LLM 的參考摘錄或步驟內容。 */
+  references: CopilotReference[];
 };

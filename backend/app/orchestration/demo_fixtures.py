@@ -190,5 +190,14 @@ def demo_language_model() -> FakeLanguageModel:
     有 `BEDROCK_MODEL_ID` 時會改用真實 adapter，沒有模型設定時才落回這裡。
     """
     return FakeLanguageModel(
-        responses={LlmTask.RESOLVE_LIFE_EVENT: {"event_id": DEMO_EVENT_ID}}
+        responses={
+            LlmTask.RESOLVE_LIFE_EVENT: {"event_id": DEMO_EVENT_ID},
+            # 離線時諮詢後 Copilot 仍要有可測的成功路徑；內容刻意標示為示範。
+            LlmTask.ANSWER_WITH_REFERENCES: {
+                "answer": (
+                    "（離線示範回覆）我只能依你提供的參考資料說明期限、文件與窗口，"
+                    "不能判定你是否符合資格。請對照左側摘錄，並以官方窗口為準。"
+                )
+            },
+        }
     )

@@ -1,11 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 
-import {
-  buildCopilotGreeting,
-  createUserMessage,
-  replyToCopilot,
-} from "../../lib/copilotStub";
+import { askCopilot } from "../../lib/askCopilot";
+import { buildCopilotGreeting } from "../../lib/copilotStub";
 import type {
   CopilotContext,
   CopilotMessage,
@@ -17,6 +14,8 @@ type PostConsultPanelProps = {
   title: string;
   subtitle: string;
   context: CopilotContext;
+  /** 正式諮詢的 session；缺省時會嘗試建一個臨時 session 再問 LLM。 */
+  sessionId?: string | null;
   onClose: () => void;
   children: ReactNode;
 };
@@ -26,6 +25,7 @@ export function PostConsultPanel({
   title,
   subtitle,
   context,
+  sessionId = null,
   onClose,
   children,
 }: PostConsultPanelProps) {
@@ -35,6 +35,7 @@ export function PostConsultPanel({
     buildCopilotGreeting(context),
   ]);
   const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -42,24 +43,48 @@ export function PostConsultPanel({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !busy) {
         onClose();
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [busy, onClose]);
 
-  function handleAsk(event: FormEvent<HTMLFormElement>) {
+  async function handleAsk(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) {
+    if (!text || busy) {
       return;
     }
-    const userMessage = createUserMessage(text);
-    const answer = replyToCopilot(text, context);
-    setMessages((current) => [...current, userMessage, answer]);
+    setBusy(true);
     setDraft("");
+    setMessages((current) => [
+      ...current,
+      {
+        id: `pending_user_${Date.now()}`,
+        role: "user",
+        content: text,
+      },
+    ]);
+    try {
+      const result = await askCopilot(text, context, {
+        sessionId,
+        ensureSession: !sessionId,
+      });
+      setMessages((current) => {
+        const withoutPending = current.filter(
+          (message) => !message.id.startsWith("pending_user_"),
+        );
+        return [
+          ...withoutPending,
+          result.userMessage,
+          result.assistantMessage,
+        ];
+      });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -67,7 +92,7 @@ export function PostConsultPanel({
       className="fixed inset-0 z-[70] flex items-stretch justify-center bg-[#171513]/45 p-3 sm:p-6"
       role="presentation"
       onClick={(event) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && !busy) {
           onClose();
         }
       }}
@@ -97,7 +122,8 @@ export function PostConsultPanel({
             ref={closeRef}
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-sm border border-[#c9c0b0] px-3 py-2 text-[0.88rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+            disabled={busy}
+            className="shrink-0 rounded-sm border border-[#c9c0b0] px-3 py-2 text-[0.88rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:opacity-60"
           >
             關閉
           </button>
@@ -120,7 +146,7 @@ export function PostConsultPanel({
                 Copilot 說明
               </h3>
               <p className="mt-1 text-[0.78rem] leading-[1.7] text-[#6b6459]">
-                先幫你總成白話，也可繼續追問。不做資格判定、不代為送件。
+                提問時會把左側參考資料一併送進說明服務。不做資格判定、不代為送件。
               </p>
             </div>
 
@@ -137,10 +163,15 @@ export function PostConsultPanel({
                   {message.content}
                 </div>
               ))}
+              {busy ? (
+                <p className="text-[0.82rem] text-[#8b8377]">正在依參考資料整理回答…</p>
+              ) : null}
             </div>
 
             <form
-              onSubmit={handleAsk}
+              onSubmit={(event) => {
+                void handleAsk(event);
+              }}
               className="border-t border-[#e0d8ca] px-4 py-3 sm:px-5"
             >
               <label className="sr-only" htmlFor={`copilot-input-${kind}`}>
@@ -151,15 +182,17 @@ export function PostConsultPanel({
                   id={`copilot-input-${kind}`}
                   type="text"
                   value={draft}
+                  disabled={busy}
                   onChange={(event) => setDraft(event.target.value)}
                   placeholder="例如：期限多久？要帶哪些文件？"
-                  className="min-w-0 flex-1 rounded-sm border border-[#c9c0b0] bg-[#faf8f4] px-3 py-2.5 text-[0.88rem] text-[#171513] outline-none focus:border-[#2f4f45]"
+                  className="min-w-0 flex-1 rounded-sm border border-[#c9c0b0] bg-[#faf8f4] px-3 py-2.5 text-[0.88rem] text-[#171513] outline-none focus:border-[#2f4f45] disabled:opacity-60"
                 />
                 <button
                   type="submit"
-                  className="shrink-0 rounded-sm bg-[#2f4f45] px-4 py-2.5 text-[0.88rem] font-semibold text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                  disabled={busy}
+                  className="shrink-0 rounded-sm bg-[#2f4f45] px-4 py-2.5 text-[0.88rem] font-semibold text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
                 >
-                  送出
+                  {busy ? "送出中" : "送出"}
                 </button>
               </div>
             </form>

@@ -13,6 +13,12 @@ const PROVISION_CONTEXT: CopilotContext = {
   lifeEventLabel: "配偶過世",
   provisionTitles: ["新北市環保葬鼓勵金", "臺北市聯合奠祭家屬須知"],
   guideTitle: null,
+  references: [
+    {
+      title: "新北市環保葬鼓勵金",
+      body: "完成環保葬次日起1個月內臨櫃申辦",
+    },
+  ],
 };
 
 const GUIDE_CONTEXT: CopilotContext = {
@@ -21,6 +27,12 @@ const GUIDE_CONTEXT: CopilotContext = {
   lifeEventLabel: "配偶過世",
   provisionTitles: [],
   guideTitle: "配偶過世後常見申請與辦理順序",
+  references: [
+    {
+      title: "辦理死亡登記",
+      body: "向戶政事務所完成死亡登記",
+    },
+  ],
 };
 
 describe("copilotStub", () => {

@@ -5,11 +5,13 @@ import { PostConsultPanel } from "./PostConsultPanel";
 
 type ApplicationGuidePanelProps = {
   lifeEventId: string | null;
+  sessionId?: string | null;
   onClose: () => void;
 };
 
 export function ApplicationGuidePanel({
   lifeEventId,
+  sessionId = null,
   onClose,
 }: ApplicationGuidePanelProps) {
   const guide = getApplicationGuide(lifeEventId);
@@ -23,6 +25,26 @@ export function ApplicationGuidePanel({
     lifeEventLabel,
     provisionTitles: [],
     guideTitle: guide.title,
+    references: [
+      {
+        title: guide.title,
+        body: `${guide.overview}\n\n${guide.disclaimer}`,
+      },
+      ...guide.steps.map((step, index) => ({
+        title: `步驟 ${index + 1}：${step.title}`,
+        body: [
+          step.description,
+          step.agencyName ? `窗口：${step.agencyName}` : null,
+          step.deadlineNote ? `期限：${step.deadlineNote}` : null,
+          step.requiredDocuments.length > 0
+            ? `應備文件：\n- ${step.requiredDocuments.join("\n- ")}`
+            : null,
+          step.tips.length > 0 ? `提醒：\n- ${step.tips.join("\n- ")}` : null,
+        ]
+          .filter((line): line is string => line !== null)
+          .join("\n"),
+      })),
+    ],
   };
 
   return (
@@ -31,6 +53,7 @@ export function ApplicationGuidePanel({
       title="申請解說"
       subtitle={guide.title}
       context={context}
+      sessionId={sessionId}
       onClose={onClose}
     >
       <p className="text-[0.92rem] leading-[1.9] text-[#4a453d]">

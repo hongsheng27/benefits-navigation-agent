@@ -7,9 +7,9 @@
 ## 為什麼是一個窄的 port，不是 agent runner
 
 ADR-0004 原本規劃 `AgentRunner` —— 一個模型可以自己選擇並呼叫工具的迴圈。ADR-0015 改成
-這個窄 port，理由是：系統裡只有兩個模型任務（把一段話變成事件代號、把已定案的結果換成
-白話），兩個都是問一次答一次；而讓模型能呼叫工具，等於開出一條它可以影響資格判定的路，
-那是 ADR-0003 明文禁止的。
+這個窄 port，理由是：系統裡的模型任務都是問一次答一次（事件辨識、結果白話、依摘錄說明），
+沒有工具迴圈；而讓模型能呼叫工具，等於開出一條它可以影響資格判定的路，那是 ADR-0003
+明文禁止的。
 
 **不存在的能力不需要用 prompt 或護欄去防守。** 所以這裡沒有工具登記表，也沒有迴圈。
 
@@ -60,6 +60,7 @@ class LlmTask(StrEnum):
 
     RESOLVE_LIFE_EVENT = "resolve_life_event"  # 把一段話變成事件代號與屬性
     EXPLAIN_RESULT = "explain_result"  # 把已定案的判定換成白話
+    ANSWER_WITH_REFERENCES = "answer_with_references"  # 依提供摘錄回答諮詢後問題
 
 
 class FinishReason(StrEnum):

@@ -117,6 +117,9 @@ class ErrorCode(StrEnum):
     # 而不是顯示「系統發生錯誤」。刻意不區分「模型壞掉」與「描述看不懂」——
     # 對使用者而言下一步都一樣，區分只對我們有意義，記在紀錄檔就好。
     EVENT_NOT_RECOGNIZED = "event_not_recognized"
+    # 諮詢後 grounded 說明暫時無法產生（模型不可用或輸出不合用）。
+    # 前端可退回本機 stub，不要顯示成一般「系統錯誤」。
+    EXPLANATION_UNAVAILABLE = "explanation_unavailable"
     INTERNAL_ERROR = "internal_error"  # 後端自身錯誤，不透露細節
 
 
@@ -225,6 +228,25 @@ class AdvanceRequest(_Input):
     input: AdvanceInput
 
 
+class ExplainReference(_Input):
+    """諮詢後說明用的一筆參考資料（法條摘錄或申請步驟）。"""
+
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=8000)
+    source_url: str | None = Field(default=None, max_length=500)
+
+
+class ExplainRequest(_Input):
+    """`POST /sessions/current/explain`：依參考資料回答問題。
+
+    問題與參考資料只活在這次請求，不寫入 session。
+    """
+
+    question: str = Field(min_length=1, max_length=1000)
+    panel_kind: Literal["related_provisions", "application_guide"]
+    references: list[ExplainReference] = Field(min_length=1, max_length=12)
+
+
 # ---------------------------------------------------------------------------
 # 回應：內部狀態的投影
 # ---------------------------------------------------------------------------
@@ -243,6 +265,12 @@ class _View(BaseModel):
         alias_generator=to_camel,
         populate_by_name=True,
     )
+
+
+class ExplainResponse(_View):
+    """諮詢後說明的回覆。只含 answer，不含問題原文。"""
+
+    answer: str
 
 
 class DecisiveConditionView(_View):

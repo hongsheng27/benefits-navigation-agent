@@ -315,6 +315,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
   unknown_item: "整理結果時出了一點問題，請重新開始再試一次。",
   invalid_transition: "這個步驟現在無法繼續，請重新開始再試一次。",
   event_not_recognized: "我們沒有完全看懂，可以換個說法再說一次嗎？",
+  explanation_unavailable: "說明服務暫時無法回答，請稍後再試，或先閱讀左側資料。",
   internal_error: "服務暫時無法處理，請稍後再試。",
 };
 

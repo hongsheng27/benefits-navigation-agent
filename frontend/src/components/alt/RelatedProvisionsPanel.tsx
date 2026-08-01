@@ -5,11 +5,13 @@ import { PostConsultPanel } from "./PostConsultPanel";
 
 type RelatedProvisionsPanelProps = {
   lifeEventId: string | null;
+  sessionId?: string | null;
   onClose: () => void;
 };
 
 export function RelatedProvisionsPanel({
   lifeEventId,
+  sessionId = null,
   onClose,
 }: RelatedProvisionsPanelProps) {
   const provisions = getProvisionsForLifeEvent(lifeEventId);
@@ -23,6 +25,23 @@ export function RelatedProvisionsPanel({
     lifeEventLabel,
     provisionTitles: provisions.map((item) => item.title),
     guideTitle: null,
+    references: provisions.map((item) => ({
+      title: item.title,
+      body: [
+        item.lawName,
+        item.articleLabel ? `段落：${item.articleLabel}` : null,
+        `機關：${item.publisherName}`,
+        "",
+        "白話摘要：",
+        item.plainLanguageSummary,
+        "",
+        "原文摘錄：",
+        item.excerpt,
+      ]
+        .filter((line): line is string => line !== null)
+        .join("\n"),
+      sourceUrl: item.sourceUrl,
+    })),
   };
 
   return (
@@ -31,6 +50,7 @@ export function RelatedProvisionsPanel({
       title="相關法條與官方依據"
       subtitle="以下摘錄來自官方網頁候選資料，先幫你對照可能相關的條件與說明。"
       context={context}
+      sessionId={sessionId}
       onClose={onClose}
     >
       <p className="rounded-sm border border-[#e2d3b5] bg-[#f8f3ea] px-3 py-2.5 text-[0.82rem] leading-[1.75] text-[#5c564e]">
