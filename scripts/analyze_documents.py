@@ -73,9 +73,13 @@ KNOWN_LIFE_EVENTS = [
     "new_immigrant",
 ]
 
-ANALYSIS_PROMPT = """你是一個台灣社會福利資料分析專家。請分析以下政府官方網頁內容，並萃取出所有可辨識的福利方案或行政服務。
+ANALYSIS_PROMPT = """你是一個台灣社會福利資料分析專家。請分析以下政府官方網頁內容，並萃取出所有可辨識的福利方案、行政服務或補助項目。
 
-請用以下 JSON 格式回答。如果頁面內容不包含具體的福利方案（例如只是一般性政策說明或目錄頁），回傳空的 programs 陣列即可。
+重要：請盡可能積極地辨識方案。即使頁面只是概述或資訊不完整，只要你能從標題、內容片段或上下文中辨識出一個服務/福利/補助的存在，就應該列出。缺少的欄位用 null 填寫。
+
+你也可以根據「頁面標題」和「來源機關」合理推斷該頁面涉及的方案，即使頁面文字內容有限。在這種情況下，在 summary 中標註「資訊有限，需進一步確認」。
+
+請用以下 JSON 格式回答：
 
 ```json
 {
@@ -84,9 +88,9 @@ ANALYSIS_PROMPT = """你是一個台灣社會福利資料分析專家。請分�
       "canonical_name": "方案的正式名稱",
       "summary": "一句話描述這個方案",
       "life_event": "對應的人生事件代號（從已知清單選）",
-      "support_purpose": "支持目的（選一）",
-      "program_basis": "方案法律基礎（選一）",
-      "delivery_form": "給付形式（選一）",
+      "support_purpose": "支持目的（選一或 null）",
+      "program_basis": "方案法律基礎（選一或 null）",
+      "delivery_form": "給付形式（選一或 null）",
       "responsible_agency": "主管機關名稱",
       "eligibility_rules": {
         "type": "all_of 或 any_of",
@@ -97,7 +101,7 @@ ANALYSIS_PROMPT = """你是一個台灣社會福利資料分析專家。請分�
             "data_type": "integer/boolean/enum/text/date",
             "operator": ">=, <=, ==, !=, in, not_in",
             "value": "期望值",
-            "source_text": "原文依據（引用頁面原文）"
+            "source_text": "原文依據（引用頁面原文，若無法引用則寫 null）"
           }
         ]
       },
@@ -162,12 +166,14 @@ delivery_form 可選值：
 - fee_waiver, service_or_in_kind, unknown
 
 重要規則：
-1. 只萃取**明確記載在頁面上的資訊**，不要推測或補充。
-2. 如果金額不明確，amount 的 min/max 設為 null。
-3. eligibility_rules 只放頁面上明確寫出的條件。
-4. field_id 用英文 snake_case（例如 age, cms_level, has_tw_residency）。
-5. 如果頁面是目錄頁或概述頁，沒有具體方案，回傳空 programs 陣列。
+1. 盡可能辨識所有方案。即使只看到方案名稱和簡短描述，也要列出。
+2. 如果金額不明確，amount 的 min/max 設為 null，但 description 寫你看到的任何金額資訊。
+3. eligibility_rules 放頁面上明確寫出的條件。如果沒有看到明確條件，conditions 設為空陣列。
+4. field_id 用英文 snake_case（例如 age, cms_level, has_tw_residency, is_veteran）。
+5. 一個頁面如果涉及多個不同的服務/補助/方案，每個都單獨列出。
 6. detected_attachments 列出頁面中所有 PDF/DOCX 附件連結。
+7. 如果頁面提到「訓練」「課程」「諮詢服務」等也算是一種方案（delivery_form 設 service_or_in_kind）。
+8. 對於目錄頁：如果能從目錄項目辨識出各子服務的名稱，每個子服務也列為一個方案（標 summary 說明資訊有限）。
 
 以下是要分析的頁面內容：
 
@@ -289,17 +295,24 @@ def call_bedrock(bedrock_client, content: str, publisher_name: str, title: str, 
 
 def download_attachment(url: str, s3_client, source_id: str) -> tuple[str, str, int] | None:
     """Download an attachment and upload to S3. Returns (s3_key, hash, size) or None."""
+    from urllib.parse import quote, urlparse, urlunparse
+
+    # Handle Chinese characters in URL by percent-encoding the path
+    parsed = urlparse(url)
+    encoded_path = quote(parsed.path, safe='/:@!$&\'()*+,;=')
+    encoded_url = urlunparse(parsed._replace(path=encoded_path))
+
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    req = Request(url, headers={
+    req = Request(encoded_url, headers={
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
     })
     try:
         with urlopen(req, timeout=30, context=ctx) as resp:
             content = resp.read()
     except Exception as exc:
-        print(f"    WARN: Failed to download attachment {url}: {exc}")
+        print(f"    WARN: Failed to download attachment {url[:80]}: {exc}")
         return None
 
     if not content:
@@ -307,16 +320,16 @@ def download_attachment(url: str, s3_client, source_id: str) -> tuple[str, str, 
 
     file_hash = hashlib.sha256(content).hexdigest()
     # Extract filename from URL
-    filename = url.split("/")[-1].split("?")[0] or "attachment"
+    filename = parsed.path.split("/")[-1] or "attachment"
     att_id = str(uuid.uuid4())
-    s3_key = f"{S3_ATTACHMENT_PREFIX}{source_id}/{att_id}_{filename}"
+    s3_key = f"{S3_ATTACHMENT_PREFIX}{source_id}/{att_id}_{filename[:50]}"
 
     try:
         s3_client.put_object(
             Bucket=S3_BUCKET,
             Key=s3_key,
             Body=content,
-            Metadata={"source_url": url, "fetched_at": utc_now()},
+            Metadata={"source_url": url[:200], "fetched_at": utc_now()},
         )
         return s3_key, file_hash, len(content)
     except Exception as exc:
