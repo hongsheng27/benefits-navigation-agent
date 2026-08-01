@@ -7,5 +7,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
+    // The navigator flow tests walk several chat turns, each waiting out the
+    // simulated typing delay, so they land near the 5s default and go flaky
+    // once suites run in parallel.
+    testTimeout: 20000,
   },
 });
