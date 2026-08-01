@@ -96,14 +96,21 @@ describe("App", () => {
     expect(await screen.findByText("再請你回答幾個問題")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "看下一步" }));
-    expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "相關法條" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "申請解說" })).toBeInTheDocument();
+    expect(
+      await screen.findByText(/我們好像已經掌握夠多了/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("再確認一下就可以了")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看結果" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "看下一步" }));
+    expect(await screen.findByText("我們先幫你整理到這裡")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "一起看相關法條" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "一起看申請解說" })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "去追蹤進度看這筆" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "相關法條" }));
+    fireEvent.click(screen.getByRole("button", { name: "一起看相關法條" }));
     expect(
       await screen.findByRole("heading", { name: "相關法條與官方依據" }),
     ).toBeInTheDocument();

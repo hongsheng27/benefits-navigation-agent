@@ -102,7 +102,8 @@ describe("previousUiStep", () => {
     expect(previousUiStep("describe")).toBe("landing");
     expect(previousUiStep("confirm")).toBe("describe");
     expect(previousUiStep("questions")).toBe("confirm");
-    expect(previousUiStep("result")).toBe("questions");
+    expect(previousUiStep("ready")).toBe("questions");
+    expect(previousUiStep("result")).toBe("ready");
   });
 });
 
@@ -213,7 +214,7 @@ describe("HomePageAlt", () => {
     await startIntake();
     // Only the current step is on screen.
     expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
-    expect(screen.queryByText("目前整理出的方向")).not.toBeInTheDocument();
+    expect(screen.queryByText("我們先幫你整理到這裡")).not.toBeInTheDocument();
 
     describeSituation("我先生上個月過世了。");
 
@@ -232,11 +233,18 @@ describe("HomePageAlt", () => {
     // 有選項時可直接點 chips，不必先切到整頁選擇題。
     fireEvent.click(screen.getByRole("button", { name: "是" }));
 
-    expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/我們好像已經掌握夠多了/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("再確認一下就可以了")).toBeInTheDocument();
+    expect(screen.queryByText("我們先幫你整理到這裡")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "查看結果" }));
+
+    expect(await screen.findByText("我們先幫你整理到這裡")).toBeInTheDocument();
     expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
-    expect(screen.getByText("建議再向承辦確認")).toBeInTheDocument();
+    expect(screen.getByText("這幾項，建議再跟承辦聊聊")).toBeInTheDocument();
     expect(screen.getByText("喪葬給付")).toBeInTheDocument();
-    expect(screen.getByText(/目前結果仍是示範資料/)).toBeInTheDocument();
+    expect(screen.getByText(/先用示範資料帶你看一輪/)).toBeInTheDocument();
 
     const advanceCalls = calls.filter((call) => call.url.endsWith("/sessions/advance"));
     expect(advanceCalls).toHaveLength(3);
@@ -319,7 +327,11 @@ describe("HomePageAlt", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "送出" }));
 
-    expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/我們好像已經掌握夠多了/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "查看結果" }));
+    expect(await screen.findByText("我們先幫你整理到這裡")).toBeInTheDocument();
     const advanceCalls = calls.filter((call) => call.url.endsWith("/sessions/advance"));
     expect(JSON.parse(String(advanceCalls[2].init?.body))).toEqual({
       input: { kind: "attribute_chat_turn", text: "我住臺北市" },
@@ -418,8 +430,55 @@ describe("HomePageAlt", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "對，就是這些" }));
 
-    expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/我們好像已經掌握夠多了/),
+    ).toBeInTheDocument();
     expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "查看結果" }));
+    expect(await screen.findByText("我們先幫你整理到這裡")).toBeInTheDocument();
     expect(screen.getByText(/資料還在補齊中/)).toBeInTheDocument();
+  });
+
+  it("asks before clearing the session when the user wants to start over from the ready gate", async () => {
+    stubBackend([
+      jsonResponse(snapshot({ lifeEvent: "spouse_death" })),
+      jsonResponse(
+        snapshot({
+          lifeEvent: "spouse_death",
+          workflowState: "collect_missing_fields",
+          questionGroups: [],
+          items: [],
+        }),
+      ),
+    ]);
+
+    render(<HomePageAlt />);
+    await screen.findByText("服務已就緒");
+    await startIntake();
+    describeSituation("我先生上個月過世了。");
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這些" }));
+
+    expect(
+      await screen.findByText(/我們好像已經掌握夠多了/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "我還有其他情況想說" }));
+    expect(
+      screen.getByText("確定要從頭再說一次嗎？"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/前面在對話裡輸入與選擇過的內容都會清掉/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "先不要，再想想" }));
+    expect(
+      screen.queryByText("確定要從頭再說一次嗎？"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/我們好像已經掌握夠多了/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "我還有其他情況想說" }));
+    fireEvent.click(screen.getByRole("button", { name: "確定，從頭開始" }));
+    expect(
+      await screen.findByRole("button", { name: "開始說明我的情況" }),
+    ).toBeInTheDocument();
   });
 });

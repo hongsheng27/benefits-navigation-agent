@@ -9,6 +9,7 @@ export type HistoryConsultStep =
   | "describe"
   | "confirm"
   | "questions"
+  | "ready"
   | "result";
 
 export type AppHistoryState = {
@@ -35,6 +36,7 @@ function isConsultStep(value: unknown): value is HistoryConsultStep {
     value === "describe" ||
     value === "confirm" ||
     value === "questions" ||
+    value === "ready" ||
     value === "result"
   );
 }

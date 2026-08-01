@@ -405,12 +405,12 @@ export function resultAudienceDescription(audience: ResultAudience): string {
 
 /** 結果分區的標題。 */
 const STATUS_SECTION_TITLES: Record<ItemStatus, string> = {
-  eligible: "你可能可以申請",
-  needs_information: "還需要再確認",
-  ineligible: "目前看起來不符合",
-  needs_human_review: "建議再向承辦確認",
-  pending: "尚待確認",
-  declined_by_user: "你選擇不辦理",
+  eligible: "這些，你或許可以辦理",
+  needs_information: "還差一點資訊才能更確定",
+  ineligible: "目前看起來比較難符合",
+  needs_human_review: "這幾項，建議再跟承辦聊聊",
+  pending: "我們還需要再核對一下",
+  declined_by_user: "你選擇先不辦理",
 };
 
 /** 項目是義務還是權利，畫面上要分得出來。 */

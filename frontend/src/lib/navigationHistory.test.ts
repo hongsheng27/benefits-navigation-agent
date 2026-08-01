@@ -22,6 +22,18 @@ describe("navigationHistory", () => {
     );
   });
 
+  it("round-trips the ready consult step", () => {
+    const state = {
+      v: 1 as const,
+      section: "consult" as const,
+      mode: "live" as const,
+      consultStep: "ready" as const,
+      demoSceneIndex: 0,
+    };
+    expect(historyStateToUrl(state)).toBe("/?s=consult&step=ready");
+    expect(historyStateFromLocation("?s=consult&step=ready")).toEqual(state);
+  });
+
   it("round-trips demo scene index", () => {
     const state = {
       v: 1 as const,
