@@ -228,20 +228,27 @@ def call_bedrock(bedrock_client, content: str, publisher_name: str, title: str, 
         body=body.encode(),
     )
 
-    response_body = json.loads(response["body"].read())
+    raw_bytes = response["body"].read()
+    response_body = json.loads(raw_bytes)
     text = response_body["content"][0]["text"]
 
-    # Try to parse JSON from response
-    # Sometimes LLM wraps it in ```json ... ```
+    # Parse JSON from response
     text = text.strip()
+    # Remove markdown code blocks if present
     if text.startswith("```"):
         text = re.sub(r'^```(?:json)?\s*', '', text)
         text = re.sub(r'\s*```$', '', text)
+    # Find the JSON object boundaries
+    first_brace = text.find("{")
+    last_brace = text.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        text = text[first_brace:last_brace + 1]
 
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        print(f"    WARN: Failed to parse LLM response as JSON")
+    except json.JSONDecodeError as e:
+        print(f"    WARN: JSON parse error: {e}")
+        print(f"    Raw response (first 300 chars): {text[:300]}")
         return {"programs": [], "detected_attachments": []}
 
 
