@@ -2,7 +2,7 @@
 
 這份文件是 local mock 與 live AWS adapter 之間的**單一遷移資訊來源**。
 
-> **Status**: 目前功能仍以 local mocks（SQLite、本機檔案）運作，且 AWS 資源開放前不得建立 live connections。Owner 已核准 Hackathon data-layer target 為 Amazon RDS for PostgreSQL 與 Amazon S3；完成 adapters、migration、validation 與 rollback 前不得切換，也不得提交 credentials 或 account-specific secrets。
+> **Status**: PostgreSQL adapters 已實作。本機開發繼續使用 SQLite (`DATA_STORE_BACKEND=sqlite`)；部署到 AWS 時切換為 `DATA_STORE_BACKEND=postgresql`。RDS endpoint: `database-1.c54m4aak2pcn.us-west-2.rds.amazonaws.com`。
 
 ## How to Use This Guide
 
@@ -20,32 +20,23 @@ Add only the variables required by an owner-approved integration to your local `
 
 ```env
 # AWS General
-AWS_REGION=ap-northeast-1
-AWS_ACCOUNT_ID=
+AWS_REGION=us-west-2
+
+# Data store backend selector
+DATA_STORE_BACKEND=postgresql
+
+# RDS PostgreSQL (ACTIVE — adapters implemented)
+RDS_HOST=database-1.c54m4aak2pcn.us-west-2.rds.amazonaws.com
+RDS_PORT=5432
+RDS_DATABASE=benefits_navigation
+RDS_USERNAME=benefits_admin
+RDS_PASSWORD=<your-password-here>
+RDS_SSLMODE=require
 
 # S3 (approved document/attachment target; fill only when adapter exists)
 S3_BUCKET_NAME=
 S3_ATTACHMENT_PREFIX=attachments/
-
-# RDS PostgreSQL (approved target; not consumed by the current SQLite path)
-DATA_STORE_BACKEND=sqlite
-RDS_HOST=
-RDS_PORT=5432
-RDS_DATABASE=
-RDS_USERNAME=
-RDS_PASSWORD=
-RDS_SSLMODE=require
-
-# Document/attachment object adapter selector; keep local until S3 cutover
-# validation passes. Source documents switch as one adapter-managed batch;
-# attachments also retain per-row storage_backend metadata.
 ATTACHMENT_STORAGE_BACKEND=local
-
-# Bedrock (LLM)
-# BEDROCK_MODEL_ID=
-
-# AgentCore (if used)
-# AGENTCORE_AGENT_ID=
 ```
 
 ---
@@ -60,40 +51,34 @@ SQLite/local-file path remains mandatory for development and tests.
 
 | Concern | Current local default | Local modules used or planned |
 |------|--------------------------|-------------------------------|
-| Canonical data | `data/local/government_oid.db` SQLite last committed state | Used: `backend/app/services/benefit_catalog.py`; planned: `backend/app/adapters/sqlite/` and migrations |
-| Eligibility | Local deterministic engine over canonical Rule DSL | Used: `backend/app/rules/engine.py`; planned: `backend/app/application/eligibility_service.py`, `backend/app/rules/dsl.py`, `backend/app/rules/evaluator.py` |
-| Evidence/files | SQLite metadata plus `data/local/source_documents/` | Used: `backend/app/services/source_connector.py`; planned: `backend/app/adapters/sqlite/evidence_repository.py` |
-| Refresh | Local committed-data-first enqueue and local worker | Planned: `backend/app/adapters/sqlite/source_refresh_service.py`, `backend/app/curation/local_worker.py` |
+| Canonical data | `data/local/government_oid.db` SQLite last committed state | Used: `backend/app/services/benefit_catalog.py`; active: `backend/app/adapters/sqlite/` and `backend/app/adapters/postgresql/` |
+| Eligibility | Local deterministic engine over canonical Rule DSL | Used: `backend/app/rules/engine.py`; active: `backend/app/application/eligibility_service.py`, `backend/app/rules/dsl.py`, `backend/app/rules/evaluator.py` |
+| Evidence/files | SQLite metadata plus `data/local/source_documents/` | Used: `backend/app/services/source_connector.py`; active: `backend/app/adapters/sqlite/evidence_repository.py`, `backend/app/adapters/postgresql/evidence_repository.py` |
+| Refresh | Local committed-data-first enqueue and local worker | Active: `backend/app/adapters/sqlite/source_refresh_service.py`, `backend/app/adapters/postgresql/source_refresh_service.py` |
 | Candidate extraction | Local parser and local/mock LLM only | Planned: `backend/app/curation/candidate_extractor.py`; crawler/LLM outputs remain unverified |
-| Wiring | FastAPI application composition root | Planned: `backend/app/application/composition.py`; workflow/state machine receive injected ports |
+| Wiring | FastAPI application composition root | Active: `backend/app/application/composition.py` — switches between SQLite and PostgreSQL based on `DATA_STORE_BACKEND` |
 
 ### Future adapter swap points
 
-A later cutover replaces only these infrastructure implementations while
-preserving the shared contracts:
+PostgreSQL adapters are now implemented. The cutover procedure:
 
-1. Add PostgreSQL implementations of `EntitlementGraphRepository`,
-   `EligibilityService`, `EvidenceRepository`, and `SourceRefreshService`.
-   Do not modify Workflow or Rule Engine semantics.
-2. Translate ordered SQLite migrations into a separate PostgreSQL dialect:
-   use `JSONB` for typed expected values, `TIMESTAMPTZ` for timezone-aware
-   timestamps, explicit numeric types for amounts, and equivalent FK/check/
-   partial-unique constraints.
-3. Copy the SQLite last successful committed state to RDS in FK dependency
-   order. Compare table counts, canonical IDs, hashes, current-version pointers,
-   foreign-key validity, rule/evidence validation, and synthetic isolation
-   before changing adapters.
-4. Replace local document and attachment writes behind the storage adapter with
-   S3 `put_object`/`get_object`. Keep hashes and opaque object keys in database
-   rows; never store object bytes in relational columns.
-5. Replace the local refresh worker behind `SourceRefreshService` only after a
-   separate queue decision; preserve current-data-first responses and same-day
-   deduplication.
-6. Change construction only in the FastAPI composition root. Workflow and state
-   machine must not receive PostgreSQL connections, AWS SDK types, table names,
-   bucket names, or URLs.
-7. Keep SQLite and local files as the rollback path until a complete RDS/S3
-   cutover has passed validation. JSON is not a runtime fallback.
+1. **Schema**: Run `scripts/migrate_sqlite_to_postgresql.py` — it creates
+   all tables and copies data from SQLite to RDS in FK dependency order.
+2. **Adapters**: Set `DATA_STORE_BACKEND=postgresql` in `.env` and provide
+   `RDS_HOST`, `RDS_PASSWORD`, etc. The composition root automatically
+   switches to `PgEntitlementGraphRepository`, `PgRuleRepository`,
+   `PgEvidenceRepository`, and `PgSourceRefreshService`.
+3. **Verify**: Start the FastAPI app and hit `/health` to confirm RDS
+   connectivity. Run the integration test suite against the PostgreSQL
+   backend.
+4. **Rollback**: Set `DATA_STORE_BACKEND=sqlite` to revert to local SQLite.
+
+Implemented PostgreSQL adapters:
+- `backend/app/adapters/postgresql/graph_repository.py` — `PgEntitlementGraphRepository`
+- `backend/app/adapters/postgresql/rule_repository.py` — `PgRuleRepository`
+- `backend/app/adapters/postgresql/evidence_repository.py` — `PgEvidenceRepository`
+- `backend/app/adapters/postgresql/source_refresh_service.py` — `PgSourceRefreshService`
+- `backend/app/adapters/postgresql/connection.py` — Connection pool management
 
 ### Environment variables for the approved RDS/S3 targets
 

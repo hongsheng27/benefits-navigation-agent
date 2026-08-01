@@ -33,6 +33,21 @@ class Settings(BaseSettings):
     # of the same source on the same working day.
     application_timezone: str = "Asia/Taipei"
 
+    # --- Data store backend selector ---
+    # "sqlite" (default, local development) or "postgresql" (RDS deployment).
+    data_store_backend: str = "sqlite"
+
+    # --- RDS PostgreSQL settings (only used when data_store_backend=postgresql) ---
+    rds_host: str = ""
+    rds_port: int = 5432
+    rds_database: str = "benefits_navigation"
+    rds_username: str = "benefits_admin"
+    rds_password: str = ""
+    rds_sslmode: str = "require"
+
+    # --- AWS region ---
+    aws_region: str = "us-west-2"
+
     # Vite's development server. Deployment origins are added once the
     # deployment platform is decided.
     cors_allow_origins: list[str] = [

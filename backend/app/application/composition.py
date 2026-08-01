@@ -6,8 +6,8 @@ application. Routes must never create adapters themselves.
 Design:
 - `ApplicationDependencies`: frozen dataclass holding all protocol ports.
 - `ApplicationOverrides`: optional frozen dataclass for test injection.
-- `build_dependencies()`: validates SQLite, builds real adapters.
-  When overrides supply all four ports, ZERO SQLite connections are opened.
+- `build_dependencies()`: validates SQLite or PostgreSQL, builds real adapters.
+  When overrides supply all four ports, ZERO database connections are opened.
 - If any required dependency is missing, `DependencyConfigurationError` is
   raised before the app can accept requests.
 
@@ -34,6 +34,7 @@ from app.adapters.sqlite.migrations import (
 from app.adapters.sqlite.rule_repository import SqliteRuleRepository
 from app.adapters.sqlite.source_refresh_service import SqliteSourceRefreshService
 from app.application.eligibility_service import DeterministicEligibilityService
+from app.config import get_settings
 from app.orchestration.data_errors import RepositoryUnavailableError
 from app.orchestration.protocols import (
     EligibilityService,
@@ -145,13 +146,15 @@ def build_dependencies(
 ) -> ApplicationDependencies:
     """Build all application dependencies.
 
-    When `overrides` supplies all four ports, no SQLite is touched (Req 2.9).
-    Otherwise, validates SQLite and builds real adapters (Req 2.5).
+    When `overrides` supplies all four ports, no database is touched (Req 2.9).
+    Otherwise, checks DATA_STORE_BACKEND setting:
+    - "sqlite" (default): validates SQLite and builds SQLite adapters.
+    - "postgresql": connects to RDS and builds PostgreSQL adapters.
 
     If any required port ends up None, raises DependencyConfigurationError
     before the app can accept requests (Req 2.10).
     """
-    # Check if all overrides are supplied — skip SQLite entirely
+    # Check if all overrides are supplied — skip database entirely
     if overrides is not None and _all_overrides_present(overrides):
         return ApplicationDependencies(
             graph_repository=overrides.graph_repository,  # type: ignore[arg-type]
@@ -160,6 +163,93 @@ def build_dependencies(
             source_refresh_service=overrides.source_refresh_service,  # type: ignore[arg-type]
         )
 
+    settings = get_settings()
+
+    if settings.data_store_backend == "postgresql":
+        return _build_postgresql_dependencies(overrides, settings)
+
+    # Default: SQLite
+    return _build_sqlite_dependencies(overrides, db_path)
+
+
+def _build_postgresql_dependencies(
+    overrides: ApplicationOverrides | None,
+    settings: object,
+) -> ApplicationDependencies:
+    """Build dependencies backed by PostgreSQL (RDS)."""
+    from app.adapters.postgresql.connection import PostgresConfig, create_pool
+    from app.adapters.postgresql.evidence_repository import PgEvidenceRepository
+    from app.adapters.postgresql.graph_repository import PgEntitlementGraphRepository
+    from app.adapters.postgresql.rule_repository import PgRuleRepository
+    from app.adapters.postgresql.source_refresh_service import PgSourceRefreshService
+
+    config = PostgresConfig(
+        host=settings.rds_host,  # type: ignore[attr-defined]
+        port=settings.rds_port,  # type: ignore[attr-defined]
+        database=settings.rds_database,  # type: ignore[attr-defined]
+        username=settings.rds_username,  # type: ignore[attr-defined]
+        password=settings.rds_password,  # type: ignore[attr-defined]
+        sslmode=settings.rds_sslmode,  # type: ignore[attr-defined]
+    )
+
+    if not config.host:
+        raise DependencyConfigurationError(
+            "postgresql", reason="rds_host_not_configured"
+        )
+
+    pool = create_pool(config)
+
+    graph_repository: EntitlementGraphRepository
+    eligibility_service: EligibilityService
+    evidence_repository: EvidenceRepository
+    source_refresh_service: SourceRefreshService
+
+    if overrides is not None and overrides.graph_repository is not None:
+        graph_repository = overrides.graph_repository
+    else:
+        graph_repository = PgEntitlementGraphRepository(pool)
+
+    if overrides is not None and overrides.evidence_repository is not None:
+        evidence_repository = overrides.evidence_repository
+    else:
+        evidence_repository = PgEvidenceRepository(pool)
+
+    if overrides is not None and overrides.source_refresh_service is not None:
+        source_refresh_service = overrides.source_refresh_service
+    else:
+        source_refresh_service = PgSourceRefreshService(
+            pool, application_timezone=settings.application_timezone  # type: ignore[attr-defined]
+        )
+
+    if overrides is not None and overrides.eligibility_service is not None:
+        eligibility_service = overrides.eligibility_service
+    else:
+        rule_repository = PgRuleRepository(pool)
+        eligibility_service = DeterministicEligibilityService(
+            rule_repository=rule_repository,
+            evidence_repository=evidence_repository,
+        )
+
+    _validate_all_present(
+        graph_repository=graph_repository,
+        eligibility_service=eligibility_service,
+        evidence_repository=evidence_repository,
+        source_refresh_service=source_refresh_service,
+    )
+
+    return ApplicationDependencies(
+        graph_repository=graph_repository,
+        eligibility_service=eligibility_service,
+        evidence_repository=evidence_repository,
+        source_refresh_service=source_refresh_service,
+    )
+
+
+def _build_sqlite_dependencies(
+    overrides: ApplicationOverrides | None,
+    db_path: Path | None,
+) -> ApplicationDependencies:
+    """Build dependencies backed by SQLite (local development)."""
     # Default SQLite path
     resolved_db_path = db_path if db_path is not None else _DEFAULT_DB_PATH
 
