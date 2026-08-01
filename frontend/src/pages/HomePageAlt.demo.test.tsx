@@ -20,7 +20,7 @@ describe("HomePageAlt demo mode", () => {
     expect(screen.getByRole("button", { name: "下一步" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "看下一步" }));
-    expect(screen.getByRole("button", { name: "對，就是這些" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "對，就是這件事" })).toBeDisabled();
 
     const backButtons = screen.getAllByRole("button", { name: "← 上一步" });
     fireEvent.click(backButtons[0]);
