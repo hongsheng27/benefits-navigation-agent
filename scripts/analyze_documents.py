@@ -51,10 +51,26 @@ MAX_HTML_CHARS = 80000  # Truncate HTML to fit context window
 KNOWN_LIFE_EVENTS = [
     "long_term_care",
     "death_of_family_member",
+    "childbirth_and_childcare",
+    "domestic_violence",
+    "sexual_assault",
+    "divorce",
     "disability",
-    "retirement",
-    "childbirth",
+    "serious_illness",
+    "mental_health",
     "unemployment",
+    "retirement",
+    "work_injury",
+    "workplace_bullying",
+    "poverty",
+    "debt_crisis",
+    "housing_need",
+    "disaster",
+    "education_expense",
+    "career_start",
+    "military_service",
+    "indigenous_rights",
+    "new_immigrant",
 ]
 
 ANALYSIS_PROMPT = """你是一個台灣社會福利資料分析專家。請分析以下政府官方網頁內容，並萃取出所有可辨識的福利方案或行政服務。
@@ -110,10 +126,26 @@ ANALYSIS_PROMPT = """你是一個台灣社會福利資料分析專家。請分�
 可用的 life_event 代號：
 - long_term_care（長期照顧需求）
 - death_of_family_member（親人過世）
+- childbirth_and_childcare（生育與育兒）
+- domestic_violence（家庭暴力）
+- sexual_assault（性侵害）
+- divorce（離婚）
 - disability（身心障礙）
-- retirement（退休）
-- childbirth（生育）
+- serious_illness（重大傷病）
+- mental_health（心理健康需求）
 - unemployment（失業）
+- retirement（退休）
+- work_injury（職業災害）
+- workplace_bullying（職場霸凌）
+- poverty（經濟困難）
+- debt_crisis（債務危機）
+- housing_need（居住需求）
+- disaster（天然災害）
+- education_expense（就學負擔）
+- career_start（初入職場/青年就業）
+- military_service（服兵役/退伍）
+- indigenous_rights（原住民族權益）
+- new_immigrant（新住民適應）
 
 support_purpose 可選值：
 - funeral_cost, one_time_death_support, survivor_livelihood
