@@ -182,7 +182,7 @@ function BackLink({
       type="button"
       disabled={disabled}
       onClick={onBack}
-      className="mb-4 text-[0.88rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:text-[#a89f90] disabled:no-underline"
+      className="text-[0.88rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:text-[#a89f90] disabled:no-underline"
     >
       ← 上一步
     </button>
@@ -313,16 +313,31 @@ function IntakeSteps({
 
   return (
     <>
-      {showBack ? <BackLink disabled={busy} onBack={onBack} /> : null}
+      {showBack || isReviewing ? (
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {showBack ? <BackLink disabled={busy} onBack={onBack} /> : null}
+          {isReviewing && onReturnToCurrent ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onReturnToCurrent}
+              className="text-[0.88rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:text-[#a89f90]"
+            >
+              回到目前進度 →
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {isReviewing ? (
-        <div className="mb-6 rounded-sm border border-[#e2d3b5] bg-[#f8f3ea] px-4 py-3 text-[0.88rem] leading-[1.85] text-[#4a453d]">
-          <p>你正在回看稍早的步驟。若要繼續，請先回到目前進度。</p>
+        <div className="mb-6 rounded-sm border border-[#e2d3b5] bg-[#f8f3ea] px-4 py-3.5 text-[0.88rem] leading-[1.85] text-[#4a453d]">
+          <p>你正在回看稍早的步驟，這裡不能重新送出。</p>
           {onReturnToCurrent ? (
             <button
               type="button"
+              disabled={busy}
               onClick={onReturnToCurrent}
-              className="mt-2 text-[0.88rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline"
+              className="mt-3 rounded-sm bg-[#2f4f45] px-4 py-2 text-[0.88rem] font-semibold tracking-[0.02em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
             >
               回到目前進度
             </button>
@@ -433,22 +448,38 @@ function IntakeSteps({
             ) : null}
 
             <div className="mt-8">
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className="w-full rounded-sm bg-[#2f4f45] px-6 py-3.5 text-[1rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459] sm:w-auto"
-              >
-                {busy ? "正在了解你的情況…" : "下一步"}
-              </button>
-              <p className="mt-3 text-[0.82rem] leading-[1.8] text-[#8b8377]">
-                {readOnly
-                  ? "示範中無法送出。正式使用時，寫下一點內容就可以繼續。"
-                  : isReviewing
-                    ? "回看中無法重新送出，請先回到目前進度。"
-                    : canSubmit
-                      ? "送出後我們只留下「發生哪一類事」，你寫的原文不會保存。"
-                      : "寫下一點內容後，就可以繼續。"}
-              </p>
+              {isReviewing && onReturnToCurrent ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={onReturnToCurrent}
+                    className="w-full rounded-sm bg-[#2f4f45] px-6 py-3.5 text-[1rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459] sm:w-auto"
+                  >
+                    回到目前進度
+                  </button>
+                  <p className="mt-3 text-[0.82rem] leading-[1.8] text-[#8b8377]">
+                    回看中無法重新送出；按上面按鈕可回到你剛才進行到的步驟。
+                  </p>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="submit"
+                    disabled={!canSubmit}
+                    className="w-full rounded-sm bg-[#2f4f45] px-6 py-3.5 text-[1rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459] sm:w-auto"
+                  >
+                    {busy ? "正在了解你的情況…" : "下一步"}
+                  </button>
+                  <p className="mt-3 text-[0.82rem] leading-[1.8] text-[#8b8377]">
+                    {readOnly
+                      ? "示範中無法送出。正式使用時，寫下一點內容就可以繼續。"
+                      : canSubmit
+                        ? "送出後我們只留下「發生哪一類事」，你寫的原文不會保存。"
+                        : "寫下一點內容後，就可以繼續。"}
+                  </p>
+                </>
+              )}
             </div>
           </form>
         </section>
@@ -473,6 +504,18 @@ function IntakeSteps({
             onConfirm={() => onConfirm?.()}
             onRedescribe={() => onRedescribe?.()}
           />
+          {isReviewing && onReturnToCurrent ? (
+            <div className="mt-6">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onReturnToCurrent}
+                className="rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
+              >
+                回到目前進度
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -497,10 +540,22 @@ function IntakeSteps({
               disabled={busy || actionsLocked}
               groups={questionGroups}
               initialAnswers={demoAnswers ?? snapshot?.attributes}
-              readOnly={actionsLocked}
+              readOnly={readOnly || isReviewing}
               onSubmit={(answers) => onAnswerFields?.(answers)}
             />
           </div>
+          {isReviewing && onReturnToCurrent ? (
+            <div className="mt-6">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onReturnToCurrent}
+                className="rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
+              >
+                回到目前進度
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

@@ -89,7 +89,7 @@ export function QuestionGroupList({
         </button>
         <p className="text-[0.82rem] leading-[1.9] text-[#6b6459]">
           {readOnly
-            ? "示範中無法送出，正式使用時由你回答後繼續。"
+            ? "目前無法送出答案；若在回看稍早步驟，請按「回到目前進度」。"
             : canSubmit
               ? "送出後我們會依你的回答整理結果。"
               : "請先回答上面的問題。"}
