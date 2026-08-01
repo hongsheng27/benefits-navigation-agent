@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode, RefObject } from "react";
 
 import { getBackendHealth } from "../api/client";
 import styles from "../components/alt/alt.module.css";
+import { ApplicationGuidePanel } from "../components/alt/ApplicationGuidePanel";
 import {
   BackendStatusLine,
   type BackendConnectionState,
@@ -16,9 +17,11 @@ import { EventConfirmation } from "../components/alt/EventConfirmation";
 import { ExamplePrompts } from "../components/alt/ExamplePrompts";
 import { PrivacyNotice } from "../components/alt/PrivacyNotice";
 import { QuestionGroupList } from "../components/alt/QuestionGroupList";
+import { RelatedProvisionsPanel } from "../components/alt/RelatedProvisionsPanel";
 import { ResultList } from "../components/alt/ResultList";
 import { useBackendSession } from "../hooks/useBackendSession";
 import { INTAKE_DEMO_SCENES } from "../mocks/intakeDemoScript";
+import type { PostConsultPanelKind } from "../types/postConsult";
 import type { SessionSnapshot } from "../types/session";
 import { MAX_LIFE_EVENT_TEXT_LENGTH } from "../types/session";
 
@@ -292,6 +295,7 @@ function IntakeSteps({
   inputRef,
   stepHeadingRef,
 }: IntakeStepsProps) {
+  const [openPanel, setOpenPanel] = useState<PostConsultPanelKind | null>(null);
   const trimmed = description.trim();
   const actionsLocked = readOnly || isReviewing;
   const canSubmit =
@@ -593,29 +597,58 @@ function IntakeSteps({
             </div>
           )}
 
-          {onGoToTracking || (!actionsLocked && onReset) ? (
-            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              {onGoToTracking && !isReviewing ? (
+          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            {!isReviewing ? (
+              <>
                 <button
                   type="button"
-                  onClick={() => onGoToTracking(snapshot.lifeEvent)}
+                  onClick={() => setOpenPanel("related_provisions")}
                   className="rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
                 >
-                  去追蹤進度看這筆
+                  相關法條
                 </button>
-              ) : null}
-              {!actionsLocked && onReset ? (
                 <button
                   type="button"
-                  onClick={() => onReset()}
-                  className="rounded-sm border border-[#c9c0b0] bg-transparent px-5 py-2.5 text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                  onClick={() => setOpenPanel("application_guide")}
+                  className="rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
                 >
-                  重新開始
+                  申請解說
                 </button>
-              ) : null}
-            </div>
-          ) : null}
+              </>
+            ) : null}
+            {onGoToTracking && !isReviewing ? (
+              <button
+                type="button"
+                onClick={() => onGoToTracking(snapshot.lifeEvent)}
+                className="rounded-sm border border-[#c9c0b0] bg-transparent px-5 py-2.5 text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+              >
+                去追蹤進度看這筆
+              </button>
+            ) : null}
+            {!actionsLocked && onReset ? (
+              <button
+                type="button"
+                onClick={() => onReset()}
+                className="rounded-sm border border-[#c9c0b0] bg-transparent px-5 py-2.5 text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+              >
+                重新開始
+              </button>
+            ) : null}
+          </div>
         </section>
+      ) : null}
+
+      {openPanel === "related_provisions" ? (
+        <RelatedProvisionsPanel
+          lifeEventId={snapshot?.lifeEvent ?? null}
+          onClose={() => setOpenPanel(null)}
+        />
+      ) : null}
+      {openPanel === "application_guide" ? (
+        <ApplicationGuidePanel
+          lifeEventId={snapshot?.lifeEvent ?? null}
+          onClose={() => setOpenPanel(null)}
+        />
       ) : null}
     </>
   );
