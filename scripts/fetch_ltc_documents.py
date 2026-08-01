@@ -135,10 +135,17 @@ def get_pg_conninfo() -> str:
 
 
 def fetch_page(url: str) -> tuple[bytes, int]:
-    """Fetch a URL and return (content_bytes, http_status)."""
+    """Fetch a URL and return (content_bytes, http_status).
+
+    Uses relaxed SSL verification because many Taiwan government sites
+    have non-standard certificate configurations.
+    """
     ctx = ssl.create_default_context()
+    # Taiwan government sites often have certificate chain issues
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     req = Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (compatible; BenefitsNavBot/0.1; +https://github.com/hongsheng27/benefits-navigation-agent)"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     })
     try:
         with urlopen(req, timeout=30, context=ctx) as resp:
