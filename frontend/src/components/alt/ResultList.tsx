@@ -1,5 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
+import {
+  addTrackedBenefitItem,
+  buildTrackedItemFromResult,
+  isBenefitItemTracked,
+  syncPendingBenefitItemsFromResults,
+} from "../../lib/trackingStore";
 import { getItemDetail } from "../../mocks/itemDetails";
 import type { ItemStatus, ItemView, SessionSnapshot } from "../../types/session";
 import styles from "./alt.module.css";
@@ -32,6 +38,9 @@ type ResultListProps = {
   snapshot: SessionSnapshot;
   /** 示範用：依被照顧者／照顧者分組（不改 API）。 */
   groupByAudience?: boolean;
+  /** 顯示「加入追蹤」並同步本輪待追蹤清單。 */
+  enableItemTracking?: boolean;
+  onGoToTracking?: (lifeEventId: string | null) => void;
 };
 
 /**
@@ -43,8 +52,19 @@ type ResultListProps = {
 export function ResultList({
   snapshot,
   groupByAudience = false,
+  enableItemTracking = true,
+  onGoToTracking,
 }: ResultListProps) {
-  const { items, implementation, lifeEvents } = snapshot;
+  const { items, implementation, lifeEvents, lifeEvent } = snapshot;
+  const primaryLifeEvent =
+    lifeEvent ?? (lifeEvents.length > 0 ? lifeEvents[0] : null);
+
+  useEffect(() => {
+    if (!enableItemTracking || items.length === 0) {
+      return;
+    }
+    syncPendingBenefitItemsFromResults(items, primaryLifeEvent);
+  }, [enableItemTracking, items, primaryLifeEvent]);
 
   const audienceGroups = groupByAudience
     ? AUDIENCE_ORDER.map((audience) => ({
@@ -97,7 +117,13 @@ export function ResultList({
               <p className="mt-1 text-[0.88rem] leading-[1.9] text-[#6b6459]">
                 {resultAudienceDescription(group.audience)}
               </p>
-              <StatusGroups items={group.items} nested />
+              <StatusGroups
+                items={group.items}
+                nested
+                lifeEventId={primaryLifeEvent}
+                enableItemTracking={enableItemTracking}
+                onGoToTracking={onGoToTracking}
+              />
             </section>
           ))}
 
@@ -108,7 +134,13 @@ export function ResultList({
               >
                 其他相關方向
               </h3>
-              <StatusGroups items={ungroupedItems} nested />
+              <StatusGroups
+                items={ungroupedItems}
+                nested
+                lifeEventId={primaryLifeEvent}
+                enableItemTracking={enableItemTracking}
+                onGoToTracking={onGoToTracking}
+              />
             </section>
           ) : null}
         </div>
@@ -120,7 +152,12 @@ export function ResultList({
                 與「{lifeEventName(bucket.eventId)}」相關
               </h2>
             ) : null}
-            <StatusGroups items={bucket.items} />
+            <StatusGroups
+              items={bucket.items}
+              lifeEventId={bucket.eventId ?? primaryLifeEvent}
+              enableItemTracking={enableItemTracking}
+              onGoToTracking={onGoToTracking}
+            />
           </div>
         ))
       )}
@@ -131,9 +168,15 @@ export function ResultList({
 function StatusGroups({
   items,
   nested = false,
+  lifeEventId,
+  enableItemTracking,
+  onGoToTracking,
 }: {
   items: ItemView[];
   nested?: boolean;
+  lifeEventId: string | null;
+  enableItemTracking: boolean;
+  onGoToTracking?: (lifeEventId: string | null) => void;
 }) {
   const grouped = STATUS_ORDER.map((status) => ({
     status,
@@ -153,7 +196,13 @@ function StatusGroups({
       </Heading>
       <ul className="mt-3 divide-y divide-[#eee7db] border border-[#e0d8ca] bg-[#fdfbf7]">
         {group.items.map((item) => (
-          <ResultRow item={item} key={item.itemId} />
+          <ResultRow
+            item={item}
+            key={item.itemId}
+            lifeEventId={lifeEventId}
+            enableItemTracking={enableItemTracking}
+            onGoToTracking={onGoToTracking}
+          />
         ))}
       </ul>
     </section>
@@ -204,12 +253,28 @@ function DetailSection({
   );
 }
 
-function ResultRow({ item }: { item: ItemView }) {
+function ResultRow({
+  item,
+  lifeEventId,
+  enableItemTracking,
+  onGoToTracking,
+}: {
+  item: ItemView;
+  lifeEventId: string | null;
+  enableItemTracking: boolean;
+  onGoToTracking?: (lifeEventId: string | null) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [tracked, setTracked] = useState(() => isBenefitItemTracked(item.itemId));
   const detail = getItemDetail(item.itemId);
   const amountLabel = formatAmountFromItem(item) ?? detail?.amountLabel ?? null;
   const officialUrl =
     detail?.officialUrl ?? item.citations[0]?.url ?? null;
+
+  function handleAddTracking() {
+    addTrackedBenefitItem(buildTrackedItemFromResult(item, lifeEventId));
+    setTracked(true);
+  }
 
   return (
     <li className="px-4 py-4 sm:px-5">
@@ -267,7 +332,7 @@ function ResultRow({ item }: { item: ItemView }) {
         </ul>
       ) : null}
 
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         <button
           type="button"
           onClick={() => setExpanded((current) => !current)}
@@ -276,6 +341,30 @@ function ResultRow({ item }: { item: ItemView }) {
         >
           {expanded ? "收合詳情" : "查看詳情"}
         </button>
+        {enableItemTracking ? (
+          tracked ? (
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.85rem] text-[#6b6459]">
+              <span>已加入追蹤</span>
+              {onGoToTracking ? (
+                <button
+                  type="button"
+                  onClick={() => onGoToTracking(lifeEventId)}
+                  className="font-semibold text-[#2f4f45] underline decoration-[#a8bdb2] underline-offset-2 hover:decoration-[#2f4f45]"
+                >
+                  查看追蹤
+                </button>
+              ) : null}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleAddTracking}
+              className="rounded-sm border border-[#2f4f45] bg-transparent px-3 py-1.5 text-[0.82rem] font-semibold tracking-[0.04em] text-[#2f4f45] transition-colors hover:bg-[#2f4f45] hover:text-[#f7f4ee]"
+            >
+              加入追蹤
+            </button>
+          )
+        ) : null}
       </div>
 
       {expanded ? (

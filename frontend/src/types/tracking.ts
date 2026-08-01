@@ -49,3 +49,18 @@ export type TrackedCase = {
   /** 受理或相關機關（顯示用）。 */
   agencies: string[];
 };
+
+/**
+ * 結果頁「加入追蹤」的單一補助／手續項目。
+ * 存在 localStorage；與案件級 TrackedCase 並存。
+ */
+export type TrackedBenefitItem = {
+  itemId: string;
+  name: string;
+  categoryLabel: string;
+  lifeEventId: string;
+  lifeEventLabel: string;
+  agency?: string;
+  nextAction?: string;
+  addedAt: string;
+};

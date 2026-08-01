@@ -1,11 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { listTrackedCases } from "../api/trackingClient";
 import styles from "../components/alt/alt.module.css";
+import {
+  addTrackedBenefitItem,
+  listPendingBenefitItems,
+  listTrackedBenefitItems,
+  type PendingBenefitItem,
+} from "../lib/trackingStore";
 import type {
   CaseOverallStatus,
   DocumentPrepStatus,
   FlowStepStatus,
+  TrackedBenefitItem,
   TrackedCase,
 } from "../types/tracking";
 
@@ -244,18 +251,70 @@ type TrackedCasesPageProps = {
   onStartConsult?: () => void;
 };
 
+function BenefitItemCard({
+  item,
+  mode,
+  onAdd,
+}: {
+  item: TrackedBenefitItem | PendingBenefitItem;
+  mode: "tracked" | "pending";
+  onAdd?: () => void;
+}) {
+  return (
+    <article className="border border-[#e0d8ca] bg-[#fdfbf7] px-4 py-5 sm:px-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-[1.05rem] font-semibold text-[#171513]">{item.name}</h3>
+        <span className="rounded-sm border border-[#d8cfc0] px-2 py-0.5 text-[0.75rem] text-[#6b6459]">
+          {item.categoryLabel}
+        </span>
+      </div>
+      <p className="mt-2 text-[0.88rem] leading-[1.85] text-[#5c564e]">
+        相關情況：{item.lifeEventLabel}
+        {item.agency ? ` · ${item.agency}` : ""}
+      </p>
+      {"nextAction" in item && item.nextAction ? (
+        <p className="mt-2 text-[0.88rem] leading-[1.85] text-[#4a453d]">
+          {item.nextAction}
+        </p>
+      ) : null}
+      {mode === "pending" && onAdd ? (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="mt-4 rounded-sm border border-[#2f4f45] bg-transparent px-4 py-2 text-[0.85rem] font-semibold text-[#2f4f45] transition-colors hover:bg-[#2f4f45] hover:text-[#f7f4ee]"
+        >
+          加入追蹤
+        </button>
+      ) : null}
+      {mode === "tracked" && "addedAt" in item ? (
+        <p className="mt-3 text-[0.78rem] text-[#8b8377]">
+          加入於 {formatDate(item.addedAt)}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
 export function TrackedCasesPage({
   onViewAgencies,
   highlightLifeEventId = null,
   onStartConsult,
 }: TrackedCasesPageProps) {
   const [cases, setCases] = useState<TrackedCase[]>([]);
+  const [trackedItems, setTrackedItems] = useState<TrackedBenefitItem[]>([]);
+  const [pendingItems, setPendingItems] = useState<PendingBenefitItem[]>([]);
   const [isMock, setIsMock] = useState(true);
   const [loading, setLoading] = useState(true);
+
+  function refreshLocalTracking() {
+    setTrackedItems(listTrackedBenefitItems());
+    setPendingItems(listPendingBenefitItems());
+  }
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
+    refreshLocalTracking();
     listTrackedCases(controller.signal)
       .then((response) => {
         if (!controller.signal.aborted) {
@@ -274,6 +333,16 @@ export function TrackedCasesPage({
     return () => controller.abort();
   }, []);
 
+  const sortedCases = useMemo(
+    () =>
+      [...cases].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)),
+    [cases],
+  );
+
+  const hasTracked = trackedItems.length > 0 || sortedCases.length > 0;
+  const hasPending = pendingItems.length > 0;
+  const isEmpty = !loading && !hasTracked && !hasPending;
+
   return (
     <div className={`${styles.page} min-h-[calc(100vh-4rem)] text-[#171513]`}>
       <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8 sm:py-14">
@@ -282,24 +351,24 @@ export function TrackedCasesPage({
           你正在處理的事
         </h1>
         <p className="mt-3 max-w-xl text-[0.92rem] leading-[1.9] text-[#5c564e] sm:text-[0.95rem]">
-          這裡會留下每次諮詢對應的事件、流程走到哪、文件準備得如何，以及建議的下一步。
+          已加入追蹤的項目會排在前面；本輪諮詢還沒加入的，會出現在「待追蹤」。
         </p>
 
-        {isMock && cases.length > 0 ? (
+        {isMock && sortedCases.length > 0 ? (
           <p className="mt-5 border-l-2 border-[#8a5a1a] bg-[#f6f1e6] px-4 py-3 text-[0.85rem] leading-[1.85] text-[#4a453d]">
-            目前為示範資料。之後會改為讀取你真實的諮詢紀錄。
+            案件列表目前含示範資料。你從結果頁「加入追蹤」的項目會另外列在上方。
           </p>
         ) : null}
 
         {loading ? (
           <p className="mt-10 text-[0.9rem] text-[#8b8377]">正在載入……</p>
-        ) : cases.length === 0 ? (
+        ) : isEmpty ? (
           <div className="mt-8 border border-dashed border-[#d8cfc0] bg-[#fdfbf7] px-4 py-8 sm:px-6">
             <h2 className="text-[1.05rem] font-semibold text-[#171513]">
               還沒有可追蹤的案件
             </h2>
             <p className="mt-3 text-[0.92rem] leading-[1.9] text-[#5c564e]">
-              完成一次「新諮詢」後，這裡會留下事件、流程進度與文件準備狀況，方便你之後回來接著辦。
+              完成一次「新諮詢」後，可在結果頁把項目加入追蹤，之後回來接著辦。
             </p>
             {onStartConsult ? (
               <button
@@ -316,18 +385,69 @@ export function TrackedCasesPage({
             )}
           </div>
         ) : (
-          <div className="mt-8 space-y-5 sm:space-y-6">
-            {cases.map((item) => (
-              <CaseCard
-                key={item.caseId}
-                item={item}
-                highlighted={
-                  highlightLifeEventId !== null &&
-                  item.lifeEventId === highlightLifeEventId
-                }
-                onViewAgencies={onViewAgencies}
-              />
-            ))}
+          <div className="mt-8 space-y-10">
+            {hasTracked ? (
+              <section>
+                <h2 className="text-[1.1rem] font-semibold text-[#2f4f45]">
+                  追蹤中
+                </h2>
+                <p className="mt-1 text-[0.85rem] text-[#6b6459]">
+                  你已加入的項目會優先顯示。
+                </p>
+                <div className="mt-4 space-y-4">
+                  {trackedItems.map((item) => (
+                    <BenefitItemCard
+                      key={`tracked-${item.itemId}`}
+                      item={item}
+                      mode="tracked"
+                    />
+                  ))}
+                  {sortedCases.map((item) => (
+                    <CaseCard
+                      key={item.caseId}
+                      item={item}
+                      highlighted={
+                        highlightLifeEventId !== null &&
+                        item.lifeEventId === highlightLifeEventId
+                      }
+                      onViewAgencies={onViewAgencies}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {hasPending ? (
+              <section>
+                <h2 className="text-[1.1rem] font-semibold text-[#8a5a1a]">
+                  待追蹤
+                </h2>
+                <p className="mt-1 text-[0.85rem] text-[#6b6459]">
+                  本輪諮詢整理出的項目，尚未加入追蹤。
+                </p>
+                <div className="mt-4 space-y-4">
+                  {pendingItems.map((item) => (
+                    <BenefitItemCard
+                      key={`pending-${item.itemId}`}
+                      item={item}
+                      mode="pending"
+                      onAdd={() => {
+                        addTrackedBenefitItem({
+                          itemId: item.itemId,
+                          name: item.name,
+                          categoryLabel: item.categoryLabel,
+                          lifeEventId: item.lifeEventId,
+                          lifeEventLabel: item.lifeEventLabel,
+                          agency: item.agency,
+                          nextAction: "回來看辦理進度與應備文件",
+                        });
+                        refreshLocalTracking();
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </div>
         )}
       </main>

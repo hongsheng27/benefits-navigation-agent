@@ -613,6 +613,8 @@ function IntakeSteps({
               <ResultList
                 snapshot={snapshot}
                 groupByAudience={groupResultsByAudience}
+                enableItemTracking={!hideDemoResultActions}
+                onGoToTracking={onGoToTracking}
               />
             </div>
           )}
