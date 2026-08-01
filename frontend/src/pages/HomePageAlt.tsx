@@ -152,6 +152,13 @@ function lifeEventSummary(snapshot: SessionSnapshot | null): string {
   return labels.length > 0 ? labels.join("、") : "你的情況";
 }
 
+function snapshotHasLifeEvent(
+  snapshot: SessionSnapshot | null,
+  eventId: string,
+): boolean {
+  return snapshotLifeEvents(snapshot).includes(eventId);
+}
+
 function StepProgress({ step }: { step: Exclude<IntakeUiStep, "landing"> }) {
   const meta = STEP_META[step];
   return (
@@ -588,7 +595,7 @@ function IntakeSteps({
             {readOnly ||
             isReviewing ||
             !onAnswerChatTurn ||
-            snapshotLifeEvents(snapshot).includes("occupational_injury") ? (
+            snapshotHasLifeEvent(snapshot, "occupational_injury") ? (
               <div>
                 {questionGroups.length > 0 ? (
                   <QuestionGroupList
@@ -601,7 +608,7 @@ function IntakeSteps({
                     submitLabel={
                       !readOnly &&
                       !showResultGate &&
-                      snapshotLifeEvents(snapshot).includes("occupational_injury")
+                      snapshotHasLifeEvent(snapshot, "occupational_injury")
                         ? "送出答案"
                         : undefined
                     }
@@ -1296,9 +1303,7 @@ function HomePageLive({
         onRedescribe={() => void handleRedescribe()}
         onAnswerFields={(answers) => void answerFields(answers)}
         onAnswerChatTurn={(text) => answerChatTurn(text)}
-        groupResultsByAudience={snapshotLifeEvents(snapshot).includes(
-          "occupational_injury",
-        )}
+        groupResultsByAudience={snapshotHasLifeEvent(snapshot, "occupational_injury")}
         onReset={() => void handleReset()}
         showResultGate={showResultGate}
         onViewResults={() => {

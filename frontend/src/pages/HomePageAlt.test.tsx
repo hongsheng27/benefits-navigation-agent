@@ -230,17 +230,24 @@ describe("HomePageAlt", () => {
       sourceLifeEvents: [],
     };
     const calls = stubBackend([
-      jsonResponse(snapshot({ lifeEvent: "occupational_injury" })),
       jsonResponse(
         snapshot({
-          lifeEvent: "occupational_injury",
+          lifeEvent: "long_term_care_need",
+          lifeEvents: ["long_term_care_need", "occupational_injury"],
+        }),
+      ),
+      jsonResponse(
+        snapshot({
+          lifeEvent: "long_term_care_need",
+          lifeEvents: ["long_term_care_need", "occupational_injury"],
           workflowState: "collect_missing_fields",
           questionGroups: case2Questions,
         }),
       ),
       jsonResponse(
         snapshot({
-          lifeEvent: "occupational_injury",
+          lifeEvent: "long_term_care_need",
+          lifeEvents: ["long_term_care_need", "occupational_injury"],
           workflowState: "confirm",
           attributes: { caregiver_relationship: "relationship_child" },
           items: [
@@ -263,7 +270,7 @@ describe("HomePageAlt", () => {
     await screen.findByText("服務已就緒");
     await startIntake();
     describeSituation("爸爸工作受傷後失能，需要長期照顧。");
-    fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這些情況" }));
 
     expect(await screen.findByText("你和需要照顧的人是什麼關係？")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "子女" }));

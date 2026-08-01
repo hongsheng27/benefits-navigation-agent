@@ -54,6 +54,7 @@ Fixture 是可替換的資料來源，不是資格判定捷徑。它沒有經過
 7. WHEN 使用者在 Case 2 第三頁選擇答案, THE frontend SHALL 只暫存選擇且 SHALL NOT 自動送出
 8. WHEN 所有必填問題已回答, THE frontend SHALL 啟用明確的「送出答案」按鈕
 9. WHEN 使用者按下「送出答案」, THE frontend SHALL 以一筆 `attribute_answers` 請求送出目前整組答案
+10. IF `lifeEvents` contains `occupational_injury`, THEN the frontend SHALL use the explicit-submit Case 2 form regardless of that ID's position in the ordered list
 
 ### Requirement 3: 確定性相關性篩選
 

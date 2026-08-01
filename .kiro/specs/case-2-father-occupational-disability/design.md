@@ -52,6 +52,7 @@ POST life_event_text
 
 - 正式模式只依 API snapshot 選擇確認、問題與結果畫面。
 - 確認頁依 `lifeEvents` 逐項顯示「職業災害」與「長照需求」；問題與結果標題以頓號串接。
+- Case 2 的表單、「送出答案」與父親／照顧者結果分組以 `lifeEvents.includes("occupational_injury")` 判斷，不依賴職災是否排在第一。
 - Case 2 的選項先存在 `QuestionGroupList` 的 component state；選項點擊不呼叫 API，只有使用者按下「送出答案」才將整組 answers 送到 backend。
 - Case 2 結果依既有 item audience mapping 分成父親／照顧者。
 - 中文題目、選項及展示名稱仍由前端 copy mapping 負責；後端擁有欄位、選項與項目 ID。
@@ -104,6 +105,7 @@ loader，避免在 `main` 重做未合併分支的 schema。
 - Backend boundary：明確不符合的結構化答案會移除對應 relevance-only 項目。
 - Frontend regression：正式模式使用 API snapshots 從描述走到雙線結果。
 - Frontend submit regression：Case 2 選完最後一題仍留在問題頁，按「送出答案」後才發出 `attribute_answers` 並進入結果。
+- Frontend event-order regression：當 `occupational_injury` 排在 `lifeEvents` 第二項時，仍使用整組明確送出並顯示雙線結果。
 - Frontend session regression：即使瀏覽器存在舊版 `jiezhu.sessionId`，載入後仍停在首頁且不呼叫 restore endpoint。
 - Browser：以本機 backend 與 frontend 完整操作四頁。
 - Repository hygiene：執行相關 checks 與 `git diff --check`。

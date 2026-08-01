@@ -21,6 +21,7 @@
 - [ ] 19. 重啟後端後以 live Bedrock 重跑 Case 2，確認新 schema 實際回傳職災與長照兩個 ID
 - [x] 20. 將 multi-event 上限由 3 調整為 5，並驗證四個合法事件不會被誤判為無法辨識
 - [x] 21. 以 live Bedrock 驗證複合描述的五個合法事件可全部寫入 `lifeEvents`
+- [x] 22. 改以 `lifeEvents` membership 辨識 Case 2，並驗證職災排第二時仍需由使用者明確送出答案
 
 ## Deferred SQLite Cutover
 
