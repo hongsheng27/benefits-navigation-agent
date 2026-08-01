@@ -1,7 +1,27 @@
 {
-  "_comment": "欄位登記表種子資料。這幾筆是佔位用，正式欄位由政策資料負責人依法規決定。代號與選項沿用 MVP 情境（配偶過世），切點為暫定。",
+  "_comment": "欄位登記表種子資料。這幾筆是佔位用，正式欄位由政策資料負責人依法規決定。代號與選項沿用 MVP 情境（配偶過世），切點為暫定。applicant_jurisdiction 為通用篩選欄位，用來收斂地方型補助。",
   "version": "0.1",
   "fields": [
+    {
+      "field_id": "applicant_jurisdiction",
+      "value_kind": "code",
+      "option_ids": [
+        "TPE",
+        "NWT",
+        "TAO",
+        "PEN",
+        "OTHER_TW",
+        "unsure"
+      ],
+      "required": true,
+      "purpose": "所在縣市決定有哪些地方型補助與受理窗口可對照",
+      "used_by": [
+        "funeral_benefit",
+        "survivor_pension"
+      ],
+      "topic_id": "location",
+      "status": "draft"
+    },
     {
       "field_id": "deceased_insurance_type",
       "value_kind": "code",
