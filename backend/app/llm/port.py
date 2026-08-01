@@ -61,6 +61,7 @@ class LlmTask(StrEnum):
     RESOLVE_LIFE_EVENT = "resolve_life_event"  # 把一段話變成事件代號與屬性
     EXPLAIN_RESULT = "explain_result"  # 把已定案的判定換成白話
     ANSWER_WITH_REFERENCES = "answer_with_references"  # 依提供摘錄回答諮詢後問題
+    COLLECT_ATTRIBUTES = "collect_attributes"  # 從對話抽出登記表上的資格屬性
 
 
 class FinishReason(StrEnum):
