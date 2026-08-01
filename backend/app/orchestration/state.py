@@ -272,7 +272,13 @@ class SessionState(BaseModel):
 
     # 正規化後的事件代號，例如 `spouse_death`。刻意不用列舉：事件的集合是由
     # entitlement graph 擁有的 curated 資料，寫死在這裡會把政策放進應用程式碼。
+    #
+    # `life_event` 保留給舊客戶端：永遠等於 `life_events` 的第一筆（或 None）。
+    # `life_events` 是確認後（或辨識後待確認）的複合情境，最多 5 個。
+    # `extra_candidate_life_events` 是確認頁「另外可能相關」的未預選選項（最多 3）。
     life_event: str | None = None
+    life_events: tuple[str, ...] = ()
+    extra_candidate_life_events: tuple[str, ...] = ()
 
     # 去識別化的答案，以欄位代號為鍵。用對照表而不是清單，因為一個欄位只能有一個
     # 值，而使用者在 CONFIRM 修正答案時是直接覆蓋。

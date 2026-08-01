@@ -13,6 +13,8 @@ function snapshot(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
     stepIndex: 1,
     stepTotal: 8,
     lifeEvent: null,
+    lifeEvents: [],
+    extraCandidateLifeEvents: [],
     attributes: {},
     items: [],
     questionGroups: [],
