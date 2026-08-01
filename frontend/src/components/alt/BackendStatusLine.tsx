@@ -30,7 +30,7 @@ export function BackendStatusLine({ state }: BackendStatusLineProps) {
           <svg {...ICON_PROPS}>
             <circle cx="8" cy="8" r="5.4" strokeDasharray="2.6 2.6" />
           </svg>
-          正在確認後端連線
+          正在連線服務
         </span>
       ) : null}
 
@@ -40,7 +40,7 @@ export function BackendStatusLine({ state }: BackendStatusLineProps) {
             <circle cx="8" cy="8" r="5.4" />
             <path d="M5.6 8.2 7.3 9.9l3.1-3.6" />
           </svg>
-          後端已連線
+          服務已就緒
         </span>
       ) : null}
 
@@ -51,9 +51,9 @@ export function BackendStatusLine({ state }: BackendStatusLineProps) {
               <circle cx="8" cy="8" r="5.4" />
               <path d="M5.4 10.6 10.6 5.4" />
             </svg>
-            後端未連線
+            暫時連不上服務
           </span>
-          <span className="text-[#6b6459]">本機服務可能尚未啟動，畫面仍可瀏覽。</span>
+          <span className="text-[#6b6459]">畫面仍可瀏覽，稍後再試即可。</span>
         </>
       ) : null}
     </p>
