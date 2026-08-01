@@ -33,34 +33,47 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
     ]
 
-    # --- Language model ----------------------------------------------------
+    # --- AWS / Bedrock -----------------------------------------------------
     #
-    # Empty means no live model. The backend then falls back to an offline
-    # implementation instead of failing to start, so a teammate without a key
-    # can still run everything (ADR-0015).
+    # Competition primary regions are us-east-1 and us-west-2. Default to
+    # us-east-1. Credentials come from the normal AWS chain (env vars, shared
+    # config, or instance role) — never commit keys.
+
+    aws_region: str = "us-east-1"
+    """AWS region for Bedrock and other AWS clients."""
+
+    bedrock_model_id: str = ""
+    """Bedrock foundation model ID. Empty means Bedrock is not selected.
+
+    Request access only for the model you actually use (competition rule).
+    Example on us-east-1: anthropic.claude-3-haiku-20240307-v1:0
+    """
+
+    # --- Gemini (fallback while Bedrock is unavailable) --------------------
+    #
+    # Empty means no Gemini key. Used only when Bedrock is not configured.
 
     gemini_api_key: str = ""
     """Gemini API key. Never commit a real value; keep it in a local `.env`."""
 
     gemini_model_id: str = "gemma-4-31b-it"
-    """Model identifier, configurable because models get retired.
+    """Model identifier, configurable because models get retired."""
 
-    Hardcoding it means the backend breaks one day for a reason that is not
-    visible in the error.
+    def has_bedrock_language_model(self) -> bool:
+        """Whether a Bedrock model ID is configured."""
+        return bool(self.bedrock_model_id.strip())
 
-    Both `gemma-4-31b-it` and `gemini-3.6-flash` were verified against the live
-    API on 2026-07-30: each returns schema-conforming JSON through the
-    interactions endpoint, and each correctly answers `unrecognised` for a
-    description that maps to no registered event.
-    """
+    def has_gemini_language_model(self) -> bool:
+        """Whether a Gemini API key is configured."""
+        return bool(self.gemini_api_key.strip())
 
     def has_live_language_model(self) -> bool:
-        """Whether a real model is configured.
+        """Whether any real model is configured (Bedrock preferred, else Gemini).
 
-        `strip()` because an accidental `GEMINI_API_KEY=" "` in `.env` should
-        count as absent rather than produce a 401 on every request.
+        `strip()` because an accidental `BEDROCK_MODEL_ID=" "` in `.env` should
+        count as absent rather than produce a failed call on every request.
         """
-        return bool(self.gemini_api_key.strip())
+        return self.has_bedrock_language_model() or self.has_gemini_language_model()
 
 
 @lru_cache
