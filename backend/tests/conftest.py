@@ -2,8 +2,8 @@
 
 ## 為什麼需要這個檔案
 
-`Settings` 會讀 repository 根目錄的 `.env`。所以在**有 Gemini 金鑰或
-`BEDROCK_MODEL_ID` 的人的機器上**，`create_app()` 會建出一個真的 adapter，於是整合
+`Settings` 會讀 repository 根目錄的 `.env`。所以在有 `BEDROCK_MODEL_ID` 的人的
+機器上，`create_app()` 會建出一個真的 adapter，於是整合
 測試會真的打網路 —— 我們在 2026-07-30 實際撞到這件事：測試從 3 秒變成 46 秒，
 而且七個失敗。
 
@@ -33,7 +33,6 @@ def _no_live_language_model(monkeypatch: pytest.MonkeyPatch) -> None:
     `get_settings` 有 `lru_cache`，所以前後都要清一次 —— 前面清是為了不要沿用
     某個更早的呼叫留下的快取，後面清是為了不要把這個空金鑰留給下一個測試。
     """
-    monkeypatch.setenv("GEMINI_API_KEY", "")
     monkeypatch.setenv("BEDROCK_MODEL_ID", "")
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "")

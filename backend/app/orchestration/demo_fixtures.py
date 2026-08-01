@@ -187,7 +187,7 @@ def demo_language_model() -> FakeLanguageModel:
     就停住，示範與手動驗證都做不了。
 
     這個實作讓「除了事件辨識以外的每一步」在沒有金鑰的情況下仍然驗證得到。
-    T23 接上 Gemini 之後，有金鑰時應該改用真實 adapter，沒有金鑰時才落回這裡。
+    有 `BEDROCK_MODEL_ID` 時會改用真實 adapter，沒有模型設定時才落回這裡。
     """
     return FakeLanguageModel(
         responses={LlmTask.RESOLVE_LIFE_EVENT: {"event_id": DEMO_EVENT_ID}}

@@ -4,10 +4,10 @@ This is the **single source of truth** for transitioning from local mock
 implementations to live AWS services on August 1st.
 
 > **Status**: Most features still run on local mocks (SQLite, local files).
-> The LLM layer prefers **Amazon Bedrock `InvokeModel`** when
-> `BEDROCK_MODEL_ID` is set, falls back to Gemini when only `GEMINI_API_KEY`
-> is set, and otherwise uses the offline demo. See
-> [ADR-0015](decisions/0015-narrow-llm-port-instead-of-agent-loop.md).
+> The live LLM path is **Amazon Bedrock `Converse`** when `BEDROCK_MODEL_ID` is
+> set; otherwise the backend uses the offline demo. The competition account was
+> verified in `us-west-2` on 2026-08-01. See
+> [ADR-0016](decisions/0016-use-bedrock-only-live-llm-provider.md).
 
 ## How to Use This Guide
 
@@ -24,8 +24,8 @@ On August 1st, teammates should:
 Add these to your `.env` file when AWS access is available:
 
 ```env
-# AWS General — competition primary regions: us-east-1, us-west-2
-AWS_REGION=us-east-1
+# AWS General — the verified Bedrock path uses us-west-2
+AWS_REGION=us-west-2
 AWS_ACCOUNT_ID=
 
 # S3 (document storage) — keep buckets private (Block Public Access)
@@ -34,15 +34,9 @@ AWS_ACCOUNT_ID=
 # Database (if migrating from SQLite)
 # DATABASE_URL=
 
-# Bedrock (preferred LLM). Leave empty to try Gemini, then offline demo.
-# Request access only for the model you will call (competition rule).
-# Example: anthropic.claude-3-haiku-20240307-v1:0
-BEDROCK_MODEL_ID=
-
-# Gemini fallback when Bedrock is not configured.
-# Get a key from Google AI Studio: https://aistudio.google.com/apikey
-GEMINI_API_KEY=
-GEMINI_MODEL_ID=
+# Bedrock (only live LLM provider). Leave empty for the offline demo.
+# Verified inference profile in the competition account:
+BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
 
 # AgentCore (if used) — not required; this project has no agent loop.
 # AGENTCORE_AGENT_ID=
@@ -85,15 +79,15 @@ GEMINI_MODEL_ID=
 
 | Item | Current | AWS Target |
 |------|---------|------------|
-| LLM | Bedrock when `BEDROCK_MODEL_ID` is set; else Gemini; else offline demo | Amazon Bedrock `InvokeModel` (Anthropic Messages + forced tool_use) |
+| LLM | Bedrock when `BEDROCK_MODEL_ID` is set; otherwise offline demo | Amazon Bedrock `Converse` + forced tool choice |
 | Files | `backend/app/llm/bedrock.py`, `factory.py`, `config.py` | already added |
-| IAM action in use | — | `bedrock:InvokeModel` (listed in Supported Services List; `Converse` is **not**) |
+| Verified runtime | `us-west-2`, Claude Haiku 4.5 inference profile | `Converse` returned the registered `spouse_death` event ID |
 
 **There is no `AgentRunner`.** ADR-0015 replaced it with a narrow port that has
 no tool loop, because both model tasks are single request/response and giving a
 model a free tool loop would open a path for it to influence eligibility.
-Forced tool_use here is only a **structured-output vehicle**: one tool whose
-`input_schema` is our JSON Schema, and `tool_choice` forces that single tool.
+Forced tool choice here is only a **structured-output vehicle**: one tool whose
+`inputSchema.json` is our JSON Schema, and `toolChoice` forces that single tool.
 The model cannot call application tools.
 
 ### Competition constraints that this feature must obey
@@ -124,36 +118,36 @@ def generate_structured(self, request: LlmRequest) -> LlmResult: ...
 
 ### How to turn Bedrock on today
 
-1. Log into the competition AWS account; set region to `us-east-1` (or `us-west-2`).
-2. In Bedrock console, request access for **one** small/cheap chat model you will
-   use (example: `anthropic.claude-3-haiku-20240307-v1:0`). Do not enable all.
-3. Configure credentials via the normal AWS chain (no keys in git).
+1. Log into the competition AWS account and set region to `us-west-2`.
+2. Configure the temporary Workshop Studio credentials via the normal AWS chain
+   or a local gitignored `.env` file. Never copy credentials into tracked files.
+3. Use the inference profile that was successfully tested with Converse.
 4. In repository-root `.env`:
 
    ```env
-   AWS_REGION=us-east-1
-   BEDROCK_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+   AWS_REGION=us-west-2
+   BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
    ```
 
 5. Restart the backend. Startup logs should show
    `language_model_selected` with your Bedrock model id.
-6. If Bedrock fails, clear `BEDROCK_MODEL_ID` and set `GEMINI_API_KEY` to use the
-   proven Gemini path, or leave both empty for the offline demo.
+6. If the venue needs the offline contingency, explicitly clear
+   `BEDROCK_MODEL_ID` and restart the backend. A Bedrock failure during a request
+   does not silently switch providers.
 
-### Request shape (InvokeModel)
+### Request shape (Converse)
 
-| `LlmRequest` field | InvokeModel (Anthropic Messages) location |
-|--------------------|-------------------------------------------|
-| `instruction` | `system` |
-| `user_content` | `messages[0].content` (marked as data, not instructions) |
-| `output_schema` | `tools[0].input_schema` |
-| `schema_name` | `tools[0].name` + `tool_choice.name` |
-| `max_output_tokens`, `temperature` | `max_tokens`, `temperature` |
+| `LlmRequest` field | Converse location |
+|--------------------|-------------------|
+| `instruction` | `system[0].text` |
+| `user_content` | `messages[0].content[0].text` (marked as data, not instructions) |
+| `output_schema` | `toolConfig.tools[0].toolSpec.inputSchema.json` |
+| `schema_name` | `toolSpec.name` + `toolChoice.tool.name` |
+| `max_output_tokens`, `temperature` | `inferenceConfig.maxTokens`, `inferenceConfig.temperature` |
 
-### Do not remove the Gemini adapter
-
-Keep `gemini.py`. It is the only previously verified live-model path and the
-demo fallback if Bedrock model access or IAM surprises you mid-event.
+Gemini has been removed from the runtime, configuration, dependency list, and
+active documentation. Bedrock is the only live provider; the local fixture is
+the deliberate offline contingency.
 
 ### The JSON Schema subset is a hard constraint, already enforced
 
@@ -171,9 +165,8 @@ If a schema needs to change, keep it inside the allowlist in
 
 ### Privacy note that survives the migration
 
-Sending user text to Gemini is an egress change recorded in ADR-0015. Moving to
-Bedrock changes who receives the text, not whether it is sent. The three
-structural rules stay the same either way: model-returned attributes go through
+Sending user text to Bedrock is an external egress. The three structural rules
+remain: model-returned attributes go through
 the same privacy gate as user-submitted answers, the raw text is never stored or
 logged, and the explanation task's return type has no status field so it cannot
 alter a determination.

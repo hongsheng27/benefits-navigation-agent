@@ -142,7 +142,7 @@ def advance_session(
             state,
             payload.input,
             registry=state_machine.default_registry(),
-            # 有 `GEMINI_API_KEY` 就是真模型，沒有就是示範實作（一律回配偶過世）。
+            # 有 `BEDROCK_MODEL_ID` 就走 Bedrock，沒有才使用離線示範實作。
             # 選擇在 `create_app()` 做一次，見 `llm/factory.py`。
             #
             # 為什麼沒有金鑰時要落回一個「會成功」的示範實作，而判定的示範資料卻不注入

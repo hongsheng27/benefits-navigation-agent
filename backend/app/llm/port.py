@@ -1,8 +1,8 @@
 """語言模型的邊界形狀與呼叫契約（ADR-0015）。
 
 這個模組定義「怎麼問模型、模型要回什麼形狀」，**不包含任何廠商細節**，也不知道什麼是
-生命事件或喪葬給付。廠商實作各自放在自己的模組（`gemini.py`、之後的 `bedrock.py`），
-任務的指示文字放在 `tasks/`。
+生命事件或喪葬給付。廠商實作放在自己的模組（目前是 `bedrock.py`），任務的指示文字放在
+`tasks/`。
 
 ## 為什麼是一個窄的 port，不是 agent runner
 
@@ -22,8 +22,8 @@ ADR-0004 原本規劃 `AgentRunner` —— 一個模型可以自己選擇並呼�
 ## 沒有對話歷史
 
 `LlmRequest` 只帶一段指示與一段使用者內容，**刻意不帶前幾輪的對話**。三個理由：兩個任務
-本來就是單次問答；沒有歷史就沒有「歷史被存在哪裡」的問題（ADR-0007）；不帶歷史的請求在
-Gemini 與 Bedrock 兩邊的形狀都最單純，轉換最不容易出錯。
+本來就是單次問答；沒有歷史就沒有「歷史被存在哪裡」的問題（ADR-0007）；不帶歷史也讓
+Bedrock 請求最單純，資料外送範圍容易檢查。
 
 ## 錯誤裡不會有內容
 
@@ -106,9 +106,8 @@ class LlmRequest:
     schema_name: str
     """這份 schema 的代號。
 
-    Bedrock 的 `outputConfig.textFormat.structure.jsonSchema.name` 需要它；
-    Gemini 不需要，adapter 會忽略。放在請求裡而不是讓 adapter 自己編，
-    是為了讓兩邊送出的內容一致。
+    Bedrock Converse 的 forced tool choice 需要一個穩定的 tool 名稱。放在請求裡而不是
+    讓 adapter 自己編，是為了讓任務定義和送出的結構化輸出契約一致。
     """
 
     max_output_tokens: int = 1024
@@ -254,7 +253,7 @@ def validate_portable_schema(
     *,
     _path: str = "$",
 ) -> None:
-    """確認這份 schema 在 Gemini 與 Bedrock 上都能用。不合規就拋例外。
+    """確認這份 schema 在 Bedrock 上能用。不合規就拋例外。
 
     檢查五件事：關鍵字在允許清單上、物件必須明寫 `additionalProperties: false`、
     `format` 在支援清單上、`minItems` 只能是 0 或 1、`$ref` 只能指向同一份文件內部。

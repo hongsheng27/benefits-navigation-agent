@@ -12,8 +12,8 @@ Backend 採用 Python **modular monolith**，負責 API、workflow state、Agent
 - 採用 policy-governed hybrid orchestration：state machine 控制狀態、允許的 tools、
   停止條件與人工確認；LLM 不直接決定福利資格。
 - **不做 agent 迴圈。** 模型呼叫走一個窄的 LLM port（`app/llm/port.py`），沒有
-  應用程式工具迴圈；優先 Amazon Bedrock（`InvokeModel`），其次 Gemini，否則離線
-  示範。理由見 ADR-0015。
+  應用程式工具迴圈；有 `BEDROCK_MODEL_ID` 就使用 Amazon Bedrock Converse，沒有才用
+  離線示範。理由見 ADR-0015 與 ADR-0016。
 - Raw Lambda handler 不列為 MVP 必要項目；若未來部署需要，只能作為 application
   service 前方的 thin adapter。
 - 環境與套件以 **uv** 管理，Python 版本由 `.python-version` 釘在 3.13。
@@ -154,8 +154,8 @@ rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/
 | `app/orchestration/demo_fixtures.py` | **示範用**資料，只有喪葬給付一項填到底。不得作為預設值。見 ADR-0014 |
 | `app/llm/port.py` | 語言模型的邊界形狀、呼叫契約、以及 schema 可攜性檢查。見 ADR-0015 |
 | `app/llm/fake.py` | 不連網路的模型實作，**預設值**。回登記好的答案，沒登記就拋錯 |
-| `app/llm/gemini.py` | Gemini adapter，直接發 HTTP。**唯一 import `httpx`、也唯一知道 Gemini 存在的模組** |
-| `app/llm/factory.py` | 有金鑰用 Gemini，沒金鑰用示範實作。啟動時決定一次 |
+| `app/llm/bedrock.py` | Bedrock Converse adapter；forced tool choice 取得結構化輸出 |
+| `app/llm/factory.py` | 有 `BEDROCK_MODEL_ID` 用 Bedrock，沒有才用示範實作。啟動時決定一次 |
 | `app/llm/tasks/resolve_life_event.py` | 把一段文字對應成事件代號。**系統唯一持有原文的地方**，用完即丟 |
 | `app/orchestration/life_events.py` | 生命事件登記表的讀取，讀 `data/life_events/events.v0.1.json` |
 | `app/privacy/attribute_gate.py` | 屬性值的型別與選項驗證，不合法就拒絕整筆 |
@@ -174,31 +174,34 @@ rules 以 `connection` 參數接收，由呼叫端管生命週期）；`scripts/
 | `app/api/implementation.py` | 回應裡「哪些能力還沒實作」的宣告。全部實作完成後連同 `ImplementationNotice` 一起從契約移除 |
 | `app/orchestration/protocols.py` 裡的 `Fixture*` / `Local*` 類別 | 四個接口的離線實作。資料層交出 SQLite 實作後，改注入參數即可換掉，介面本身保留 |
 
-### 接上真的語言模型（選用）
+### 接上真的語言模型（Bedrock）
 
-**不設定也能跑。** 沒有金鑰時後端會落回一個離線的示範實作，事件辨識一律回
+**不設定也能跑。** 沒有 `BEDROCK_MODEL_ID` 時後端會落回一個離線的示範實作，事件辨識一律回
 `spouse_death`。所有測試都不需要金鑰也不需要網路。
 
 要用真的模型：
 
-1. 到 [Google AI Studio](https://aistudio.google.com/apikey) 申請一把 Gemini API 金鑰。
-2. 在**repository 根目錄**的 `.env` 裡填入（那個檔案已經被 gitignore）：
+1. 從 Workshop Studio 取得臨時 AWS credentials，放在**repository 根目錄**、已被
+   gitignore 的 `.env`。
+2. 填入已在競賽帳號 `us-west-2` 實測的 inference profile：
 
    ```env
-   GEMINI_API_KEY=你的金鑰
+   AWS_REGION=us-west-2
+   BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
    ```
 
 3. 重啟後端。啟動時會記一筆 `language_model_selected`，`model_id` 是
    `demo_fixture` 或實際的模型代號 —— **從行為上分不出來，所以看那一筆紀錄**。
 
-`GEMINI_MODEL_ID` 可以省略，預設是 `gemma-4-31b-it`。`gemini-3.6-flash` 也驗過可用，
-兩個都會回符合 schema 的 JSON。
+正式路徑使用 boto3 `Converse`，以 forced tool choice 取得符合 schema 的輸出。若已設定
+`BEDROCK_MODEL_ID`，但發生權限、模型、region、timeout、throttling 或回應格式錯誤，
+後端會明確失敗，不會把離線示範結果冒充成正式模型結果。
 
 接上真模型之後才會出現 `event_not_recognized` 這個錯誤（描述對應不到任何已登記的
 事件）。示範實作永遠成功，所以那條路徑在沒有金鑰時測不到。
 
-**測試不會用到真實模型，即使你設了金鑰。** `tests/conftest.py` 有一個 `autouse`
-fixture 把金鑰清成空的。沒有它的話整套測試會真的打網路 —— 那會花額度、會變慢
+**測試不會用到真實模型，即使你設了 AWS credentials。** `tests/conftest.py` 有一個
+`autouse` fixture 把 `BEDROCK_MODEL_ID` 清成空的。沒有它的話整套測試會真的打網路 —— 那會花額度、會變慢
 （實測 3 秒變 46 秒），而且結果會取決於誰在跑。要驗證真實模型請用手動腳本。
 
 ### 預設跑起來為什麼每一項都是「需人工協助」

@@ -171,10 +171,10 @@
 
 | 後端環境 | 行為 |
 | --- | --- |
-| 有設 `GEMINI_API_KEY` | 真的辨識。看不懂就回 `event_not_recognized` |
-| 沒設金鑰 | 示範實作，**一律回 `spouse_death`**，永遠不會出現這個錯誤 |
+| 有設 `BEDROCK_MODEL_ID` | 透過 Bedrock Converse 真的辨識。看不懂就回 `event_not_recognized` |
+| 沒設 `BEDROCK_MODEL_ID` | 示範實作，**一律回 `spouse_death`**，永遠不會出現這個錯誤 |
 
-所以**前端不能靠「試不出這個錯誤」來推斷它不會發生** —— 那可能只是後端沒設金鑰。
+所以**前端不能靠「試不出這個錯誤」來推斷它不會發生** —— 那可能只是後端沒設模型。
 這一項必須實作。
 
 實測的辨識結果（用 `gemma-4-31b-it`）：
