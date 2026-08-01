@@ -8,12 +8,239 @@
 
 import type { ErrorCode, ItemKind, ItemStatus } from "../../types/session";
 
-/** 生命事件。目前後端只認得三個，清單會變長。 */
-const LIFE_EVENT_NAMES: Record<string, string> = {
-  spouse_death: "配偶過世",
-  parent_death: "父母過世",
-  child_death: "子女過世",
+/** 一個生命事件在前端的完整顯示資料。 */
+export type LifeEventCopy = {
+  eventId: string;
+  label: string;
+  /** 首頁情境分類標題。 */
+  category: string;
+  /** 點選情境時帶入輸入框的例句。 */
+  examplePrompt: string;
 };
+
+/**
+ * 台灣常見、可能需要補助／福利／行政協助的生活變故文案。
+ *
+ * `eventId` 須與後端 `data/life_events/events.v0.1.json` 對齊。
+ * 使用者用自然語言描述，由後端 LLM 對應到這些代號；前端只負責顯示中文名。
+ * 多數事件目前只有「辨識＋確認」；福利項目展開仍多半只有配偶過世有示範資料。
+ */
+export const LIFE_EVENT_CATALOG: readonly LifeEventCopy[] = [
+  // —— 喪親 ——
+  {
+    eventId: "spouse_death",
+    label: "配偶過世",
+    category: "喪親",
+    examplePrompt: "配偶過世一個月了，想確認還有哪些給付來得及申請。",
+  },
+  {
+    eventId: "parent_death",
+    label: "父母過世",
+    category: "喪親",
+    examplePrompt: "我媽媽前天在醫院過世，不知道接下來要辦什麼。",
+  },
+  {
+    eventId: "child_death",
+    label: "子女過世",
+    category: "喪親",
+    examplePrompt: "小孩過世了，想知道有哪些補助或要先辦的手續。",
+  },
+  {
+    eventId: "sibling_death",
+    label: "兄弟姊妹過世",
+    category: "喪親",
+    examplePrompt: "我哥哥剛過世，不確定身為手足可以申請什麼、要辦什麼。",
+  },
+  {
+    eventId: "other_relative_death",
+    label: "親人過世",
+    category: "喪親",
+    examplePrompt: "親人過世了，不知道接下來要辦什麼。",
+  },
+
+  // —— 就業與收入 ——
+  {
+    eventId: "job_loss",
+    label: "失業／被資遣",
+    category: "就業與收入",
+    examplePrompt: "公司裁員被資遣了，想知道失業給付或其他協助怎麼申請。",
+  },
+  {
+    eventId: "unpaid_leave",
+    label: "無薪假／收入驟減",
+    category: "就業與收入",
+    examplePrompt: "被放無薪假，收入突然少很多，想問有沒有可以申請的補助。",
+  },
+  {
+    eventId: "occupational_injury",
+    label: "職業災害",
+    category: "就業與收入",
+    examplePrompt: "上班時受傷，想了解職災給付、醫療與休養期間可以申請什麼。",
+  },
+  {
+    eventId: "youth_employment_hardship",
+    label: "青年就業困難",
+    category: "就業與收入",
+    examplePrompt: "剛畢業一直找不到穩定工作，想知道青年就業或職訓相關協助。",
+  },
+  {
+    eventId: "low_income_hardship",
+    label: "低收入／生活困頓",
+    category: "就業與收入",
+    examplePrompt: "家裡收入很低、開銷快撐不住，想確認是否符合生活扶助。",
+  },
+
+  // —— 健康與照顧 ——
+  {
+    eventId: "serious_illness",
+    label: "重大傷病",
+    category: "健康與照顧",
+    examplePrompt: "被診斷重大傷病，醫療費壓力很大，想知道有哪些補助或減免。",
+  },
+  {
+    eventId: "disability_onset",
+    label: "身心障礙／失能",
+    category: "健康與照顧",
+    examplePrompt: "家人剛取得身心障礙證明，想了解可以申請哪些福利與服務。",
+  },
+  {
+    eventId: "long_term_care_need",
+    label: "長照需求",
+    category: "健康與照顧",
+    examplePrompt: "爸媽需要長期照顧，想知道長照服務與補助怎麼開始申請。",
+  },
+  {
+    eventId: "caregiver_burden",
+    label: "家庭照顧負擔",
+    category: "健康與照顧",
+    examplePrompt: "我幾乎全職照顧失能家人，自己快撐不住，想找照顧者支持資源。",
+  },
+  {
+    eventId: "mental_health_crisis",
+    label: "精神健康危機",
+    category: "健康與照顧",
+    examplePrompt: "自己或家人有嚴重情緒／精神困擾，想知道就醫與社會扶助管道。",
+  },
+  {
+    eventId: "elderly_living_hardship",
+    label: "老人生活困難",
+    category: "健康與照顧",
+    examplePrompt: "家裡有獨居長輩，生活與就醫都吃力，想問老人福利或關懷資源。",
+  },
+
+  // —— 生育與家庭 ——
+  {
+    eventId: "pregnancy",
+    label: "懷孕",
+    category: "生育與家庭",
+    examplePrompt: "剛確認懷孕，想了解產檢、津貼或懷孕期間可以申請的協助。",
+  },
+  {
+    eventId: "childbirth",
+    label: "生育／生產",
+    category: "生育與家庭",
+    examplePrompt: "剛生完小孩，想確認生育給付、育兒津貼要怎麼申請。",
+  },
+  {
+    eventId: "childcare_hardship",
+    label: "育兒生活困難",
+    category: "生育與家庭",
+    examplePrompt: "帶小孩開銷太高，想知道托育、育兒相關補助有哪些。",
+  },
+  {
+    eventId: "school_expense_hardship",
+    label: "就學費用困難",
+    category: "生育與家庭",
+    examplePrompt: "小孩學費與生活費負擔很重，想問就學貸款或助學金相關協助。",
+  },
+  {
+    eventId: "divorce",
+    label: "離婚／分居",
+    category: "生育與家庭",
+    examplePrompt: "剛離婚，一個人帶小孩，想了解單親或特殊境遇可以申請什麼。",
+  },
+  {
+    eventId: "single_parent_hardship",
+    label: "單親家庭困境",
+    category: "生育與家庭",
+    examplePrompt: "我是單親，收入不夠支應孩子生活，想確認有哪些扶助。",
+  },
+  {
+    eventId: "domestic_violence",
+    label: "家庭暴力",
+    category: "生育與家庭",
+    examplePrompt: "遭受家暴需要離開不安全的環境，想知道保護與急難協助管道。",
+  },
+  {
+    eventId: "special_family_circumstances",
+    label: "特殊境遇家庭",
+    category: "生育與家庭",
+    examplePrompt:
+      "家庭遇到喪偶、離婚或配偶入獄等特殊情況，想確認特殊境遇家庭扶助。",
+  },
+
+  // —— 居住與災害 ——
+  {
+    eventId: "housing_insecurity",
+    label: "居住不穩／迫遷",
+    category: "居住與災害",
+    examplePrompt: "快繳不出房租、可能被迫搬家，想知道租金補貼或居住協助。",
+  },
+  {
+    eventId: "natural_disaster",
+    label: "天然災害受災",
+    category: "居住與災害",
+    examplePrompt: "家裡被颱風／水災影響，想了解災害救助金或後續協助。",
+  },
+  {
+    eventId: "fire_or_accident",
+    label: "火災或重大意外",
+    category: "居住與災害",
+    examplePrompt: "家裡遇到火災，暫時沒地方住，想問急難救助怎麼申請。",
+  },
+
+  // —— 特定身分與處境 ——
+  {
+    eventId: "new_immigrant_hardship",
+    label: "新住民生活困難",
+    category: "特定身分與處境",
+    examplePrompt: "我是新住民，在生活或工作上遇到困難，想知道可申請的協助。",
+  },
+  {
+    eventId: "indigenous_welfare_need",
+    label: "原住民福利諮詢",
+    category: "特定身分與處境",
+    examplePrompt: "想了解原住民身分可以申請的生活、就學或就業相關福利。",
+  },
+  {
+    eventId: "incarceration_family",
+    label: "家屬入監",
+    category: "特定身分與處境",
+    examplePrompt: "家人入監後家計出問題，想知道受刑人家庭可以申請什麼扶助。",
+  },
+  {
+    eventId: "missing_family_member",
+    label: "家屬失蹤",
+    category: "特定身分與處境",
+    examplePrompt: "家人失蹤一段時間了，家裡經濟受影響，想問相關協助管道。",
+  },
+  {
+    eventId: "veteran_support_need",
+    label: "榮民／榮眷協助",
+    category: "特定身分與處境",
+    examplePrompt: "家裡有榮民或榮眷身分，想確認可以申請哪些生活或就養協助。",
+  },
+  {
+    eventId: "youth_independence_hardship",
+    label: "少年自立困難",
+    category: "特定身分與處境",
+    examplePrompt: "離開安置或家庭後要自立生活，想知道少年生涯發展或生活協助。",
+  },
+] as const;
+
+const LIFE_EVENT_NAMES: Record<string, string> = Object.fromEntries(
+  LIFE_EVENT_CATALOG.map((entry) => [entry.eventId, entry.label]),
+);
 
 /** 候選項目。目前是離線示範資料的四筆。 */
 const ITEM_NAMES: Record<string, string> = {
@@ -93,7 +320,7 @@ const ERROR_MESSAGES: Record<ErrorCode, string> = {
 
 /** 使用者的描述無法對應到已知事件時顯示的提示。這不是錯誤。 */
 export const EVENT_NOT_RECOGNIZED_MESSAGE =
-  "我們沒有看懂剛才的描述，可以換個說法再說一次嗎？例如直接說發生了什麼事，以及是誰。";
+  "我們沒有看懂剛才的描述，可以換個說法再說一次嗎？請直接說明發生了什麼事、以及是誰。";
 
 export function lifeEventName(code: string): string {
   return LIFE_EVENT_NAMES[code] ?? code;

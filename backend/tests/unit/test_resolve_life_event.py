@@ -105,13 +105,32 @@ def test_anything_but_a_registered_event_raises(event_id: str, why: str) -> None
 
 
 def test_an_unavailable_model_also_raises_not_recognised() -> None:
-    """失敗情境：模型服務壞掉時走同一條路。
+    """失敗情境：模型服務壞掉、且口語備援也對不上時，走同一條路。
 
     刻意不分「我們的模型壞了」和「你的描述我們不懂」—— 對使用者而言下一步都一樣，
     而區分只對我們有意義，記在紀錄檔就好。
     """
     with pytest.raises(LifeEventNotRecognisedError):
         resolve_life_event(TEXT, model=UnavailableLanguageModel(), registry=_registry())
+
+
+def test_keyword_fallback_covers_clear_short_phrases_when_model_fails() -> None:
+    """短句「我失業了」在模型不可用時仍應對到 job_loss，避免畫面誤顯示看不懂。"""
+    registry = LifeEventRegistry(
+        (
+            LifeEventDefinition(event_id="job_loss", description="失業"),
+            LifeEventDefinition(event_id="spouse_death", description="配偶過世"),
+        )
+    )
+
+    assert (
+        resolve_life_event(
+            "我失業了",
+            model=UnavailableLanguageModel(),
+            registry=registry,
+        )
+        == "job_loss"
+    )
 
 
 # ---------------------------------------------------------------------------

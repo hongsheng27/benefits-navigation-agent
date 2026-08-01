@@ -147,7 +147,12 @@ describe("HomePageAlt", () => {
     describeSituation("我先生上個月過世了。");
 
     // Step 1 turns into a confirmation prompt using the recognised event.
-    expect(await screen.findByText("配偶過世")).toBeInTheDocument();
+    // Prefer the confirm control: the catalog also shows the label as a chip.
+    expect(
+      await screen.findByRole("button", { name: "對，就是這件事" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("我讀到的是")).toBeInTheDocument();
+    expect(screen.getByText("配偶過世")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "對，就是這件事" }));
 
     // Step 2 renders the backend's question with the frontend's own wording.
@@ -196,7 +201,12 @@ describe("HomePageAlt", () => {
   });
 
   it("shows a plain error message when the session has expired", async () => {
+    // describeEvent retries once after a stale/expired session; both attempts fail.
     stubBackend([
+      jsonResponse(
+        { errorCode: "session_expired", fieldIds: [], currentState: null },
+        410,
+      ),
       jsonResponse(
         { errorCode: "session_expired", fieldIds: [], currentState: null },
         410,
@@ -211,5 +221,30 @@ describe("HomePageAlt", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "這次諮詢已經超過保存時間",
     );
+  });
+
+  it("starts a fresh session when the old one rejects life_event_text", async () => {
+    stubBackend([
+      jsonResponse(
+        {
+          errorCode: "invalid_transition",
+          fieldIds: [],
+          currentState: "collect_missing_fields",
+        },
+        409,
+      ),
+      jsonResponse(snapshot({ lifeEvent: "serious_illness" })),
+    ]);
+
+    render(<HomePageAlt />);
+    await screen.findByText("後端已連線");
+
+    describeSituation("我生病了");
+
+    expect(
+      await screen.findByRole("button", { name: "對，就是這件事" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("重大傷病")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

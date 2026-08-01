@@ -22,12 +22,13 @@ import { useBackendSession } from "../hooks/useBackendSession";
 import { MAX_LIFE_EVENT_TEXT_LENGTH } from "../types/session";
 
 const LEDE =
-  "接住會判斷哪些補助與行政程序和你有關、要用什麼順序辦、去哪個機關，並附上可以帶去問承辦人的官方依據。目前開放的情境是配偶過世。";
+  "用你自己的話說發生了什麼事就好。系統會自動判斷是哪一種生活變故，再整理可能相關的補助與行政程序、辦理順序與機關，並附上可帶去問承辦人的官方依據。部分情境的福利圖譜仍在建置中。";
 
+/** 不知道怎麼開頭時的少量例句（不是選單；送出後仍由 LLM 辨識）。 */
 const EXAMPLE_PROMPTS = [
-  "家人剛過世，不知道接下來要辦什麼。",
   "配偶過世一個月了，想確認還有哪些給付來得及申請。",
-  "我在幫媽媽處理爸爸的後事，她沒有工作。",
+  "公司裁員被資遣了，想知道失業給付或其他協助怎麼申請。",
+  "爸媽需要長期照顧，想知道長照服務與補助怎麼開始申請。",
 ] as const;
 
 const BOUNDARIES = [
@@ -106,6 +107,11 @@ export function HomePageAlt() {
   // 事件已辨識但還沒確認：後端維持在 understand_event，並且已經給出 lifeEvent。
   const awaitingConfirmation =
     workflowState === "understand_event" && (snapshot?.lifeEvent ?? null) !== null;
+
+  // 只有「尚未確認事件」時才能送描述。中途若仍顯示表單，再送會拿到 invalid_transition。
+  const canDescribeEvent =
+    snapshot === null ||
+    (workflowState === "understand_event" && snapshot.lifeEvent === null);
 
   const questionGroups = snapshot?.questionGroups ?? [];
   const showQuestions =
@@ -192,12 +198,19 @@ export function HomePageAlt() {
         </ul>
 
         {errorCode ? (
-          <p
+          <div
             role="alert"
             className="mt-10 border-l-2 border-[#8a2a2a] bg-[#f7ecec] px-4 py-4 text-[0.9rem] leading-[2] text-[#5c2323] sm:px-5"
           >
-            {errorMessage(errorCode)}
-          </p>
+            <p>{errorMessage(errorCode)}</p>
+            <button
+              type="button"
+              onClick={() => void handleReset()}
+              className="mt-3 rounded-sm border border-[#c9a0a0] bg-[#faf3f3] px-4 py-2 text-[0.88rem] leading-[1.8] text-[#5c2323] transition-colors hover:border-[#8a2a2a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8a2a2a]"
+            >
+              清除這次諮詢，重新開始
+            </button>
+          </div>
         ) : null}
 
         <div className="mt-14 ml-[1.15rem] border-l border-[#e0d8ca] sm:ml-6">
@@ -214,6 +227,19 @@ export function HomePageAlt() {
                 onConfirm={() => void confirmEvent(true)}
                 onRedescribe={() => void handleRedescribe()}
               />
+            ) : !canDescribeEvent ? (
+              <div className="mt-2">
+                <p className="text-[0.9rem] leading-[2] text-[#5c564e]">
+                  這次諮詢已經過了描述事件的步驟。若要說另一件事，請重新開始。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleReset()}
+                  className="mt-4 rounded-sm border border-[#c9c0b0] bg-[#f7f4ee] px-4 py-2.5 text-[0.9rem] leading-[1.8] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                >
+                  清除這次諮詢，重新開始
+                </button>
+              </div>
             ) : (
               <form onSubmit={(event) => void handleSubmit(event)} noValidate>
                 <label

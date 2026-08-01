@@ -168,7 +168,7 @@ export function useBackendSession(): BackendSession {
 
   const describeEvent = useCallback(
     async (text: string) => {
-      await run(async () => {
+      const advanceLifeEventText = async () => {
         let sessionId = sessionIdRef.current;
         if (!sessionId) {
           const created = await createSession();
@@ -177,9 +177,56 @@ export function useBackendSession(): BackendSession {
           writeStoredSessionId(sessionId);
         }
         return advanceSession(sessionId, { kind: "life_event_text", text });
-      });
+      };
+
+      setStatus("working");
+      setErrorCode(null);
+      setEventNotRecognized(false);
+
+      try {
+        applySnapshot(await advanceLifeEventText());
+      } catch (error: unknown) {
+        if (error instanceof SessionApiError) {
+          if (error.errorCode === "event_not_recognized") {
+            setEventNotRecognized(true);
+            setStatus("idle");
+            return;
+          }
+          // 常見於：後端重啟後記憶體 session 已沒了，或本機還握著已往下走的舊諮詢，
+          // 卻又在第一步送 life_event_text → invalid_transition。清掉後開新的再送一次。
+          if (
+            isStaleSessionError(error) ||
+            error.errorCode === "invalid_transition"
+          ) {
+            forgetSession();
+            try {
+              applySnapshot(await advanceLifeEventText());
+              return;
+            } catch (retryError: unknown) {
+              if (retryError instanceof SessionApiError) {
+                if (retryError.errorCode === "event_not_recognized") {
+                  setEventNotRecognized(true);
+                  setStatus("idle");
+                  return;
+                }
+                setErrorCode(retryError.errorCode);
+                setStatus("error");
+                return;
+              }
+              setErrorCode("internal_error");
+              setStatus("error");
+              return;
+            }
+          }
+          setErrorCode(error.errorCode);
+          setStatus("error");
+          return;
+        }
+        setErrorCode("internal_error");
+        setStatus("error");
+      }
     },
-    [run],
+    [applySnapshot, forgetSession],
   );
 
   const confirmEvent = useCallback(

@@ -116,6 +116,7 @@ class LifeEventRegistry:
 
 
 _REGISTRY_CACHE: LifeEventRegistry | None = None
+_REGISTRY_CACHE_MTIME_NS: int | None = None
 
 
 def default_life_events() -> LifeEventRegistry:
@@ -123,8 +124,22 @@ def default_life_events() -> LifeEventRegistry:
 
     lazy 初始化並快取，與 `state_machine.default_registry()` 同一個作法：
     `from_json` 會讀磁碟，放在 import 時執行會讓「匯入這個模組」變成一件可能失敗的事。
+
+    JSON 在 `backend/` 目錄外，uvicorn --reload 不一定會重載此模組；因此比對檔案
+    mtime，變更後下次請求會重新讀取，避免改了 description 卻一直用舊快取。
     """
-    global _REGISTRY_CACHE
-    if _REGISTRY_CACHE is None:
-        _REGISTRY_CACHE = LifeEventRegistry.from_json()
+    global _REGISTRY_CACHE, _REGISTRY_CACHE_MTIME_NS
+    path = DEFAULT_EVENTS_PATH
+    try:
+        mtime_ns = path.stat().st_mtime_ns
+    except OSError:
+        mtime_ns = None
+
+    if (
+        _REGISTRY_CACHE is None
+        or mtime_ns is None
+        or mtime_ns != _REGISTRY_CACHE_MTIME_NS
+    ):
+        _REGISTRY_CACHE = LifeEventRegistry.from_json(path)
+        _REGISTRY_CACHE_MTIME_NS = mtime_ns
     return _REGISTRY_CACHE

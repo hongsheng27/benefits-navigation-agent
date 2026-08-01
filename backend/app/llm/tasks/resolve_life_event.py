@@ -11,24 +11,19 @@
 內，外加一個 `unrecognised`。所以**模型在結構上無法回一個我們不認得的事件** ——
 不是事後攔下來，是它沒有那個選項。
 
-`unrecognised` 是刻意給的：如果只給合法代號，模型面對「我想問問看有什麼補助」這種
-無法對應的描述時，只能硬選一個。給它一個誠實的出口，比逼它猜好。
+`unrecognised` 是刻意給的：面對閒聊或完全對不上清單的描述時，模型有誠實出口，
+不必硬塞一個無關代號。
 
-## 為什麼失敗時不猜
+細節不足但仍明顯屬於某一類（例如「親人過世了」）時，應選該類通用代號
+（如 `other_relative_death`），再靠後續「確認理解」讓使用者否認並重說。
 
-事件代號決定後面七個步驟展開哪些項目。猜錯的話，使用者會被問一整串跟他無關的問題，
-最後拿到一份跟他的處境無關的清單 —— 而他正在辦喪事。
-
-所以三種情況都拋 `LifeEventNotRecognisedError`，由端點轉成
-`event_not_recognized`，讓前端請使用者換個說法：
+以下三種情況拋 `LifeEventNotRecognisedError`，由端點轉成 `event_not_recognized`：
 
 1. 模型回 `unrecognised`
 2. 模型回的代號不在登記表上（理論上 schema 會擋，但廠商不保證遵守，所以再查一次）
 3. 模型服務不可用
 
-第三種也歸在這裡，理由是**對使用者而言沒有差別** —— 都是「系統這次沒看懂」，
-而區分「我們的模型壞了」和「你的描述我們不懂」對他的下一步毫無幫助。差別記在紀錄檔裡
-給我們看。
+第三種也歸在這裡：對使用者而言都是「系統這次沒看懂」。差別記在紀錄檔裡給我們看。
 
 ## 這一批沒有做屬性抽取
 
@@ -59,23 +54,42 @@ UNRECOGNISED = "unrecognised"
 
 SCHEMA_NAME = "life_event_resolution"
 
+# 高信心口語備援：模型回 unrecognised、或 Bedrock 瞬間失敗（含節流）時使用。
+# 只覆蓋非常明確、短句常踩雷的說法；細節仍以模型為主，確認步驟可糾正。
+_KEYWORD_FALLBACKS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("失業", "被資遣", "裁員", "解雇", "被炒"), "job_loss"),
+    (("無薪假", "減班休息"), "unpaid_leave"),
+    (("職災", "上班受傷", "做工受傷"), "occupational_injury"),
+    (("我生病", "生病了", "重大傷病", "住院"), "serious_illness"),
+    (("長照", "失智", "外籍看護"), "long_term_care_need"),
+    (("家暴", "被打", "保護令"), "domestic_violence"),
+    (("懷孕", "有喜"), "pregnancy"),
+    (("剛生", "生了小孩", "生育給付"), "childbirth"),
+    (("單親",), "single_parent_hardship"),
+    (("離婚", "分居"), "divorce"),
+    (("先生過世", "太太過世", "老公過世", "老婆過世", "配偶過世"), "spouse_death"),
+    (("爸爸過世", "媽媽過世", "父親過世", "母親過世"), "parent_death"),
+    (("親人過世", "家人過世", "家裡有人過世", "有人過世"), "other_relative_death"),
+)
+
 INSTRUCTION = """你的工作是把一段中文描述對應到一個事件代號。
 
 規則：
 1. 只能回答下面清單裡的代號，或 `unrecognised`。
-2. 描述若對應不到清單上任何一個事件，回 `unrecognised`。不要挑一個最接近的。
-3. 不確定時回 `unrecognised`。錯的代號比誠實說不知道更糟。
-4. 只判斷「發生了什麼事」，不要推測其他資訊。
+2. 預設要選一個最接近的代號。短句也要對，例如「我失業了」→ `job_loss`，「我生病了」→ `serious_illness`，「親人過世了」→ `other_relative_death`。
+3. 有講清楚關係或細節時，選更精確的代號（「媽媽過世」→ `parent_death`，「先生過世」→ `spouse_death`）。
+4. 幾乎只有在完全無關（聊天、天氣、沒有生活變故）時才回 `unrecognised`。不要因為句子短就回 `unrecognised`。
+5. 只輸出工具參數，不要解釋。
 
 可選的事件代號：
 {event_lines}"""
 """給模型的指示。
 
-第 2 條與第 3 條是刻意重複同一件事的兩種說法。模型傾向於「盡量幫上忙」，
-所以「不要挑一個最接近的」必須明講 —— 只寫「不確定就回 unrecognised」不夠。
+使用者常說得很短（「親人過世了」「我生病了」）。若一律要求關係細節才給代號，
+第一步會反覆失敗，產品等於不能用。因此細節不足時改走該類通用代號；
+`unrecognised` 只留給真的對不上任何事件的描述。
 
-第 4 條擋的是模型自作主張多回東西。目前 schema 已經用 `additionalProperties: false`
-擋住多餘欄位，但把意圖寫進指示可以減少它把推測塞進 `event_id` 的機會。
+後續仍有「確認理解」步驟：選到通用代號後，使用者可以否認並重說得更具體。
 """
 
 
@@ -125,6 +139,14 @@ def build_instruction(registry: LifeEventRegistry) -> str:
     return INSTRUCTION.format(event_lines=event_lines)
 
 
+def _keyword_fallback(text: str, registry: LifeEventRegistry) -> str | None:
+    """極短、高信心的口語備援。只在模型失敗或回 unrecognised 時使用。"""
+    for keywords, event_id in _KEYWORD_FALLBACKS:
+        if any(keyword in text for keyword in keywords) and registry.has(event_id):
+            return event_id
+    return None
+
+
 def resolve_life_event(
     text: str,
     *,
@@ -145,22 +167,31 @@ def resolve_life_event(
         user_content=text,
         output_schema=build_schema(registry),
         schema_name=SCHEMA_NAME,
-        # 這個任務只回一個短代號，不需要長度預算。壓低上限也讓「模型開始長篇解釋」
-        # 這種失控情況更早被截斷。
-        max_output_tokens=64,
+        # 代號很短，但 tool_use 外殼與較長 enum 仍需要一點空間；64 在實務上偶發截斷。
+        max_output_tokens=256,
     )
-
     try:
         result = model.generate_structured(request)
     except LanguageModelError as error:
         # 只記例外**類別**。例外訊息可能引用使用者提供的值，所以走 exc_info，
         # 由格式器只取類別名稱與堆疊。
+        root = error.__cause__
         log_event(
             "life_event_resolution_failed",
             level=logging.WARNING,
             exc_info=True,
             tool=LlmTask.RESOLVE_LIFE_EVENT.value,
+            error_type=type(root).__name__ if root is not None else type(error).__name__,
         )
+        fallback = _keyword_fallback(text, registry)
+        if fallback is not None:
+            log_event(
+                "life_event_resolved",
+                level=logging.INFO,
+                life_event=fallback,
+                tool=LlmTask.RESOLVE_LIFE_EVENT.value,
+            )
+            return fallback
         msg = "語言模型目前無法處理事件辨識"
         raise LifeEventNotRecognisedError(msg) from error
 
@@ -172,6 +203,15 @@ def resolve_life_event(
             level=logging.INFO,
             tool=LlmTask.RESOLVE_LIFE_EVENT.value,
         )
+        fallback = _keyword_fallback(text, registry)
+        if fallback is not None:
+            log_event(
+                "life_event_resolved",
+                level=logging.INFO,
+                life_event=fallback,
+                tool=LlmTask.RESOLVE_LIFE_EVENT.value,
+            )
+            return fallback
         msg = "模型判斷這段描述對應不到任何已登記的事件"
         raise LifeEventNotRecognisedError(msg)
 
