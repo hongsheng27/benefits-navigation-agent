@@ -18,7 +18,8 @@ These rules apply to every Kiro session in this workspace.
 - This repository is **PUBLIC**. Never commit secrets (API keys, AWS
   credentials, tokens, `.env` files, private keys).
 - Run a secrets scan before every `git push`.
-- AWS resources are unavailable until August 1st. Use local mocks only.
+- AWS resources now available. Follow `hackathon-aws-constraints.md` for
+  usage rules and region/service restrictions.
 - All AWS migration notes go in `docs/aws_migration_guide.md` (single source
   of truth).
 - Do not modify `main` branch directly.
