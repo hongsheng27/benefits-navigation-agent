@@ -164,7 +164,7 @@ function PageChrome({
       <footer className="border-t border-[#e0d8ca]/30">
         <div className="mx-auto flex w-full max-w-[40rem] flex-col gap-2 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <p className="text-[0.78rem] leading-[1.7] text-[#8b8377]">
-            接住 · 協助你理清補助與手續，不取代承辦人員
+            接住 · 生活突然改變時，先有人陪你理出下一步
           </p>
           {footerExtra}
         </div>
