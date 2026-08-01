@@ -170,6 +170,12 @@ def test_snapshot_projects_items_amounts_and_citations() -> None:
     assert snapshot.extra_candidate_life_events == ()
     assert snapshot.attributes == {"deceased_insurance_type": "labor_insurance"}
 
+    funeral, pension = snapshot.items
+    assert funeral.amount_min == funeral.amount_max == 10000
+    assert funeral.amount_period is AmountPeriod.ONE_TIME
+    assert funeral.citations[0].url == "https://example.gov.tw/rule"
+    assert pension.decisive_conditions[0].actual == "five_to_fifteen_years"
+
 
 def test_snapshot_projects_life_events_array() -> None:
     state = _state().model_copy(
@@ -194,12 +200,6 @@ def test_snapshot_projects_life_events_array() -> None:
         "caregiver_burden",
     ]
     assert payload["lifeEvent"] == "occupational_injury"
-
-    funeral, pension = snapshot.items
-    assert funeral.amount_min == funeral.amount_max == 10000
-    assert funeral.amount_period is AmountPeriod.ONE_TIME
-    assert funeral.citations[0].url == "https://example.gov.tw/rule"
-    assert pension.decisive_conditions[0].actual == "five_to_fifteen_years"
 
 
 def test_snapshot_reports_progress_and_defaults_to_no_questions() -> None:
