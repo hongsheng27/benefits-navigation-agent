@@ -1,3 +1,6 @@
+import { useState, type ReactNode } from "react";
+
+import { getItemDetail } from "../../mocks/itemDetails";
 import type { ItemStatus, ItemView, SessionSnapshot } from "../../types/session";
 import styles from "./alt.module.css";
 import {
@@ -157,7 +160,57 @@ function StatusGroups({
   ));
 }
 
+function formatAmountFromItem(item: ItemView): string | null {
+  if (item.amountMin == null && item.amountMax == null) {
+    return null;
+  }
+  const currency = item.amountCurrency?.trim() || "元";
+  const period =
+    item.amountPeriod === "monthly"
+      ? "／月"
+      : item.amountPeriod === "annual"
+        ? "／年"
+        : item.amountPeriod === "one_time"
+          ? "（一次）"
+          : "";
+  if (item.amountMin != null && item.amountMax != null) {
+    if (item.amountMin === item.amountMax) {
+      return `${item.amountMin.toLocaleString("zh-TW")} ${currency}${period}`;
+    }
+    return `${item.amountMin.toLocaleString("zh-TW")}–${item.amountMax.toLocaleString("zh-TW")} ${currency}${period}`;
+  }
+  if (item.amountMin != null) {
+    return `約 ${item.amountMin.toLocaleString("zh-TW")} ${currency}起${period}`;
+  }
+  return `最高約 ${item.amountMax!.toLocaleString("zh-TW")} ${currency}${period}`;
+}
+
+function DetailSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mt-3">
+      <h4 className="text-[0.82rem] font-semibold tracking-[0.04em] text-[#2f4f45]">
+        {title}
+      </h4>
+      <div className="mt-1 text-[0.85rem] leading-[1.95] text-[#4a453d]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function ResultRow({ item }: { item: ItemView }) {
+  const [expanded, setExpanded] = useState(false);
+  const detail = getItemDetail(item.itemId);
+  const amountLabel = formatAmountFromItem(item) ?? detail?.amountLabel ?? null;
+  const officialUrl =
+    detail?.officialUrl ?? item.citations[0]?.url ?? null;
+
   return (
     <li className="px-4 py-4 sm:px-5">
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -212,6 +265,72 @@ function ResultRow({ item }: { item: ItemView }) {
             </li>
           ))}
         </ul>
+      ) : null}
+
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          className="text-[0.85rem] font-semibold tracking-[0.04em] text-[#2f4f45] underline decoration-[#a8bdb2] underline-offset-2 hover:decoration-[#2f4f45]"
+          aria-expanded={expanded}
+        >
+          {expanded ? "收合詳情" : "查看詳情"}
+        </button>
+      </div>
+
+      {expanded ? (
+        <div className="mt-3 border-t border-[#eee7db] pt-3">
+          {detail ? (
+            <>
+              <DetailSection title="完整說明">{detail.summary}</DetailSection>
+              <DetailSection title="主管機關">{detail.agency}</DetailSection>
+              <DetailSection title="申請地點">{detail.location}</DetailSection>
+              {amountLabel ? (
+                <DetailSection title="金額範圍">{amountLabel}</DetailSection>
+              ) : null}
+              <DetailSection title="資格條件">
+                <ul className="list-disc pl-5">
+                  {detail.eligibilityNotes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              </DetailSection>
+              <DetailSection title="申請步驟">
+                <ol className="list-decimal pl-5">
+                  {detail.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </DetailSection>
+              <DetailSection title="應備文件">
+                <ul className="list-disc pl-5">
+                  {detail.documents.map((doc) => (
+                    <li key={doc}>{doc}</li>
+                  ))}
+                </ul>
+              </DetailSection>
+            </>
+          ) : (
+            <p className="text-[0.85rem] leading-[1.95] text-[#6b6459]">
+              這筆項目的示範詳情尚未補齊；正式申請仍以承辦機關說明為準。
+            </p>
+          )}
+          {officialUrl ? (
+            <p className="mt-3">
+              <a
+                href={officialUrl}
+                rel="noreferrer noopener"
+                target="_blank"
+                className="text-[0.85rem] font-semibold text-[#2f4f45] underline decoration-[#a8bdb2] underline-offset-2 hover:decoration-[#2f4f45]"
+              >
+                前往機關／官方頁面
+              </a>
+            </p>
+          ) : null}
+          <p className="mt-3 text-[0.78rem] leading-[1.8] text-[#8b8377]">
+            以上為整理用示範說明，不代表資格已核定。
+          </p>
+        </div>
       ) : null}
     </li>
   );
