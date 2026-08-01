@@ -145,6 +145,9 @@ def fetch_page(url: str) -> tuple[bytes, int]:
 
     Uses relaxed SSL verification because many Taiwan government sites
     have non-standard certificate configurations.
+
+    First tries direct fetch. If content is too short (likely JS-rendered),
+    tries using curl with redirect following.
     """
     ctx = ssl.create_default_context()
     # Taiwan government sites often have certificate chain issues
