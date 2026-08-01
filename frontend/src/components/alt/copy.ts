@@ -420,6 +420,46 @@ const ITEM_KIND_LABELS: Record<ItemKind, string> = {
 };
 
 /**
+ * 結果列用的細項類型（前端對照，不擴充後端 ItemKind）。
+ * 比 benefit／administrative 更贴近使用者理解的「補助、資格認定」等。
+ */
+export type ItemCategory =
+  | "benefit"
+  | "recognition"
+  | "administrative"
+  | "consultation";
+
+const ITEM_CATEGORY_LABELS: Record<ItemCategory, string> = {
+  benefit: "補助／給付",
+  recognition: "資格認定",
+  administrative: "行政手續",
+  consultation: "諮詢／服務",
+};
+
+const ITEM_CATEGORIES: Record<string, ItemCategory> = {
+  funeral_benefit: "benefit",
+  survivor_pension: "benefit",
+  unemployment_benefit: "benefit",
+  occupational_disability_benefit: "benefit",
+  occupational_accident_disability_benefit: "benefit",
+  taipei_green_funeral_incentive: "benefit",
+  new_taipei_green_funeral_incentive: "benefit",
+  taoyuan_green_funeral_incentive: "benefit",
+  penghu_green_funeral_subsidy: "benefit",
+  caregiver_support_services: "benefit",
+  caregiver_employment_support: "benefit",
+  occupational_injury_recognition: "recognition",
+  occupational_injury_recognition_follow_up: "recognition",
+  disability_assessment: "recognition",
+  long_term_care_assessment: "recognition",
+  death_registration: "administrative",
+  health_insurance_change: "administrative",
+  taipei_joint_funeral_service: "administrative",
+  caregiver_support_contact: "consultation",
+  employment_service: "consultation",
+};
+
+/**
  * 錯誤訊息。
  *
  * `event_not_recognized` 刻意不在這裡 —— 它不是程式錯誤，不能顯示成「系統發生錯誤」，
@@ -471,6 +511,19 @@ export function statusSectionTitle(status: ItemStatus): string {
 
 export function itemKindLabel(kind: ItemKind): string {
   return ITEM_KIND_LABELS[kind] ?? kind;
+}
+
+export function itemCategory(itemId: string): ItemCategory | null {
+  return ITEM_CATEGORIES[itemId] ?? null;
+}
+
+/** 結果列「項目類型」文案；未知 id 時退回後端 kind 標籤。 */
+export function itemCategoryLabel(itemId: string, kind: ItemKind): string {
+  const category = itemCategory(itemId);
+  if (category) {
+    return ITEM_CATEGORY_LABELS[category];
+  }
+  return itemKindLabel(kind);
 }
 
 export function errorMessage(code: ErrorCode): string {

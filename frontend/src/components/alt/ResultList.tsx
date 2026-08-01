@@ -3,7 +3,7 @@ import styles from "./alt.module.css";
 import {
   fieldLabel,
   itemAudience,
-  itemKindLabel,
+  itemCategoryLabel,
   itemName,
   lifeEventName,
   optionLabel,
@@ -165,7 +165,7 @@ function ResultRow({ item }: { item: ItemView }) {
           {itemName(item.itemId)}
         </span>
         <span className="rounded-xs border border-[#d8cfc0] px-2 py-0.5 text-[0.75rem] leading-[1.8] tracking-[0.06em] text-[#6b6459]">
-          {itemKindLabel(item.kind)}
+          項目類型：{itemCategoryLabel(item.itemId, item.kind)}
         </span>
       </p>
 
