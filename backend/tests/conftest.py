@@ -35,6 +35,9 @@ def _no_live_language_model(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.setenv("GEMINI_API_KEY", "")
     monkeypatch.setenv("BEDROCK_MODEL_ID", "")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "")
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
