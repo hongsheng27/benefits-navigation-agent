@@ -44,6 +44,7 @@ describe("post-consult panels", () => {
     render(
       <RelatedProvisionsPanel
         lifeEventId="spouse_death"
+        itemIds={["funeral_benefit", "death_registration"]}
         sessionId="sess_test"
         onClose={() => {}}
       />,
@@ -98,5 +99,65 @@ describe("post-consult panels", () => {
       expect(screen.getByText(/不能代替資格判定/)).toBeInTheDocument();
     });
     expect(screen.getByText("我符不符合資格？")).toBeInTheDocument();
+  });
+
+  it("does not show funeral content for job loss results", () => {
+    render(
+      <RelatedProvisionsPanel
+        lifeEventId="job_loss"
+        itemIds={["unemployment_benefit", "employment_service"]}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("就業保險失業給付申請說明")).toBeInTheDocument();
+    expect(screen.queryByText(/環保葬/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/喪葬/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/聯合奠祭/)).not.toBeInTheDocument();
+  });
+
+  it("does not show funeral content for occupational injury results", () => {
+    render(
+      <RelatedProvisionsPanel
+        lifeEventId="occupational_injury"
+        itemIds={[
+          "occupational_injury_recognition_follow_up",
+          "long_term_care_assessment",
+          "caregiver_support_services",
+        ]}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("職業災害認定與職災保險說明")).toBeInTheDocument();
+    expect(screen.getAllByText(/1966/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/環保葬/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/聯合奠祭/)).not.toBeInTheDocument();
+  });
+
+  it("shows empty guide state instead of spouse-death fallback", () => {
+    render(
+      <ApplicationGuidePanel lifeEventId="serious_illness" onClose={() => {}} />,
+    );
+
+    expect(
+      screen.getAllByText(/還沒有對應的申請步驟說明/).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("辦理死亡登記")).not.toBeInTheDocument();
+    expect(screen.queryByText(/配偶過世/)).not.toBeInTheDocument();
+  });
+
+  it("shows job-loss application guide without funeral steps", () => {
+    render(
+      <ApplicationGuidePanel lifeEventId="job_loss" onClose={() => {}} />,
+    );
+
+    expect(
+      screen.getByText("失業／被資遣後常見申請與辦理順序"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("向公立就業服務機構辦理求職登記"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("辦理死亡登記")).not.toBeInTheDocument();
   });
 });

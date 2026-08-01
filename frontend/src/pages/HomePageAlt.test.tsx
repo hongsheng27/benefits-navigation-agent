@@ -484,6 +484,43 @@ describe("HomePageAlt", () => {
     });
   });
 
+  it("keeps the no-question result gate inside the chat shell", async () => {
+    stubBackend([
+      jsonResponse(
+        snapshot({
+          lifeEvent: "long_term_care_need",
+          lifeEvents: ["long_term_care_need"],
+        }),
+      ),
+      jsonResponse(
+        snapshot({
+          lifeEvent: "long_term_care_need",
+          lifeEvents: ["long_term_care_need"],
+          workflowState: "collect_missing_fields",
+          stepIndex: 3,
+          questionGroups: [],
+          items: [],
+          collectorQuestion: null,
+        }),
+      ),
+    ]);
+
+    render(<HomePageAlt />);
+    expect(await screen.findByText("服務已就緒")).toBeInTheDocument();
+    await startIntake();
+    describeSituation("爸媽需要長期照顧，不知道長照可以從哪裡開始。");
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
+
+    expect(await screen.findByText("我們接著往下看")).toBeInTheDocument();
+    expect(screen.queryByText("再確認一下就可以了")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("好，我們先以「長照需求」往下整理。"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/我們好像已經掌握夠多了/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看結果" })).toBeInTheDocument();
+    expect(screen.queryByText("我們先幫你整理到這裡")).not.toBeInTheDocument();
+  });
+
   it("lets the user retry when the backend cannot recognise the event", async () => {
     stubBackend([
       jsonResponse(

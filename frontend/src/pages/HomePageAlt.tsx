@@ -352,6 +352,9 @@ function IntakeSteps({
     uiStep === "result" &&
     (snapshot?.items.length ?? 0) === 0 &&
     questionGroups.length === 0;
+  /** 確認後沒追問就開閘門：避免「換一頁 ready」體感，維持聊天殼。 */
+  const gateWithoutPriorQuestions =
+    showResultGate && questionGroups.length === 0;
   const situationLabel = snapshot?.lifeEvent
     ? lifeEventName(snapshot.lifeEvent)
     : "你剛才說的情況";
@@ -363,6 +366,12 @@ function IntakeSteps({
           onConfirmRestart: onReset,
         }
       : null;
+  const useAttributeChat =
+    !readOnly &&
+    !isReviewing &&
+    Boolean(onAnswerChatTurn) &&
+    (!snapshotHasLifeEvent(snapshot, "occupational_injury") ||
+      gateWithoutPriorQuestions);
 
   const showBack = uiStep !== "landing" && onBack !== undefined;
 
@@ -578,24 +587,43 @@ function IntakeSteps({
 
       {uiStep === "questions" ? (
         <section>
-          <StepProgress step={showResultGate ? "ready" : "questions"} />
+          <StepProgress
+            step={
+              showResultGate && !gateWithoutPriorQuestions ? "ready" : "questions"
+            }
+          />
           <h1
             ref={stepHeadingRef}
             tabIndex={-1}
             className="text-[1.35rem] leading-[1.55] font-semibold text-[#171513] outline-none sm:text-[1.5rem]"
           >
-            {showResultGate ? "再確認一下就可以了" : "再請你回答幾個問題"}
+            {showResultGate
+              ? gateWithoutPriorQuestions
+                ? "我們接著往下看"
+                : "再確認一下就可以了"
+              : "再請你回答幾個問題"}
           </h1>
           <p className="mt-2 text-[0.92rem] leading-[1.9] text-[#6b6459]">
             {showResultGate
-              ? `關於「${situationLabel}」，我們先在對話裡問你要不要看整理結果。`
+              ? gateWithoutPriorQuestions
+                ? `關於「${situationLabel}」，目前沒有要再問的細節，我們在同一段對話裡確認要不要看整理結果。`
+                : `關於「${situationLabel}」，我們先在對話裡問你要不要看整理結果。`
               : `與「${situationLabel}」有關。答完這組就可以繼續。`}
           </p>
           <div className="mt-6">
-            {readOnly ||
-            isReviewing ||
-            !onAnswerChatTurn ||
-            snapshotHasLifeEvent(snapshot, "occupational_injury") ? (
+            {useAttributeChat ? (
+              <AttributeChatPanel
+                key="questions-chat"
+                groups={questionGroups}
+                collectorQuestion={snapshot?.collectorQuestion ?? null}
+                disabled={busy || actionsLocked}
+                answeredCount={Object.keys(snapshot?.attributes ?? {}).length}
+                initialChoiceAnswers={snapshot?.attributes}
+                onChatTurn={(text) => onAnswerChatTurn?.(text)}
+                onSubmitChoices={(answers) => onAnswerFields?.(answers)}
+                resultGate={resultGate}
+              />
+            ) : (
               <div>
                 {questionGroups.length > 0 ? (
                   <QuestionGroupList
@@ -637,18 +665,6 @@ function IntakeSteps({
                   </div>
                 ) : null}
               </div>
-            ) : (
-              <AttributeChatPanel
-                key="questions-chat"
-                groups={questionGroups}
-                collectorQuestion={snapshot?.collectorQuestion ?? null}
-                disabled={busy || actionsLocked}
-                answeredCount={Object.keys(snapshot?.attributes ?? {}).length}
-                initialChoiceAnswers={snapshot?.attributes}
-                onChatTurn={(text) => onAnswerChatTurn(text)}
-                onSubmitChoices={(answers) => onAnswerFields?.(answers)}
-                resultGate={resultGate}
-              />
             )}
           </div>
           {isReviewing && onReturnToCurrent ? (
@@ -755,6 +771,8 @@ function IntakeSteps({
       {openPanel === "related_provisions" ? (
         <RelatedProvisionsPanel
           lifeEventId={snapshot?.lifeEvent ?? null}
+          lifeEventIds={snapshotLifeEvents(snapshot)}
+          itemIds={(snapshot?.items ?? []).map((item) => item.itemId)}
           jurisdiction={
             typeof snapshot?.attributes.applicant_jurisdiction === "string"
               ? snapshot.attributes.applicant_jurisdiction
@@ -767,6 +785,7 @@ function IntakeSteps({
       {openPanel === "application_guide" ? (
         <ApplicationGuidePanel
           lifeEventId={snapshot?.lifeEvent ?? null}
+          lifeEventIds={snapshotLifeEvents(snapshot)}
           sessionId={sessionId ?? snapshot?.sessionId ?? null}
           onClose={() => setOpenPanel(null)}
         />
