@@ -11,8 +11,42 @@
 - [ADR-0005: Split Client and Server Session State](0005-split-client-server-session-state.md)
 - [ADR-0006: Use React, Vite, TypeScript, and Tailwind CSS](0006-use-react-vite-typescript-tailwind.md)
 - [ADR-0007: Limit Data Retention and Egress](0007-limit-data-retention-and-egress.md)
-- [ADR-0008: Use Generated SQLite for the Local Government OID Registry](0008-use-generated-sqlite-for-government-oid.md)
-- [ADR-0009: Use a Provenance-First Local Benefit Catalog](0009-use-local-provenance-first-benefit-catalog.md)
-- [ADR-0010: Use Frozen Pydantic Models for Session Workflow State](0010-frozen-pydantic-session-workflow-state.md)
+- [ADR-0008: Curate in SQL, Serve from JSON](0008-curate-in-sql-serve-from-json.md)
+- [ADR-0009: Use Generated SQLite for the Local Government OID Registry](0009-use-generated-sqlite-for-government-oid.md)
+- [ADR-0010: Use a Provenance-First Local Benefit Catalog](0010-use-local-provenance-first-benefit-catalog.md)
+- [ADR-0011: Use Frozen Pydantic Models for Session Workflow State](0011-frozen-pydantic-session-workflow-state.md)
+- [ADR-0012: Deterministic State Machine with Loop Guardrails](0012-deterministic-state-machine-with-guardrails.md)
+- [ADR-0014: Keep Fixture Data Out of the Verified Governance Status](0014-keep-fixture-data-out-of-verified-status.md)
+- [ADR-0015: Use a Narrow LLM Port Instead of an Agent Loop](0015-narrow-llm-port-instead-of-agent-loop.md)
 
-新 ADR 至少記錄背景、候選方案、決定、理由與後果。
+新 ADR 至少記錄背景、決定、理由與後果。候選方案不必逐一列出，除非那個比較本身是
+決策的重點。
+
+**0013 已經被佔用了，但還沒合併。** `origin/feat/databaseV3` 上有
+`0013-use-sqlite-runtime-behind-repositories.md`，所以這份索引從 0012 直接跳到 0014。
+那個分支合併之後 0013 就會出現在中間。
+
+## 新增 ADR 前先確認編號
+
+編號撞過一次：兩個分支各自新增 ADR-0008，合併時才發現，最後要改檔名、改標題，
+還要更新四個檔案裡的引用。
+
+查其他分支的可靠做法（不必逐一 checkout）：
+
+```
+git fetch
+git log --all --name-only --pretty=format: -- 'docs/decisions/*' | Sort-Object -Unique
+```
+
+這會列出**所有分支歷史上曾經存在**的 ADR 檔名，包含還沒合併進 `main` 的。
+ADR-0014 就是這樣發現 0013 已經被佔用的。
+
+所以新增之前：
+
+1. 看 `docs/decisions/` 目前最大的編號。
+2. 用 `git branch -a` 檢查其他未合併的分支有沒有也在寫 ADR。本目錄的最大編號**不代表**
+   全專案的最大編號。
+3. 若無法確認，在分支上先用一個明顯的暫定名稱，合併前再定編號。
+
+改編號時要一併更新：檔名、檔案第一行的標題、本索引、根目錄 `README.md`，
+以及任何引用它的文件或程式註解。

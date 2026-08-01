@@ -1,4 +1,4 @@
-# ADR-0009: Use a Provenance-First Local Benefit Catalog
+# ADR-0010: Use a Provenance-First Local Benefit Catalog
 
 - Status: Accepted for local development and first-round ingestion
 - Date: 2026-07-26

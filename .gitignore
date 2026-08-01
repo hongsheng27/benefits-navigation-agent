@@ -39,3 +39,4 @@ cdk.out/
 data/private/
 data/local/
 *.db
+semantic-review/2026-07-29-023759-pr-local-feat-backend-state-machine.md

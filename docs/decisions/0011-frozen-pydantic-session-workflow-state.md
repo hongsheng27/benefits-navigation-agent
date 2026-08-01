@@ -1,9 +1,9 @@
-# ADR-0010: Use Frozen Pydantic Models for Session Workflow State
+# ADR-0011: Use Frozen Pydantic Models for Session Workflow State
 
-# ADR-0010：以 frozen Pydantic 模型表達 session workflow state
+- Status: Accepted
+- Date: 2026-07-26
 
-- Status / 狀態: Accepted / 已接受
-- Date / 日期: 2026-07-26
+> 中文版在本文件後半段：[以 frozen Pydantic 模型表達 session workflow state](#adr-0011以-frozen-pydantic-模型表達-session-workflow-state)
 
 ## Context
 
@@ -23,20 +23,6 @@ Stating those rules in prose has already proven insufficient elsewhere in this
 repository, which is why `app.observability.logging` enforces its field
 allowlist in code rather than in documentation.
 
-## 背景
-
-ADR-0003 讓 state machine 控制整個流程，ADR-0005 則讓後端成為去識別化 session
-state 的權威擁有者。但兩份 ADR 都沒有說這份 state 在程式裡長什麼樣。
-
-這個形狀必須先定案，後端其他工作才能往下走。`app.schemas` 的對外契約是它的投影、
-state machine 讀取並改寫它、規則引擎把判定結果寫進它。形狀沒定之前，三個模組與
-另外兩位貢獻者都被卡住。
-
-這個形狀還必須承載兩項容易流失的約束。ADR-0007 規定自由文字抽取後即丟棄，所以
-不能有任何欄位誘使人塞入句子。ADR-0005 規定直接識別資料留在使用者裝置，所以不能
-有任何欄位存放身分資料。把這些規則寫成文字說明在本 repository 已經證實不夠 ——
-這正是 `app.observability.logging` 選擇用程式而不是文件來強制欄位 allowlist 的原因。
-
 ## Options Considered
 
 1. Standard-library dataclasses, keeping orchestration free of third-party types.
@@ -46,15 +32,6 @@ state machine 讀取並改寫它、規則引擎把判定結果寫進它。形狀
 A related choice applied to item status: a single flat enumeration covering both
 rule outcomes and item lifecycle, or a nested shape separating "settled" from the
 four decision values.
-
-## 候選方案
-
-1. **標準庫 dataclass**，讓 orchestration 不依賴第三方型別。
-2. **可變的 Pydantic 模型**，每一步直接對它要改的欄位賦值。
-3. **frozen Pydantic 模型**，每一步都產生一個新的 state 物件。
-
-另有一項相關選擇，適用於項目狀態：用**一層扁平的列舉**同時涵蓋規則結果與項目
-生命週期，或用**兩層結構**把「是否已定案」與四種判定值分開。
 
 ## Decision
 
@@ -113,6 +90,104 @@ a rule could not name the condition behind an ineligible result.
 no transition depends on reading the history. Duplicating it in state would store
 the same facts twice.
 
+## Amendment 1: An item carries a structured amount (2026-07-26)
+
+The first version of `CandidateItem` had nowhere to put money, so an eligible
+result could be produced but the figure could not reach the screen.
+
+Options: mirror the rule engine's `amount` plus `amount_label`; store a single
+`amount` with a currency; or store bounds, period, and currency.
+
+**Decision: bounds, period, and currency.** `CandidateItem` gains `amount_min`,
+`amount_max`, `amount_period`, and `amount_currency`, plus an `AmountPeriod`
+enumeration for one-time, monthly, and annual payments.
+
+- Two bounds, because the catalog already treats `min_amount` and `max_amount` as
+  separate fields. A fixed amount repeats the same value in both.
+- No `amount_label`, because display text belongs to the frontend under the same
+  split used for question wording.
+- `amount_period` is part of the shape, because "5,000" and "5,000 per month"
+  cannot be told apart from the number alone.
+- Administrative items normally leave the whole group empty.
+
+The adapter around the rule engine must map its single `amount` onto both bounds
+and source the period from the rule fields.
+
+## Consequences
+
+### Positive
+
+- Unblocks the transport contract, the state machine, and the rule engine, which
+  three separate tasks depend on.
+- Makes two privacy rules structural rather than advisory, and testable.
+- Confines workflow state changes to one module, so an unexpected state can be
+  traced to a single file.
+- Keeps a single declaration style across the backend.
+- Allows several items to be eligible at once, matching the result screen.
+
+### Negative
+
+- Every change needs `model_copy(update=...)`, which is more verbose than
+  assignment, and nested updates require rebuilding the enclosing state.
+- Adds a second place where a Pydantic `ValidationError` can be raised, and such
+  a message may quote the offending value. Three rules in the module docstring
+  keep it contained: state is never built directly from client input, a failure
+  here is a programming error and is allowed to crash, and callers log the
+  exception type only.
+- Diverges in letter from ADR-0005, which lists transition history as
+  backend-owned state. It remains backend-owned, in logs rather than in state.
+  The divergence is recorded in code but ADR-0005 is not amended.
+- The flat status enumeration does not prevent the rule engine from returning a
+  lifecycle value at the type level; the constraint is enforced by the
+  `RULE_ENGINE_STATUSES` check instead.
+
+## Non-decisions
+
+This ADR does not decide:
+
+- The transport contract in `app.schemas` or the matching frontend types
+- Transition rules, guards, loop caps, or retry caps
+- Where session state is stored, or how long it is kept
+- How mutually exclusive benefits are represented, which is deferred to the rule
+  engine because the exclusion sets depend on unreviewed official documents
+- Whether the action plan is stored or derived on demand
+- How question groups are formed or counted
+- How transient retrieval and model failures are marked
+- Whether a state schema version is needed, which depends on persistence
+
+---
+
+# ADR-0011：以 frozen Pydantic 模型表達 session workflow state
+
+- 狀態：已接受
+- 日期：2026-07-26
+
+> English version is in the first half of this document:
+> [Use Frozen Pydantic Models for Session Workflow State](#adr-0011-use-frozen-pydantic-models-for-session-workflow-state)
+
+## 背景
+
+ADR-0003 讓 state machine 控制整個流程，ADR-0005 則讓後端成為去識別化 session
+state 的權威擁有者。但兩份 ADR 都沒有說這份 state 在程式裡長什麼樣。
+
+這個形狀必須先定案，後端其他工作才能往下走。`app.schemas` 的對外契約是它的投影、
+state machine 讀取並改寫它、規則引擎把判定結果寫進它。形狀沒定之前，三個模組與
+另外兩位貢獻者都被卡住。
+
+這個形狀還必須承載兩項容易流失的約束。ADR-0007 規定自由文字抽取後即丟棄，所以
+不能有任何欄位誘使人塞入句子。ADR-0005 規定直接識別資料留在使用者裝置，所以不能
+有任何欄位存放身分資料。把這些規則寫成文字說明在本 repository 已經證實不夠 ——
+這正是 `app.observability.logging` 選擇用程式而不是文件來強制欄位 allowlist 的原因。
+
+## 候選方案
+
+1. **標準庫 dataclass**，讓 orchestration 不依賴第三方型別。
+2. **可變的 Pydantic 模型**，每一步直接對它要改的欄位賦值。
+3. **frozen Pydantic 模型**，每一步都產生一個新的 state 物件。
+
+另有一項相關選擇，適用於項目狀態：用**一層扁平的列舉**同時涵蓋規則結果與項目
+生命週期，或用**兩層結構**把「是否已定案」與四種判定值分開。
+
 ## 決定
 
 採用方案 3，並拆成六條規則。
@@ -161,33 +236,26 @@ Backend README 的 framework-neutral 原則已納入考量，判定為不適用�
 `log_event` 已經接受 `state`、`next_state`、`transition` 與 `guard`，而目前沒有任何
 轉換需要讀取歷程。在 state 裡再存一份等於把同一件事記錄兩次。
 
-## Consequences
+## 修訂一：項目帶結構化的金額（2026-07-26）
 
-### Positive
+`CandidateItem` 的第一版沒有地方放金額，會出現「判定為符合但金額傳不到畫面」的情況。
 
-- Unblocks the transport contract, the state machine, and the rule engine, which
-  three separate tasks depend on.
-- Makes two privacy rules structural rather than advisory, and testable.
-- Confines workflow state changes to one module, so an unexpected state can be
-  traced to a single file.
-- Keeps a single declaration style across the backend.
-- Allows several items to be eligible at once, matching the result screen.
+候選方案：照抄規則引擎的 `amount` 加 `amount_label`；存單一 `amount` 加幣別；
+或存上下界、發放性質與幣別。
 
-### Negative
+**決定：存上下界、發放性質與幣別。** `CandidateItem` 新增 `amount_min`、
+`amount_max`、`amount_period`、`amount_currency`，並新增 `AmountPeriod` 列舉，
+涵蓋一次性、按月與按年。
 
-- Every change needs `model_copy(update=...)`, which is more verbose than
-  assignment, and nested updates require rebuilding the enclosing state.
-- Adds a second place where a Pydantic `ValidationError` can be raised, and such
-  a message may quote the offending value. Three rules in the module docstring
-  keep it contained: state is never built directly from client input, a failure
-  here is a programming error and is allowed to crash, and callers log the
-  exception type only.
-- Diverges in letter from ADR-0005, which lists transition history as
-  backend-owned state. It remains backend-owned, in logs rather than in state.
-  The divergence is recorded in code but ADR-0005 is not amended.
-- The flat status enumeration does not prevent the rule engine from returning a
-  lifecycle value at the type level; the constraint is enforced by the
-  `RULE_ENGINE_STATUSES` check instead.
+- 用兩個上下界，因為 catalog 本來就把 `min_amount` 與 `max_amount` 當成兩個欄位。
+  單一固定金額時兩者填相同的值。
+- 不放 `amount_label`，因為給人看的文字屬於前端，與問題文案沿用同一條分界。
+- `amount_period` 屬於形狀的一部分，因為「5,000 元」與「每月 5,000 元」無法只從
+  數字分辨。
+- 行政事項通常整組金額欄位留空。
+
+包裝規則引擎的轉接層必須把它的單一 `amount` 映射到兩個上下界，並從規則欄位取得
+發放性質。
 
 ## 後果
 
@@ -211,20 +279,6 @@ Backend README 的 framework-neutral 原則已納入考量，判定為不適用�
 - 扁平的狀態列舉無法在型別層面阻止規則引擎回傳生命週期值；該約束改由
   `RULE_ENGINE_STATUSES` 的檢查強制。
 
-## Non-decisions
-
-This ADR does not decide:
-
-- The transport contract in `app.schemas` or the matching frontend types
-- Transition rules, guards, loop caps, or retry caps
-- Where session state is stored, or how long it is kept
-- How mutually exclusive benefits are represented, which is deferred to the rule
-  engine because the exclusion sets depend on unreviewed official documents
-- Whether the action plan is stored or derived on demand
-- How question groups are formed or counted
-- How transient retrieval and model failures are marked
-- Whether a state schema version is needed, which depends on persistence
-
 ## 未決事項
 
 本 ADR 不決定：
@@ -238,9 +292,11 @@ This ADR does not decide:
 - 檢索與模型的暫時性失敗如何標記
 - 是否需要 state schema 版本 —— 取決於持久化方案
 
+---
+
 ## Reference
 
 - [ADR-0003: Use Policy-Governed Hybrid Orchestration](0003-policy-governed-hybrid-orchestration.md)
 - [ADR-0005: Split Client and Server Session State](0005-split-client-server-session-state.md)
 - [ADR-0007: Limit Data Retention and Egress](0007-limit-data-retention-and-egress.md)
-- [ADR-0009: Use a Provenance-First Local Benefit Catalog](0009-use-local-provenance-first-benefit-catalog.md)
+- [ADR-0010: Use a Provenance-First Local Benefit Catalog](0010-use-local-provenance-first-benefit-catalog.md)

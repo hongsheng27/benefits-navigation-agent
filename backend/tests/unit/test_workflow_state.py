@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from app.orchestration.state import (
     RULE_ENGINE_STATUSES,
+    AmountPeriod,
     CandidateItem,
     Citation,
     DecisiveCondition,
@@ -226,3 +227,49 @@ def test_session_level_exits_are_distinct_from_item_level_review() -> None:
     """找不到官方依據只標記單一項目，不會讓整次諮詢停止。"""
     assert "missing_official_evidence" not in {reason.value for reason in ExitReason}
     assert ItemStatus.NEEDS_HUMAN_REVIEW in RULE_ENGINE_STATUSES
+
+
+def test_amount_is_absent_until_a_rule_supplies_one() -> None:
+    item = CandidateItem(item_id="death_registration", kind=ItemKind.ADMINISTRATIVE)
+
+    assert item.amount_min is None
+    assert item.amount_max is None
+    assert item.amount_period is None
+    assert item.amount_currency is None
+
+
+def test_a_fixed_amount_repeats_the_same_bound() -> None:
+    item = CandidateItem(
+        item_id="funeral_benefit",
+        kind=ItemKind.BENEFIT,
+        status=ItemStatus.ELIGIBLE,
+        amount_min=10000,
+        amount_max=10000,
+        amount_period=AmountPeriod.ONE_TIME,
+        amount_currency="TWD",
+    )
+
+    assert item.amount_min == item.amount_max == 10000
+    assert item.amount_period is AmountPeriod.ONE_TIME
+
+
+def test_a_ranged_monthly_amount_keeps_both_bounds() -> None:
+    """資料層的 min_amount 與 max_amount 是兩個欄位，範圍不應被壓成單一數字。"""
+    item = CandidateItem(
+        item_id="survivor_pension",
+        kind=ItemKind.BENEFIT,
+        status=ItemStatus.ELIGIBLE,
+        amount_min=3000,
+        amount_max=8000,
+        amount_period=AmountPeriod.MONTHLY,
+        amount_currency="TWD",
+    )
+
+    assert (item.amount_min, item.amount_max) == (3000, 8000)
+    assert item.amount_period is AmountPeriod.MONTHLY
+
+
+def test_no_display_ready_amount_text_is_stored() -> None:
+    """金額文案屬於前端。後端不得出現 amount_label 這類欄位。"""
+    assert "amount_label" not in CandidateItem.model_fields
+    assert "amount_text" not in CandidateItem.model_fields

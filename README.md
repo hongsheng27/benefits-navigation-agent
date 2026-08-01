@@ -77,6 +77,28 @@ UNDERSTAND_EVENT
 - RAG 只使用官方文件，回答需保留來源。
 - Entitlement graph 只描述福利與機關的關聯；MVP 不做完整 GraphRAG。
 - Agent 只能呼叫目前狀態允許的工具，並限制最大迭代次數。
+- Relevance scoring 用結構化欄位匹配做 deterministic 排序，不依賴 LLM。
+
+### Relevance Scoring（相關性評分）
+
+當可能符合的方案超過一筆時，系統用結構化欄位匹配為每筆方案計算相關性分數
+（0–100），越高代表越可能適用。評分完全基於已知欄位比對，不呼叫 LLM，可解釋。
+
+評分因子與權重：
+
+| 因子 | 權重 | 說明 |
+| --- | ---: | --- |
+| 縣市吻合 | +25 | 使用者所在縣市 = 方案適用縣市 |
+| 亡者身分吻合 | +20 | 亡者身分在方案資格清單中 |
+| 骨灰/骨骸類型吻合 | +15 | 使用者類型在方案可適用列表中 |
+| 環保葬需求吻合 | +15 | 方案需要環保葬，使用者已完成或計畫中 |
+| 在申請期限內 | +10 | 使用者天數未超過方案期限 |
+| 受理期間內 | +5 | 目前日期在方案開放申請期間 |
+| 不限設籍 | +5 | 方案不要求設籍，對非本地使用者友善 |
+| 有金額資訊 | +5 | 資料完整度加分 |
+
+評分後結果按分數高到低排序，搜尋範圍過大時（500+ 筆），未來可疊加 embedding
+語意搜尋做二次精篩。
 
 ## 暫定技術棧
 
@@ -86,87 +108,143 @@ UNDERSTAND_EVENT
 | Backend                   | Python、Pydantic、boto3                                                 | 暫定；API、結構化資料與 AWS 整合                        |
 | Backend topology          | Modular monolith                                                        | **已決定**；模組分離，單一 deployment unit              |
 | API framework             | FastAPI                                                                 | **已決定**；核心 application logic 不依賴 framework     |
-| LLM                       | Amazon Bedrock 上的模型                                                 | **後續決定**；chat 與 embedding model 待實測            |
-| Agent orchestration       | Policy-governed hybrid                                                  | **已決定**；state machine 控制，Agent 僅限指定節點      |
-| Agent SDK                 | Strands Agents + Amazon Bedrock                                         | **Trial / 可逆**；包在自有 `AgentRunner` interface 後方 |
+| LLM                       | 目前 Gemini（`gemma-4-31b-it`），目標 Amazon Bedrock                    | **已實作**；隔離在自有 LLM port 後方，換廠商只動一個檔案 |
+| Agent orchestration       | Policy-governed hybrid                                                  | **已決定**；state machine 控制，模型僅限兩個指定節點     |
+| Agent SDK                 | 無 —— 不做 agent 迴圈                                                   | **已決定**；改用窄的 LLM port，見 ADR-0015              |
 | Agent hosting             | Amazon Bedrock AgentCore Runtime                                        | **後續決定**；先確認比賽帳號權限與現場可用性            |
-| Agent tools               | `resolve_life_event`、`retrieve_official_rules`、`evaluate_eligibility` | MVP 暫定三個核心工具                                    |
+| Agent tools               | 無 —— 模型沒有工具可呼叫                                                | **已決定**；模型只做「聽懂事件」與「翻成白話」兩件事     |
 | Document storage          | Amazon S3                                                               | 暫定；存放官方文件與處理後資料                          |
 | RAG                       | Amazon Bedrock Knowledge Bases 或自製 retrieval                         | **後續決定**；先固定 `Retriever` interface              |
-| Vector store / embeddings | 由 Bedrock Knowledge Bases 管理或自選方案                               | **後續決定**                                            |
-| Entitlement graph         | JSON / Python mapping 或 DynamoDB                                       | **開賽前決定**；MVP 不使用完整 GraphRAG / Neptune       |
-| Eligibility rules         | Python / JSON 規則 + Pydantic validation                                | 暫定；規則判斷必須是 deterministic                      |
+| Relevance scoring         | 結構化欄位匹配評分（本機 deterministic）                                | **已實作**；依使用者屬性對方案評分排序，見下方說明      |
+| Vector store / embeddings | 由 Bedrock Knowledge Bases 管理或自選方案                               | **後續決定**；資料量大時疊加語意搜尋                    |
+| Entitlement graph         | 本機 SQLite + JSON 結構化欄位                                           | **已決定**；SQLite 先行，8/1 後遷移 DynamoDB；見 ADR-0008 |
+| Eligibility rules         | 通用 Rule Engine + 宣告式 JSON 欄位                                     | **已決定**；規則是資料不是程式碼，engine 讀 DB 欄位判斷  |
 | Session state boundary    | Client / server split                                                   | **已決定**；direct identifiers 留在 client              |
-| Session persistence       | Memory、DynamoDB 或 AgentCore Memory                                    | **後續決定**；只保存去識別化 backend state              |
+| Session persistence       | 記憶體，不持久化                                                        | **MVP 已定**；結束即消失，保存政策見 ADR-0007           |
 | Safety                    | Dynamic tool allowlist、輸入驗證、human-in-the-loop                     | 暫定核心機制                                            |
 | Guardrails                | Amazon Bedrock Guardrails / AgentCore Policy                            | **後續決定**；依時間與帳號權限選用                      |
 | Observability             | Amazon CloudWatch                                                       | 暫定；記錄狀態轉換、tool call、延遲與錯誤               |
 | Deployment                | AWS Amplify、Lambda、AgentCore Runtime 的組合                           | **後續決定**；本機 vertical slice 跑通後再選            |
 | Infrastructure as Code    | AWS SAM、CDK 或手動設定                                                 | **後續決定**；Hackathon 以速度為優先                    |
-| Testing                   | pytest；前端測試工具待定                                                | 暫定；以 eligibility 與 end-to-end evaluation 為優先    |
+| Testing                   | pytest；前端測試工具待定                                                | **已決定**；以 eligibility 與 end-to-end evaluation 為優先 |
+
+### 技術棧名詞白話說明
+
+以下補充說明技術棧表格中各項的實際功能，特別是標示「後續決定」的部分：
+
+| 項目 | 白話說明 |
+| --- | --- |
+| **LLM** | 讓系統能「聽懂」使用者的話、產生白話回答的 AI 模型。目前接自己的 Gemini 金鑰（已實測可用），目標是換成 AWS Bedrock。呼叫方式關在一個介面後面，換模型只動一個檔案。 |
+| **Agent SDK** | **不用了。** 原本打算用 Strands 做一個「會自己決定下一步」的 agent。後來判定不做 — 我們只有兩個問一次答一次的任務，而讓模型能自己呼叫功能會開出一條它可以影響資格判定的路。見 ADR-0015。 |
+| **Agent hosting (AgentCore)** | 讓 Agent 跑在 AWS 上面（不是跑在你的電腦）。是否用要看比賽帳號有沒有開放權限。 |
+| **Document storage (S3)** | 雲端檔案儲存。目前用本機資料夾放 HTML；8/1 後改放 S3，讓所有人都讀得到。 |
+| **RAG (Knowledge Bases)** | 語意搜尋 — 讓系統用「意思相近」來找資料，不只靠關鍵字。資料量少時用 SQL + 評分就夠，量大時才需要。 |
+| **Vector store / embeddings** | RAG 的底層技術。把文字轉成數字向量，比較向量距離來判斷「意思接不接近」。需要 Bedrock embedding model，8/1 後才能用。 |
+| **Guardrails** | AI 的安全圍欄 — 防止 AI 輸出個資、亂下結論、回答無關問題。目前靠 state machine 控制；8/1 後可再疊一層 AWS 提供的內容過濾。 |
+| **Observability (CloudWatch)** | 系統監控 — 記錄每次狀態轉換、tool 呼叫、回應時間、錯誤。用來 debug 和追蹤效能。部署到 AWS 後才需要。 |
+| **Deployment** | 怎麼讓別人用你的系統。目前只跑在本機；比賽當天需要放到 AWS 上讓評審連得到。Amplify 放前端、Lambda 放後端 API。 |
+| **Infrastructure as Code** | 用程式碼一鍵建立 AWS 資源（S3 bucket、Lambda、資料庫等），不用手動去 console 點。Hackathon 趕時間可能先手動，之後再補。 |
+| **Session persistence** | 使用者跟系統的對話狀態要不要存起來。MVP 決定不存 — 關掉就消失，避免處理個資保存問題。 |
 
 ## 初步檔案結構
 
-以下 MVP 骨架已建立在 repository 中。原則是讓四位組員可以分別處理前端、
+以下是目前 repository 的實際結構。原則是讓四位組員可以分別處理前端、
 Agent / backend、RAG / 政府文件與規則 / evaluation，並降低互相修改同一檔案的機會。
-目前多數檔案只是 package marker 或職責說明，尚不代表功能已完成。
 
 ```text
 .
-├── README.md
-├── .env.example                    # 所需環境變數名稱，不放真實密鑰
+├── README.md                           # 專案總覽、架構、技術棧
+├── AGENTS.md                           # AI agent 行為規範（含 AWS 時程限制）
+├── CONTRIBUTING.md                     # Commit 格式與協作慣例
+├── .env.example                        # 所需環境變數名稱，不放真實密鑰
 ├── .gitignore
-├── frontend/
+│
+├── frontend/                           # React 前端
 │   └── src/
-│       ├── api/                    # Backend API client
-│       ├── components/             # 對話、問題卡、福利結果、來源與 checklist
-│       ├── pages/                  # 主要頁面
-│       ├── types/                  # 前後端共用資料形狀的 TypeScript 版本
-│       └── ...                     # 選定套件版本後再初始化 React app
-├── backend/
-│   ├── README.md
+│       ├── api/
+│       │   └── client.ts              # Backend API client（目前只有健康檢查）
+│       ├── components/                 # 對話、問題卡、福利結果、來源與 checklist
+│       ├── pages/
+│       │   └── HomePage.tsx           # 人生事件輸入頁
+│       └── types/
+│           └── session.ts             # 對外契約的 TypeScript 版本
+│
+├── backend/                            # Python 後端（FastAPI modular monolith）
 │   ├── app/
-│   │   ├── main.py                 # FastAPI application 入口
-│   │   ├── api/                    # Session、message、result endpoints
-│   │   ├── schemas/                # Pydantic request / response / domain models
+│   │   ├── main.py                     # FastAPI application 入口
+│   │   ├── config.py                   # 環境變數設定
+│   │   ├── api/
+│   │   │   ├── health.py              # GET /health
+│   │   │   ├── sessions.py            # 四個 session 端點（只做傳輸）
+│   │   │   ├── errors.py              # 錯誤轉成契約形狀，不外洩使用者輸入
+│   │   │   └── implementation.py      # 宣告哪些能力還沒實作（之後移除）
+│   │   ├── schemas/
+│   │   │   └── session.py             # 對外的請求與回應形狀
 │   │   ├── orchestration/
-│   │   │   ├── state.py            # Workflow state 定義
-│   │   │   ├── state_machine.py    # 狀態轉換與停止條件
-│   │   │   ├── agent_runner.py     # Framework-neutral AgentRunner interface
-│   │   │   └── strands_agent.py    # Trial：StrandsAgentRunner adapter
+│   │   │   ├── state.py               # Workflow state 的資料形狀
+│   │   │   ├── session_store.py       # 記憶體 session 儲存，2 小時過期
+│   │   │   ├── field_registry.py      # 欄位登記表讀取與驗證
+│   │   │   ├── missing_fields.py      # 缺漏欄位計算與主題分組
+│   │   │   ├── rule_adapter.py        # 規則引擎結果 → CandidateItem
+│   │   │   ├── determination.py       # 逐項判定組裝（目前為 stub）
+│   │   │   └── state_machine.py       # 狀態轉換、守門條件、自動推進、迴圈護欄
 │   │   ├── tools/
-│   │   │   ├── resolve_life_event.py
-│   │   │   ├── retrieve_official_rules.py
-│   │   │   └── evaluate_eligibility.py
-│   │   ├── retrieval/              # 文件切分、metadata filter、citation 組裝
-│   │   ├── rules/                  # Deterministic eligibility rulesｓ
-│   │   ├── privacy/                # PII 偵測、去識別化與欄位 allowlist
-│   │   ├── services/               # Bedrock、S3、DynamoDB 等 AWS adapters
-│   │   └── observability/          # Structured logging、trace 與 metrics
+│   │   │   ├── resolve_life_event.py      # Tool：辨識人生事件
+│   │   │   ├── retrieve_official_rules.py # Tool：檢索官方規則
+│   │   │   └── evaluate_eligibility.py    # Tool：呼叫 Rule Engine 判斷資格
+│   │   ├── rules/
+│   │   │   └── engine.py              # 通用規則引擎（讀 DB 結構化欄位做判斷）
+│   │   ├── retrieval/                  # 文件切分、metadata filter、citation 組裝
+│   │   ├── privacy/                    # PII 偵測、去識別化與欄位 allowlist
+│   │   ├── services/
+│   │   │   ├── benefit_catalog.py     # SQLite schema 定義與 catalog helpers
+│   │   │   ├── source_connector.py    # 官方頁面下載與同步紀錄
+│   │   │   └── link_discovery.py      # 從 HTML 找出子連結、排序候選
+│   │   └── observability/
+│   │       └── logging.py             # Structured logging
 │   └── tests/
-│       ├── unit/                   # Rules、state transitions、privacy tests
-│       └── integration/            # Tool、RAG 與 API integration tests
+│       ├── unit/                       # 規則、狀態轉換、隱私、來源連接器測試
+│       └── integration/                # Tool、RAG 與 API integration tests
+│
 ├── data/
-│   ├── benefits/                   # 福利定義、負責機關與所需欄位
-│   ├── entitlement_graph/          # 跨福利 / 機關的 curated relations
-│   ├── document_metadata/          # 官方來源 URL、發布機關、日期與版本Ｐ
-│   └── evaluations/                # 正常、邊界與不符合資格的測試案例
+│   ├── benefit_discovery/              # 候選發現流程的設定與產出
+│   │   ├── death_benefit_first_batch.v0.1.json   # 人工核准的第一批頁面清單
+│   │   ├── death_benefit_keywords.v0.2.json      # 候選排序關鍵字
+│   │   └── extracted_candidates.v0.1.json        # 抽取後的結構化候選（供人工審查）
+│   ├── source_registry/                # 來源白名單設定
+│   │   └── initial_sources.v0.1.json   # 初始登記的官方來源
+│   ├── evaluations/                    # 正常、邊界與不符合資格的測試案例
+│   └── local/                          # 本機產物（不進 Git）
+│       ├── government_oid.db           # SQLite 資料庫（所有資料表都在這）
+│       ├── source_documents/           # 下載的官方 HTML 檔案
+│       └── discovered_links/           # 候選連結 JSON
+│
 ├── scripts/
-│   ├── ingest_documents.py         # 官方文件清理、切分與匯入
-│   ├── validate_rules.py           # 規則與資料 schema 檢查
-│   └── run_evaluation.py           # 批次執行 evaluation cases
-├── infra/                          # SAM / CDK；選型確定後再建立內容
+│   ├── import_government_oid.py        # 下載並匯入政府機關 OID 到 SQLite
+│   ├── init_benefit_catalog.py         # 建立 catalog 所有資料表
+│   ├── sync_benefit_sources.py         # 同步指定入口頁（下載 HTML）
+│   ├── discover_benefit_links.py       # 從入口頁產生子連結候選清單
+│   ├── fetch_reviewed_benefit_pages.py # 只下載人工核准的政府頁面
+│   ├── extract_benefit_candidates.py   # 從 HTML 解析結構化候選資料
+│   ├── load_candidates_to_db.py        # 把候選寫入 benefit_programs 表
+│   ├── review_benefit_status.py        # CLI：列出待審查方案與缺少欄位
+│   ├── review_server.py                # 啟動本機審查網頁介面（FastAPI + HTML）
+│   └── review_ui.html                  # 審查介面前端（瀏覽、編輯、Verify）
+│
 ├── docs/
-│   ├── positioning.md              # 產品定位與差異化判準
-│   ├── architecture.md             # 完整架構與資料流程
-│   ├── decisions/                  # Architecture Decision Records (ADR)
-│   └── official-sources.md         # MVP 採用的政府文件清單
-└── tmp/                            # 本機 PDF 提取 / 測試產物，不作為正式資料來源
+│   ├── architecture-overview.html      # 視覺化架構與資料庫說明
+│   ├── aws_migration_guide.md          # AWS 遷移集中指南（唯一來源）
+│   ├── official-sources.md             # MVP 採用的政府文件清單
+│   ├── decisions/                      # Architecture Decision Records (ADR)
+│   └── benefit-discovery/              # 搜尋與人工審查規格
+│
+├── record/                             # 進度紀錄（含日期）
+├── infra/                              # SAM / CDK；選型確定後再建立內容
+└── tmp/                                # 本機暫存，不作為正式資料來源
 ```
 
-選用功能如 DynamoDB、Guardrails 與 IaC，等選型確定後再補。大型原始 PDF
-和處理產物原則上放 S3 或本機 `tmp/`，Git 只保存來源 metadata、可審查的規則與小型
-evaluation fixtures。
+`data/local/` 下的 SQLite、HTML 與 JSON 不進 Git，可由 `scripts/` 中的指令重建。
+Git 保存的是程式碼、schema、設定、關鍵字、測試案例與進度紀錄。
 
 ## 本機政府機關 OID registry
 
@@ -197,7 +275,7 @@ SQLite 只作為可重新產生的本機與 demo reference store，不存放使�
 識別資料或 credentials，也不代表已選定正式 AWS database。未來若部署需要 shared
 writes 或 horizontal scaling，應讓 DynamoDB 或其他已同意的 adapter 使用相同的
 normalized OID record contract。詳見
-[ADR-0008](docs/decisions/0008-use-generated-sqlite-for-government-oid.md)。
+[ADR-0009](docs/decisions/0009-use-generated-sqlite-for-government-oid.md)。
 
 ## 本機補助來源與方案 catalog
 
@@ -247,7 +325,7 @@ python3 scripts/fetch_reviewed_benefit_pages.py
 Catalog 與原本 OID 專用的 `sync_runs` 分開，使用 `source_sync_runs` 保存福利來源的同步
 狀態。方案只有在分類、驗證時間及官方證據齊全後才能標為 `verified`；機關角色也必須
 附來源文件，不能把資料發布機關直接視為補助主管機關。詳見
-[ADR-0009](docs/decisions/0009-use-local-provenance-first-benefit-catalog.md)。
+[ADR-0010](docs/decisions/0010-use-local-provenance-first-benefit-catalog.md)。
 
 ## Agent Orchestration：已定案
 
@@ -258,14 +336,20 @@ Catalog 與原本 OID 專用的 `sync_runs` 分開，使用 `source_sync_runs` �
 - **Agent / LLM** 只負責人生事件理解、去識別化欄位提取、建議下一個必要問題與 grounded explanation。
 - **Deterministic rule engine** 擁有 `eligible`、`ineligible`、`needs_information` 與 `needs_human_review` 的資格判斷權。
 
-Agent 不能直接決定福利資格，也不能繞過狀態檢查、PII 邊界或人工確認。
-Bounded agentic steps 暫定以 **Strands Agents + Amazon Bedrock** 實作，但只能透過
-自有 `AgentRunner` interface 接入；state machine、schemas、tools、rules 與 session state
-不得依賴 Strands-specific types。若 spike 無法穩定限制 tools、產生結構化輸出或清楚
-除錯，則改用 direct Bedrock implementation。詳見
+Agent 不能直接決定福利資格，也不能繞過狀態檢查、PII 邊界或人工確認。詳見
 [ADR-0003](docs/decisions/0003-policy-governed-hybrid-orchestration.md)。
-實作選型與退出條件詳見
-[ADR-0004](docs/decisions/0004-trial-strands-agent-runner.md)。
+
+**沒有 agent 迴圈，模型也沒有工具可以呼叫。** 原本規劃用 Strands 做一個受限制的
+agent 迴圈（[ADR-0004](docs/decisions/0004-trial-strands-agent-runner.md)），
+2026-07-30 改為一個窄的 LLM port
+（[ADR-0015](docs/decisions/0015-narrow-llm-port-instead-of-agent-loop.md)）。理由是
+系統裡只有兩個模型任務、兩個都是單次問答；而給模型工具就是開出一條它可以影響資格判定
+的路，**不存在的能力不需要用 prompt 或護欄去防守**。
+
+模型呼叫關在 `backend/app/llm/` 底下：`port.py` 定形狀、`gemini.py` 是目前的實作
+（唯一 import `httpx`、唯一知道 Gemini 存在的模組）、`fake.py` 讓測試不需要網路。
+換成 Bedrock 只需要新增一個 adapter 並改 `factory.py` 一行，遷移步驟寫在
+[AWS 遷移指南](docs/aws_migration_guide.md)。
 
 ## 四人初步分工
 
@@ -345,4 +429,7 @@ Session persistence 技術、精確欄位、保存期限與刪除政策仍待決
 
 ## 專案狀態
 
-Planning and architecture phase。尚未開始鎖定最終技術選型。
+決賽為 **8/1–8/2 現場 30 小時開發**。架構方向與隱私邊界已定案,目前重心在
+補齊 `data/` 內容、驗證 Bedrock 權限與賽前整合演練。
+
+比賽條件、MVP 範圍與交付分工見 [hackathon-plan.md](docs/hackathon-plan.md)。

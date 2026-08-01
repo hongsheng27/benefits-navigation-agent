@@ -33,6 +33,35 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
     ]
 
+    # --- Language model ----------------------------------------------------
+    #
+    # Empty means no live model. The backend then falls back to an offline
+    # implementation instead of failing to start, so a teammate without a key
+    # can still run everything (ADR-0015).
+
+    gemini_api_key: str = ""
+    """Gemini API key. Never commit a real value; keep it in a local `.env`."""
+
+    gemini_model_id: str = "gemma-4-31b-it"
+    """Model identifier, configurable because models get retired.
+
+    Hardcoding it means the backend breaks one day for a reason that is not
+    visible in the error.
+
+    Both `gemma-4-31b-it` and `gemini-3.6-flash` were verified against the live
+    API on 2026-07-30: each returns schema-conforming JSON through the
+    interactions endpoint, and each correctly answers `unrecognised` for a
+    description that maps to no registered event.
+    """
+
+    def has_live_language_model(self) -> bool:
+        """Whether a real model is configured.
+
+        `strip()` because an accidental `GEMINI_API_KEY=" "` in `.env` should
+        count as absent rather than produce a 401 on every request.
+        """
+        return bool(self.gemini_api_key.strip())
+
 
 @lru_cache
 def get_settings() -> Settings:
