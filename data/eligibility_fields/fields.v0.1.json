@@ -1,7 +1,32 @@
 {
-  "_comment": "欄位登記表種子資料。這幾筆是佔位用，正式欄位由政策資料負責人依法規決定。代號與選項沿用 MVP 情境（配偶過世），切點為暫定。",
+  "_comment": "欄位登記表種子資料。這些欄位是配偶過世與父親職災失能流程的離線 fixture，正式欄位仍須由政策資料負責人依法規審查。applicant_jurisdiction 為通用篩選欄位，用來收斂地方型補助。",
   "version": "0.1",
   "fields": [
+    {
+      "field_id": "applicant_jurisdiction",
+      "value_kind": "code",
+      "option_ids": ["TPE", "NWT", "TAO", "PEN", "OTHER_TW", "unsure"],
+      "required": true,
+      "purpose": "所在縣市決定有哪些地方型補助與受理窗口可對照",
+      "used_by": [
+        "funeral_benefit",
+        "survivor_pension",
+        "occupational_injury_recognition",
+        "unemployment_benefit"
+      ],
+      "topic_id": "location",
+      "status": "draft"
+    },
+    {
+      "field_id": "involuntary_job_loss",
+      "value_kind": "boolean",
+      "option_ids": [],
+      "required": true,
+      "purpose": "非自願離職才是失業給付常見門檻之一",
+      "used_by": ["unemployment_benefit"],
+      "topic_id": "employment_status",
+      "status": "draft"
+    },
     {
       "field_id": "deceased_insurance_type",
       "value_kind": "code",
@@ -31,16 +56,122 @@
     {
       "field_id": "applicant_age_band",
       "value_kind": "band",
-      "option_ids": [
-        "under_25",
-        "25_to_55",
-        "55_to_65",
-        "65_or_above"
-      ],
+      "option_ids": ["under_25", "25_to_55", "55_to_65", "65_or_above"],
       "required": true,
       "purpose": "遺屬年金有年齡條件，不同年齡區間適用不同規定",
       "used_by": ["survivor_pension"],
       "topic_id": "applicant_situation",
+      "status": "draft"
+    },
+    {
+      "field_id": "caregiver_relationship",
+      "value_kind": "code",
+      "option_ids": [
+        "relationship_spouse",
+        "relationship_child",
+        "relationship_parent",
+        "relationship_other_relative"
+      ],
+      "required": true,
+      "purpose": "代辦與部分支持方向會依照顧者和被照顧者的關係確認",
+      "used_by": ["caregiver_support_services"],
+      "topic_id": "care_relationship",
+      "status": "draft"
+    },
+    {
+      "field_id": "disability_cause",
+      "value_kind": "code",
+      "option_ids": [
+        "cause_occupational_injury",
+        "cause_general_accident",
+        "cause_illness",
+        "unsure"
+      ],
+      "required": true,
+      "purpose": "失能原因用來區分職災、一般意外與疾病的相關辦理方向",
+      "used_by": [
+        "occupational_injury_recognition_follow_up",
+        "occupational_accident_disability_benefit"
+      ],
+      "topic_id": "occupational_injury_and_insurance",
+      "status": "draft"
+    },
+    {
+      "field_id": "occupational_injury_recognition",
+      "value_kind": "code",
+      "option_ids": [
+        "injury_recognized",
+        "recognition_processing",
+        "recognition_not_applied",
+        "unsure"
+      ],
+      "required": true,
+      "purpose": "職災認定進度用來整理後續追蹤方向，不需要公司或事故細節",
+      "used_by": [
+        "occupational_injury_recognition_follow_up",
+        "occupational_accident_disability_benefit"
+      ],
+      "topic_id": "occupational_injury_and_insurance",
+      "status": "draft"
+    },
+    {
+      "field_id": "care_recipient_insurance_type",
+      "value_kind": "code",
+      "option_ids": [
+        "labor_insurance",
+        "occupational_accident_insurance",
+        "no_insurance",
+        "unsure"
+      ],
+      "required": true,
+      "purpose": "投保身分用來篩選可能相關的給付與受理方向",
+      "used_by": ["occupational_accident_disability_benefit"],
+      "topic_id": "occupational_injury_and_insurance",
+      "status": "draft"
+    },
+    {
+      "field_id": "disability_assessment_status",
+      "value_kind": "code",
+      "option_ids": [
+        "disability_certificate_obtained",
+        "disability_assessment_in_progress",
+        "disability_assessment_not_applied",
+        "unsure"
+      ],
+      "required": true,
+      "purpose": "身障鑑定進度用來整理身障服務與長照銜接方向",
+      "used_by": ["disability_assessment", "long_term_care_assessment"],
+      "topic_id": "disability_and_long_term_care",
+      "status": "draft"
+    },
+    {
+      "field_id": "current_care_arrangement",
+      "value_kind": "code",
+      "option_ids": [
+        "care_mostly_solo",
+        "care_shared_by_family",
+        "hired_caregiver",
+        "care_not_arranged"
+      ],
+      "required": true,
+      "purpose": "目前照顧分工用來整理喘息、家庭照顧者支持與人工協助方向",
+      "used_by": ["caregiver_support_services", "caregiver_support_contact"],
+      "topic_id": "caregiver_situation",
+      "status": "draft"
+    },
+    {
+      "field_id": "caregiver_employment_impact",
+      "value_kind": "code",
+      "option_ids": [
+        "left_job",
+        "reduced_hours",
+        "no_employment_change",
+        "considering_employment_change"
+      ],
+      "required": true,
+      "purpose": "照顧對工作的影響用來判斷是否整理就業支持方向",
+      "used_by": ["caregiver_employment_support"],
+      "topic_id": "caregiver_situation",
       "status": "draft"
     }
   ]

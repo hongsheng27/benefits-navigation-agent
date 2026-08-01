@@ -6,7 +6,13 @@
 - 高階資料模型：[data-model.md](../data-model.md)
 - 詳細目標 schema 與 contracts：[data-layer-rule-engine design](../../.kiro/specs/data-layer-rule-engine/design.md)
 - Workflow 實作說明：[backend overview](../backend/backend-overview.html)
-- 最後更新：2026-07-29
+- 最後更新：2026-08-02
+
+> **main × databaseV3 整合狀態**：FastAPI composition root 已把 SQLite／PostgreSQL
+> repositories 注入最新 main 的多事件與 LLM workflow；主流程不改由資料庫控制。
+> Workflow 測試仍可明確注入 fixture。Case 2 的七個候選項目目前仍是 fixture，尚未
+> 寫入 SQLite graph／Rule DSL；在完成 seed migration 前，本機資料庫不會自動產生同等結果。
+> Fixture 不能標成 `verified`，只有人工審查過的資料才能進入完整資格判定。
 
 > 程式碼描述目前實作；Accepted ADR 與 finalized spec 描述目標行為。兩者不一致時必須記錄 implementation gap，不能把目標文件當成已完成程式，也不能因 legacy code 存在而忽略 accepted architecture。
 
@@ -143,3 +149,10 @@ Refresh 必須先用 request-start committed state 建立 response，再非阻�
 - future shared-write、production storage 或 AWS service selection
 
 以上不得由單一 contributor 靜默決定。切換失敗時回到上一個受支援 schema與 last successful committed SQLite state，不回退成 JSON runtime。
+
+## 十、整合後的責任邊界
+
+- `main` 擁有使用者流程、LLM 事件萃取、複數事件確認、問答與送出時機。
+- database adapters 擁有 graph expansion、deterministic eligibility、evidence 與 coverage／refresh。
+- LLM 只萃取輸入或解釋結果，不得執行資格判定，也不得把 fixture 升成 `verified`。
+- 下一個資料任務是把 Case 2 fixture 以可審查的 seed migration 寫入 SQLite；完成前保留 fixture 供隔離測試使用。

@@ -1,4 +1,4 @@
-# ADR-0014: 以 RDS PostgreSQL 與 S3 作為 Hackathon 資料層目標
+# ADR-0017: 以 RDS PostgreSQL 與 S3 作為 Hackathon 資料層目標
 
 - Status: Accepted
 - Date: 2026-07-29

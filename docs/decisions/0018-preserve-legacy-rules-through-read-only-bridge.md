@@ -1,9 +1,9 @@
-# ADR-0015: 以唯讀 Bridge 保存 Legacy Rule Fields
+# ADR-0018: 以唯讀 Bridge 保存 Legacy Rule Fields
 
 - Status: Accepted
 - Date: 2026-07-29
 - Complements: [ADR-0013: 在 Repository 邊界後使用 SQLite 作為 Runtime 真相來源](0013-use-sqlite-runtime-behind-repositories.md)
-- Complements: [ADR-0014: 以 RDS PostgreSQL 與 S3 作為 Hackathon 資料層目標](0014-target-rds-postgresql-and-s3.md)
+- Complements: [ADR-0017: 以 RDS PostgreSQL 與 S3 作為 Hackathon 資料層目標](0017-target-rds-postgresql-and-s3.md)
 
 ## 背景
 

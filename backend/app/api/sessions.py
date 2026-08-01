@@ -22,6 +22,13 @@ from fastapi import APIRouter, Depends, Header, Request, Response, status
 from app.api.errors import ApiError
 from app.api.implementation import implementation_notice
 from app.application.composition import ApplicationDependencies
+from app.llm.port import LanguageModelPort
+from app.llm.tasks.answer_with_references import (
+    ExplanationUnavailableError,
+    ReferenceExcerpt,
+    answer_with_references,
+)
+from app.llm.tasks.resolve_life_event import LifeEventNotRecognisedError
 from app.observability.logging import log_event
 from app.orchestration import state_machine
 from app.orchestration.missing_fields import compute_question_groups
@@ -33,9 +40,12 @@ from app.orchestration.session_store import (
     SessionNotFoundError,
 )
 from app.orchestration.state import SessionState, WorkflowState
+from app.privacy.attribute_gate import InvalidAttributeValueError
 from app.schemas.session import (
     AdvanceRequest,
     ErrorCode,
+    ExplainRequest,
+    ExplainResponse,
     QuestionGroupView,
     SessionSnapshot,
 )
@@ -58,6 +68,16 @@ def get_dependencies(request: Request) -> ApplicationDependencies:
     Routes 不自行建立 adapters (Req 2.5)。
     """
     return request.app.state.dependencies
+
+
+def get_language_model(request: Request) -> LanguageModelPort:
+    """從應用程式取出語言模型。
+
+    在 `create_app()` 選一次，理由跟 store 一樣是隔離；另外也因為「有沒有金鑰」
+    在行程執行期間不會變，每次請求重新決定只會多出「這個請求用真模型、下個請求
+    悄悄用示範資料」的可能性。
+    """
+    return request.app.state.language_model
 
 
 def require_session_state(
@@ -132,6 +152,7 @@ def advance_session(
     store: Annotated[InMemorySessionStore, Depends(get_store)],
     state: Annotated[SessionState, Depends(require_session_state)],
     deps: Annotated[ApplicationDependencies, Depends(get_dependencies)],
+    language_model: Annotated[LanguageModelPort, Depends(get_language_model)],
 ) -> SessionSnapshot:
     """送一筆輸入，推進一步。"""
     try:
@@ -144,6 +165,17 @@ def advance_session(
             evidence_repository=deps.evidence_repository,
             source_refresh_service=deps.source_refresh_service,
             coverage_scope=CoverageScope(source_ids=(), domain_tags=()),
+            # 有 `BEDROCK_MODEL_ID` 就走 Bedrock，沒有才使用離線示範實作。
+            # 選擇在 `create_app()` 做一次，見 `llm/factory.py`。
+            #
+            # 為什麼沒有金鑰時要落回一個「會成功」的示範實作，而判定的示範資料卻不注入
+            # （ADR-0014 讓判定維持誠實的「需人工協助」）：兩者後果不對等。
+            # 「需人工協助」是使用者可以據此行動的結局；事件辨識失敗會讓產品在第一步就
+            # 停住，什麼都做不了。
+            #
+            # 這件事不是默默發生的 —— 回應裡的 `implementation.pending` 帶著
+            # `life_event_extraction`，而啟動時也會記一筆 `language_model_selected`。
+            language_model=language_model,
         )
     except state_machine.InvalidTransitionError as error:
         raise ApiError(
@@ -159,10 +191,28 @@ def advance_session(
             field_ids=error.field_ids,
             current_state=state.workflow_state,
         ) from error
+    except InvalidAttributeValueError as error:
+        # 同樣只帶欄位代號。不合法的值本身不會離開後端。
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.INVALID_FIELD_VALUE,
+            field_ids=error.field_ids,
+            current_state=state.workflow_state,
+        ) from error
     except state_machine.UnknownItemError as error:
         raise ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             ErrorCode.UNKNOWN_ITEM,
+            current_state=state.workflow_state,
+        ) from error
+    except LifeEventNotRecognisedError as error:
+        # 沒有把描述對應到已登記的事件。**這不是程式錯誤**，前端應該請使用者換個說法。
+        #
+        # 不帶 `field_ids`，因為問題不在某個欄位上；也不帶任何訊息文字，因為那可能
+        # 引用使用者寫的內容。狀態維持在 `understand_event`，使用者可以直接再送一次。
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.EVENT_NOT_RECOGNIZED,
             current_state=state.workflow_state,
         ) from error
 
@@ -185,6 +235,49 @@ def read_current_session(
 ) -> SessionSnapshot:
     """查目前狀態。前端輪詢時用這個。"""
     return _snapshot(state)
+
+
+@router.post("/current/explain", response_model=ExplainResponse)
+def explain_with_references(
+    payload: ExplainRequest,
+    state: Annotated[SessionState, Depends(require_session_state)],
+    language_model: Annotated[LanguageModelPort, Depends(get_language_model)],
+) -> ExplainResponse:
+    """依參考摘錄回答諮詢後問題。
+
+    需要有效 session（持有 `X-Session-Id`），但不推進 workflow，也不把問題寫入 state。
+    失敗回 `explanation_unavailable`，讓前端可退回本機 stub。
+    """
+    references = tuple(
+        ReferenceExcerpt(
+            title=item.title,
+            body=item.body,
+            source_url=item.source_url,
+        )
+        for item in payload.references
+    )
+    try:
+        answer = answer_with_references(
+            payload.question,
+            references,
+            model=language_model,
+            panel_kind=payload.panel_kind,
+        )
+    except ExplanationUnavailableError as error:
+        raise ApiError(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            ErrorCode.EXPLANATION_UNAVAILABLE,
+            current_state=state.workflow_state,
+        ) from error
+
+    log_event(
+        "session_explanation_served",
+        session_id=state.session_id,
+        state=state.workflow_state.value,
+        tool="answer_with_references",
+        source_count=len(references),
+    )
+    return ExplainResponse(answer=answer)
 
 
 @router.delete("/current", status_code=status.HTTP_204_NO_CONTENT)

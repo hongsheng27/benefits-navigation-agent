@@ -219,6 +219,20 @@ class TestBuildDependenciesWithFullOverrides:
 class TestBuildDependenciesWithoutOverrides:
     """When no overrides, SQLite must be validated. Failure → config error."""
 
+    def test_default_db_path_creates_ignored_local_parent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A clean clone can start without a pre-existing data/local folder."""
+        from app.application import composition
+
+        default_path = tmp_path / "data" / "local" / "government_oid.db"
+        monkeypatch.setattr(composition, "_DEFAULT_DB_PATH", default_path)
+
+        dependencies = composition.build_dependencies()
+
+        assert default_path.is_file()
+        assert isinstance(dependencies, ApplicationDependencies)
+
     def test_raises_on_invalid_db_path(self) -> None:
         """Non-existent DB path raises DependencyConfigurationError."""
         with pytest.raises(DependencyConfigurationError) as exc_info:

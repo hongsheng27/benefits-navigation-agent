@@ -1,0 +1,171 @@
+{
+  "_comment": "生命事件登記表種子資料。代號與範圍為暫定，正式清單由政策資料負責人依 entitlement graph 決定。這份檔案是模型唯一被允許回答的事件集合：不在這裡的代號會被拒絕，模型也拿不到那個選項。description 是給模型看的判斷依據（宜含常見口語說法），不是給使用者看的文案。",
+  "version": "0.1",
+  "events": [
+    {
+      "event_id": "spouse_death",
+      "description": "配偶過世：先生、太太、老婆、老公、另一半、伴侶走了／過世／去世／往生／剛辦完喪事；想問喪葬、遺屬、健保身分等（有明確說是配偶或夫妻關係）",
+      "status": "draft"
+    },
+    {
+      "event_id": "parent_death",
+      "description": "父母過世：爸爸、媽媽、父親、母親、雙親、公婆、岳父母走了／過世／去世；在幫長輩辦後事、問喪葬或相關給付（有明確說是父母或公婆／岳父母）",
+      "status": "draft"
+    },
+    {
+      "event_id": "child_death",
+      "description": "子女過世：兒子、女兒、小孩、孩子、寶寶、胎兒或成年子女過世／夭折／沒了；父母在處理後事或相關補助",
+      "status": "draft"
+    },
+    {
+      "event_id": "sibling_death",
+      "description": "兄弟姊妹過世：哥哥、弟弟、姊姊、姐姐、妹妹、手足走了／過世；以手足身分處理後事或詢問可辦事項",
+      "status": "draft"
+    },
+    {
+      "event_id": "other_relative_death",
+      "description": "親人或家人過世但未指明是配偶、父母、子女或兄弟姊妹：只說親人、家人、家裡有人、阿公阿嬤、爺爺奶奶、外公外婆、孫子、親戚過世／走了／辦喪事；或祖父母、孫子女、伯叔姑姨舅等其他親屬過世。無法判斷是誰時優先選此項，不要回 unrecognised",
+      "status": "draft"
+    },
+    {
+      "event_id": "job_loss",
+      "description": "失業或失去工作：被資遣、裁員、解雇、開除、合約到期沒續、公司倒了、非自願離職、突然沒工作、找不到工作、想領失業給付、就業保險、職訓或就業協助；也可說我失業了、因為照顧／變故丟掉工作。若重點是還有在職但放無薪假，改選 unpaid_leave；若同時提到家人職災，可與 occupational_injury 並選",
+      "status": "draft"
+    },
+    {
+      "event_id": "unpaid_leave",
+      "description": "無薪假或收入驟減但仍算有工作：減班休息、被放無薪假、工時砍半、薪水大幅變少、業績差領不到錢，尚未確定或尚未辦理失業",
+      "status": "draft"
+    },
+    {
+      "event_id": "occupational_injury",
+      "description": "工作相關受傷、失能或職災：上班受傷、做工受傷、工作中發生事故後失能、職業災害、職業傷害、通勤職災、工廠／工地意外、因公受傷需要職災給付、醫療或休養協助。若工作事故是失能的明確原因，將此項排在第一；若同時明確提到長期照顧或詢問長照，可再加 long_term_care_need；若同時提到自己失業，可再加 job_loss",
+      "status": "draft"
+    },
+    {
+      "event_id": "youth_employment_hardship",
+      "description": "青年求職或就業不穩：剛畢業找不到工作、初次求職碰壁、青年失業、想找職訓、青年就業方案、打工不穩需要就業協助（強調年輕／畢業／初次就業，而非中高齡被資遣）",
+      "status": "draft"
+    },
+    {
+      "event_id": "low_income_hardship",
+      "description": "收入太低或生活過不下去：沒錢、撐不住、付不出生活費、想辦低收入戶／中低收入戶、生活扶助、經濟困難、家計困頓（若主因是失業且在講失業給付，可選 job_loss；兩者都像時，以「生活扶助／低收入」為主則選此項）",
+      "status": "draft"
+    },
+    {
+      "event_id": "serious_illness",
+      "description": "生病或重大健康問題：我生病了、得了重病、癌症、開刀、住院、療養、重大傷病、醫療費負擔很重、身體很差需要補助或減免（尚未強調身心障礙證明或長照服務時選此項）。只說生病、還沒講病名也選此項，不要回 unrecognised",
+      "status": "draft"
+    },
+    {
+      "event_id": "disability_onset",
+      "description": "身心障礙或失能身分：身心障礙、身障手冊／證明、失能、殘障、行動不便需要輔具或身障福利；剛鑑定通過或想申請身心障礙相關服務（重點在障礙／失能身分，不是單純生病住院）",
+      "status": "draft"
+    },
+    {
+      "event_id": "long_term_care_need",
+      "description": "需要長期照顧服務：長照、失智、臥床、請外籍看護、居家照顧、日照、輔具租借、長照給付與服務；家人或自己需要被長期照顧（重點在長照資源，不是照顧者自己累垮）",
+      "status": "draft"
+    },
+    {
+      "event_id": "caregiver_burden",
+      "description": "家庭照顧者負擔過重：我在顧家人快撐不住、需要喘息服務、照顧者支持、自己也累病了、全職照顧沒人替手（重點在照顧者本人的負荷，不是被照顧者要申請長照項目）",
+      "status": "draft"
+    },
+    {
+      "event_id": "mental_health_crisis",
+      "description": "精神或心理危機：憂鬱、躁鬱、思覺失調、情緒崩潰、想不開、自殺風險、精神疾病就醫、心理諮商負擔、精神醫療與社會扶助管道",
+      "status": "draft"
+    },
+    {
+      "event_id": "elderly_living_hardship",
+      "description": "老人或長輩生活困難：獨居老人、長輩沒人顧、老年生活費不夠、老人就醫交通、敬老或老人福利、高齡生活支持（若主軸是長照服務選 long_term_care_need；若主軸是照顧者累垮選 caregiver_burden）",
+      "status": "draft"
+    },
+    {
+      "event_id": "pregnancy",
+      "description": "懷孕中尚未生產：懷孕、有喜、產檢、孕婦、孕期津貼、孕婦協助、待產準備（還沒生或剛報喜、重點在孕期）",
+      "status": "draft"
+    },
+    {
+      "event_id": "childbirth",
+      "description": "剛生產或生育給付：生了、剛生完、坐月子、生產、剖腹、生育給付、育兒津貼申請、新生兒相關補助（重點在生產當下或甫生產後的給付）",
+      "status": "draft"
+    },
+    {
+      "event_id": "childcare_hardship",
+      "description": "育兒生活或托育負擔：帶小孩很吃力、托嬰、托育、保母、育兒開銷太大、幼童照顧困難、需要托育或育兒相關補助（孩子已出生且重點在日常照顧，不是剛生產那一刻）",
+      "status": "draft"
+    },
+    {
+      "event_id": "school_expense_hardship",
+      "description": "就學或教育費用困難：學費、雜費、住宿費、補習、助學貸款、獎學金、就學補助、讀不起書、孩子上學負擔很重",
+      "status": "draft"
+    },
+    {
+      "event_id": "divorce",
+      "description": "離婚或分居剛發生／正在處理：離婚、離異、分開了、分居、結束婚姻、離婚後生活怎麼辦（若已是長期單親且主訴經濟困難，可選 single_parent_hardship）",
+      "status": "draft"
+    },
+    {
+      "event_id": "single_parent_hardship",
+      "description": "單親家庭生活或經濟困難：我是單親、一個人帶小孩、單親扶助、單親家庭補助、家計全靠自己（身分或處境已是單親，不限於剛離婚當下）",
+      "status": "draft"
+    },
+    {
+      "event_id": "domestic_violence",
+      "description": "家暴或人身安全危機：被打、家暴、家庭暴力、親密關係暴力、跟蹤騷擾、性侵害、不安全想離開、需要庇護所、保護令或急難協助",
+      "status": "draft"
+    },
+    {
+      "event_id": "special_family_circumstances",
+      "description": "特殊境遇家庭相關困境：喪偶後扶養子女、未婚懷孕／生子、配偶入獄、配偶長期生病或失蹤等造成的家庭特殊境遇扶助；若主要是家暴安全問題優先 domestic_violence，若主要是剛離婚優先 divorce",
+      "status": "draft"
+    },
+    {
+      "event_id": "housing_insecurity",
+      "description": "住的問題：繳不起房租、被趕、迫遷、房東要收回、租不到房子、快流落街頭、遊民、租金補貼、社會住宅、居住協助、暫時沒地方住（非天災／火災造成時選此項）",
+      "status": "draft"
+    },
+    {
+      "event_id": "natural_disaster",
+      "description": "天然災害受災：颱風、洪水、水災、土石流、地震、豪雨、風災後房子或生活受損，需要災害救助、慰問金或重建協助",
+      "status": "draft"
+    },
+    {
+      "event_id": "fire_or_accident",
+      "description": "火災或重大意外：家裡失火、火災、爆炸、車禍重大傷亡、意外事故導致受傷或住屋損毀、臨時無處可住，需要急難救助",
+      "status": "draft"
+    },
+    {
+      "event_id": "new_immigrant_hardship",
+      "description": "新住民或外籍配偶相關困難：新住民、外配、東南亞配偶、婚姻移民、語言不通、居留、生活或就業適應困難，需要新住民相關協助",
+      "status": "draft"
+    },
+    {
+      "event_id": "indigenous_welfare_need",
+      "description": "原住民身分相關福利：原住民、原民、族群身分的生活、就學、就業、住宅或其他原住民福利諮詢與申請",
+      "status": "draft"
+    },
+    {
+      "event_id": "incarceration_family",
+      "description": "家屬入監或服刑影響家計：家人坐牢、入獄、收容、在看守所或監獄，家裡少了收入或需要受刑人家庭扶助",
+      "status": "draft"
+    },
+    {
+      "event_id": "missing_family_member",
+      "description": "家屬失蹤或下落不明：家人失蹤、找不到人、離開很久音訊全無，家庭生活或經濟受影響需要協助",
+      "status": "draft"
+    },
+    {
+      "event_id": "veteran_support_need",
+      "description": "榮民或榮眷相關協助：榮民、榮譽、退除役官兵、榮家、就養、榮民生活或醫療相關福利",
+      "status": "draft"
+    },
+    {
+      "event_id": "youth_independence_hardship",
+      "description": "少年或青年自立生活困難：離開安置機構、離家自立、少年獨立生活、就學就業與生活費沒著落，需要少年生涯或自立支持（不同於一般青年求職，較偏自立／安置離開）",
+      "status": "draft"
+    }
+  ]
+}

@@ -246,14 +246,11 @@
 
 - [ ] 9. 實作逐項判定組裝（T10）
   - [ ] 9.1 建立 `backend/app/orchestration/determination.py`
-    - 現況（部分完成）：模組已存在，有 `find_ready_item_ids`、`find_undeclared_item_ids`、`evaluate_ready_items_stub`。stub 把湊齊欄位的項目標為 `ELIGIBLE`，登記表未宣告任何欄位的項目標為 `NEEDS_HUMAN_REVIEW`
+    - 現況（部分完成）：模組已存在，有 `find_ready_item_ids`、`find_undeclared_item_ids`、`gated_status`、`visible_items`、`evaluate_ready_items(state, registry, eligibility_service)`，逐項判定由 `_resolve_item` 負責
     - 已達成：護欄 4（不重跑已定案）以 `status != PENDING` 過濾實現；`resolved_at` 有蓋時間戳
-    - 缺口：**沒有接上真正的規則引擎**，`evaluate_pending_items(state, registry, rules_connection)` 不存在，也沒有 `assemble_determination()`。單一項目失敗隔離（Req 15.4）尚未實作。**等 T18 接上 SQLite 規則資料**
-    - 實作 `evaluate_pending_items(state, registry, rules_connection)` → tuple[CandidateItem, ...]
-    - 只對 PENDING/NEEDS_INFORMATION 項目呼叫 rules engine
-    - 單一項目 engine 失敗 → 標 NEEDS_HUMAN_REVIEW，不影響其他
-    - 回傳 tuple 長度 == state.items 長度
-    - 實作 `assemble_determination(item, result, rules)` → CandidateItem（整合 `rule_adapter.adapt_result` + resolved_at）
+    - 已達成：**單一項目失敗隔離（Req 15.4）** —— `_resolve_item` 對每一項各自包 `try/except Exception`，某一項的規則引擎拋例外時只把該項標成 `NEEDS_HUMAN_REVIEW` 並記一筆 `item_evaluation_failed`（只記項目代號、結果狀態與例外類別，走 `exc_info`，例外訊息不會進紀錄檔），其他項目照常判定
+    - 已達成：依 `program_status` 的安全檢查 —— `verified` 才做完整判定，`candidate` / `under_review` 回 `needs_human_review`，`rejected` / `inactive` 由 `visible_items` 隱藏，`stale` 依 `_STALE_FALLBACK_STATUS` 暫行降級（待決策，不得靜默定案）
+    - 缺口：**沒有接上真正的規則引擎**。目前 `evaluate_ready_items` 呼叫的是注入進來的 `EligibilityService`，而離線實作 `FixtureEligibilityService` 對每一項都回 `needs_human_review`，因為沒有任何已核准的規則。**等 T18 接上 SQLite 規則資料**
     - _Requirements: 7.1, 7.2, 15.1, 15.2, 15.3, 15.4, 15.5_
 
   - [x]* 9.2 撰寫 determination 單元測試
@@ -342,18 +339,19 @@
 - [ ] 14. 最終檢查點
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 15. （選擇性/加分）假的 AgentRunner（T20 提前）
-  - [ ] 15.1 建立 `backend/app/orchestration/agent_runner.py`
-    - 定義 `AgentRunner` Protocol（extract_life_event, explain_results）
-    - 實作 `FakeAgentRunner`：extract_life_event 回傳寫死的 `"spouse_death"`，explain_results 回傳空字串
-    - 在 state_machine.py 中的 UNDERSTAND_EVENT handler 預留呼叫 AgentRunner 的 seam
-    - _Requirements: 19.1（擴展）_
-
-  - [ ]* 15.2 撰寫 FakeAgentRunner 單元測試
-    - 測試 extract_life_event 回傳正確值
-    - 測試 explain_results 回傳空 dict
-    - 確保無 LLM 呼叫
-    - _Requirements: 17.2_
+- [x] 15. ~~（選擇性/加分）假的 AgentRunner（T20 提前）~~ **已作廢，改用 LLM port**
+  - **不要實作這一項。** 2026-07-30 的
+    [ADR-0015](../../../docs/decisions/0015-narrow-llm-port-instead-of-agent-loop.md)
+    決定不做 `AgentRunner`，因為那意味著給模型一個可以呼叫工具的迴圈 ——
+    而那是一條它可以影響資格判定的路（ADR-0003 明文禁止）。
+  - 實際做出來的東西在 `backend/app/llm/`：`port.py`（形狀與契約）、
+    `fake.py`（離線實作，`advance()` 的預設值）、`gemini.py`（真實 adapter）、
+    `factory.py`（有金鑰用真的、沒金鑰用示範）、
+    `tasks/resolve_life_event.py`（事件辨識）。
+  - 差別不只是改名：**`FakeLanguageModel` 刻意不回寫死的 `spouse_death`**。
+    沒登記答案就拋錯 —— 一個會「大概猜一下」的假實作會讓測試在真實模型接上之前
+    就通過，於是缺口被藏起來。寫死答案的版本在
+    `orchestration/demo_fixtures.demo_language_model()`，而且必須明確注入。
 
 - [ ] 16. 拆開 `schemas` ↔ `orchestration` 的循環依賴
   - **獨立 PR，不與本批混合**（擁有者明確要求）

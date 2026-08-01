@@ -11,7 +11,7 @@ export function ExamplePrompts({ labelId, prompts, onSelect }: ExamplePromptsPro
         id={labelId}
         className="text-[0.85rem] leading-[1.9] tracking-[0.04em] text-[#6b6459]"
       >
-        不知道怎麼開頭，可以從這些句子改
+        不知道怎麼寫？可以點下面句子，再改成你的情況
       </p>
       <ul className="mt-3 flex flex-col gap-2">
         {prompts.map((prompt) => (

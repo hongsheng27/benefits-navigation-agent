@@ -23,25 +23,41 @@
 
 ## 這個版本還沒有的
 
-- 官方依據檢索：`RETRIEVE_RULES` 仍是空操作，資料層還沒交出 `EvidenceRepository`
-- 白話說明：`EXPLAIN_RESULT` 仍是空操作，還沒接模型
+- 官方依據檢索：`RETRIEVE_RULES` 仍是空操作，`EvidenceRepository` 的接縫備好了但沒接上
+- 白話說明：`EXPLAIN_RESULT` 仍是空操作，還沒接模型（T22，要等依據先有內容）
 
-## 流程規則是真的，資料來源還不是
+## 流程規則是真的，資料來源還不全是
 
-轉換規則、守門條件、自動推進與護欄都已經是最終行為。但**事件辨識仍是寫死的**
-（等 LLM），**項目展開仍來自離線 fixture**（等資料層的 SQLite repository）。每一處
-都有註解說明。
+轉換規則、守門條件、自動推進與護欄都已經是最終行為。**事件辨識已經接上真實模型**
+（`_receive_life_event` → `llm/tasks/resolve_life_event.py`），但**項目展開仍來自離線
+fixture**（等資料層的 SQLite repository）。每一處都有註解說明。
 
 資料來源不由這個模組自己去拿，而是透過 `protocols.py` 的接縫注入（見 `advance()`
 的具名參數）。目前注入的是不需要 SQLite 的離線實作，換成真實來源時這個模組不用改。
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
+from app.llm.fake import FakeLanguageModel
+from app.llm.port import LanguageModelPort
+from app.llm.tasks.collect_attributes import (
+    AttributeCollectionError,
+    collect_attributes_from_reply,
+)
+from app.llm.tasks.resolve_life_event import resolve_life_event
+from app.observability.logging import log_event
+from app.orchestration.data_contracts import CandidateItem as GraphCandidateItem
 from app.orchestration.determination import evaluate_ready_items, visible_items
 from app.orchestration.field_registry import FieldRegistry
+from app.orchestration.life_event_selection import (
+    MAX_CONFIRMED_LIFE_EVENTS,
+    normalize_life_event_ids,
+    pick_extra_candidate_life_events,
+)
+from app.orchestration.life_events import LifeEventRegistry, default_life_events
 from app.orchestration.local_worker import RefreshWorkerPort
+from app.orchestration.missing_fields import compute_question_groups
 from app.orchestration.protocols import (
     CoverageScope,
     EligibilityService,
@@ -50,7 +66,6 @@ from app.orchestration.protocols import (
     FixtureEligibilityService,
     FixtureEntitlementGraphRepository,
     LocalSourceRefreshService,
-    PassThroughPrivacyGate,
     PrivacyGate,
     SourceRefreshService,
 )
@@ -63,9 +78,11 @@ from app.orchestration.state import (
     SessionState,
     WorkflowState,
 )
+from app.privacy.attribute_gate import RegistryBackedPrivacyGate
 from app.schemas.session import (
     AdvanceInput,
     AttributeAnswersInput,
+    AttributeChatTurnInput,
     EventConfirmationInput,
     HelpRequestInput,
     ItemDeclineInput,
@@ -106,6 +123,7 @@ ALLOWED_INPUTS: dict[WorkflowState, set[type]] = {
     WorkflowState.RESOLVE_ENTITLEMENTS: set(),  # 自動推進
     WorkflowState.COLLECT_MISSING_FIELDS: {
         AttributeAnswersInput,
+        AttributeChatTurnInput,
         ItemDeclineInput,
     },
     WorkflowState.RETRIEVE_RULES: set(),  # 自動推進
@@ -225,6 +243,8 @@ class _Seams:
     privacy_gate: PrivacyGate
     eligibility_service: EligibilityService
     source_refresh_service: SourceRefreshService
+    language_model: LanguageModelPort
+    life_events: LifeEventRegistry
     coverage_scope: CoverageScope
     # 官方依據的檢索還沒接上（`RETRIEVE_RULES` 仍是空操作）。保留欄位是為了讓資料層
     # 交出 repository 時只需改 `_do_retrieve_rules`，不必再動 `advance()` 的簽章。
@@ -245,6 +265,8 @@ def advance(
     eligibility_service: EligibilityService | None = None,
     source_refresh_service: SourceRefreshService | None = None,
     coverage_scope: CoverageScope | None = None,
+    language_model: LanguageModelPort | None = None,
+    life_events: LifeEventRegistry | None = None,
     evidence_repository: EvidenceRepository | None = None,
     refresh_worker: RefreshWorkerPort | None = None,
 ) -> SessionState:
@@ -269,7 +291,7 @@ def advance(
             else FixtureEntitlementGraphRepository()
         ),
         privacy_gate=(
-            privacy_gate if privacy_gate is not None else PassThroughPrivacyGate()
+            privacy_gate if privacy_gate is not None else RegistryBackedPrivacyGate()
         ),
         # 預設的判定服務沒有任何已核准規則，所以它對每一項都回「需人工協助」。
         # 那是誠實的預設值：離線環境本來就沒有可以下結論的依據。
@@ -285,6 +307,13 @@ def advance(
             if source_refresh_service is not None
             else LocalSourceRefreshService()
         ),
+        # 預設是不連網路的實作，而且它**沒有登記任何答案**，所以預設情況下事件辨識會
+        # 失敗並回 `event_not_recognized`。那是誠實的預設值：沒有注入真實模型時，
+        # 系統確實看不懂使用者在說什麼，不該假裝看懂（ADR-0015）。
+        language_model=(
+            language_model if language_model is not None else FakeLanguageModel()
+        ),
+        life_events=(life_events if life_events is not None else default_life_events()),
         # Scope 必須由 composition/caller 明確提供；預設空 scope 不猜所有來源都相關。
         coverage_scope=(
             coverage_scope
@@ -340,11 +369,13 @@ def _handle_input(
     """依輸入種類產生新狀態。這裡只處理「使用者做了什麼」，不處理自動推進。"""
     match user_input:
         case LifeEventTextInput():
-            return _receive_life_event(state, user_input)
+            return _receive_life_event(state, user_input, seams)
         case EventConfirmationInput():
-            return _confirm_event(state, user_input)
+            return _confirm_event(state, user_input, seams)
         case AttributeAnswersInput():
             return _record_answers(state, user_input, seams)
+        case AttributeChatTurnInput():
+            return _collect_from_chat(state, user_input, seams)
         case ItemDeclineInput():
             return _decline_item(state, user_input)
         case ReviewConfirmationInput():
@@ -355,50 +386,210 @@ def _handle_input(
     raise InvalidTransitionError(state.workflow_state)
 
 
-def _receive_life_event(
-    state: SessionState, user_input: LifeEventTextInput
+def _apply_life_events(
+    state: SessionState,
+    event_ids: tuple[str, ...],
+    *,
+    extras: tuple[str, ...] | None = None,
+    registry: LifeEventRegistry | None = None,
 ) -> SessionState:
-    """接收自由文字。
+    """同步 life_events / life_event / 候補選項。"""
+    normalized = event_ids
+    if registry is not None:
+        normalized = normalize_life_event_ids(event_ids, registry)
+    extra = extras
+    if extra is None and registry is not None:
+        extra = pick_extra_candidate_life_events(normalized, registry)
+    if extra is None:
+        extra = ()
+    return state.model_copy(
+        update={
+            "life_events": normalized,
+            "life_event": normalized[0] if normalized else None,
+            "extra_candidate_life_events": extra,
+        }
+    )
 
-    真正的實作會呼叫 LLM 抽取事件代號與屬性（T21）。目前暫時用寫死的代號，
-    讓流程可以走通。
 
-    自由文字本身沒有被保存 —— SessionState 沒有欄位放它（ADR-0007）。
+def _receive_life_event(
+    state: SessionState, user_input: LifeEventTextInput, seams: _Seams
+) -> SessionState:
+    """接收自由文字，交給模型對應成一組事件代號（最多五個）。
+
+    **這段文字只存在於這個函式的呼叫範圍內。** 回傳只有代號，原文不會進 state。
     """
-    # TODO(T21): 呼叫 LLM 抽取事件代號。目前寫死，不管輸入什麼都回同一個值。
-    # 直接覆寫 life_event，所以使用者否認後重新描述也會正確更新。
-    extracted_event = "spouse_death"
-
-    return state.model_copy(update={"life_event": extracted_event})
+    event_ids = resolve_life_event(
+        user_input.text,
+        model=seams.language_model,
+        registry=seams.life_events,
+    )
+    return _apply_life_events(state, event_ids, registry=seams.life_events)
 
 
 def _confirm_event(
-    state: SessionState, user_input: EventConfirmationInput
+    state: SessionState,
+    user_input: EventConfirmationInput,
+    seams: _Seams,
 ) -> SessionState:
-    """使用者確認或否認事件。"""
-    if state.life_event is None:
-        # 還沒有事件代號就送確認，不合法。
+    """使用者確認或否認事件（可多選，最多五個）。"""
+    if not state.life_events and state.life_event is None:
         raise InvalidTransitionError(state.workflow_state)
 
     if user_input.confirmed:
-        # 確認成功，往前推到 RESOLVE_ENTITLEMENTS。
-        # 自動推進會接手往後走。
-        return state.model_copy(
-            update={"workflow_state": WorkflowState.RESOLVE_ENTITLEMENTS}
+        allowed = set(state.life_events) | set(state.extra_candidate_life_events)
+        if state.life_event:
+            allowed.add(state.life_event)
+        if user_input.event_ids is not None:
+            chosen = normalize_life_event_ids(user_input.event_ids, seams.life_events)
+        elif state.life_events:
+            chosen = state.life_events
+        elif state.life_event:
+            chosen = (state.life_event,)
+        else:
+            chosen = ()
+        # 只能勾建議或候補裡的代號；過濾未知項。
+        chosen = tuple(event_id for event_id in chosen if event_id in allowed)[
+            :MAX_CONFIRMED_LIFE_EVENTS
+        ]
+        if not chosen:
+            raise InvalidTransitionError(state.workflow_state)
+        updated = _apply_life_events(
+            state, chosen, extras=(), registry=seams.life_events
+        )
+        return updated.model_copy(
+            update={
+                "workflow_state": WorkflowState.RESOLVE_ENTITLEMENTS,
+                "extra_candidate_life_events": (),
+            }
         )
 
-    # 否認：清掉事件代號，累加重試計數。
     retries = state.event_retry_count + 1
+    cleared = _apply_life_events(state, (), extras=())
     if retries > MAX_EVENT_RETRIES:
-        return state.model_copy(
+        return cleared.model_copy(
             update={
-                "life_event": None,
                 "event_retry_count": retries,
                 "exit_reason": ExitReason.EVENT_RETRY_LIMIT_REACHED,
             }
         )
+    return cleared.model_copy(update={"event_retry_count": retries})
 
-    return state.model_copy(update={"life_event": None, "event_retry_count": retries})
+
+def _resolved_event_ids(state: SessionState) -> tuple[str, ...]:
+    """取得權威事件清單；舊測試與 fixture 只有單數欄位時仍可運作。"""
+    if state.life_events:
+        return state.life_events
+    if state.life_event is not None:
+        return (state.life_event,)
+    return ()
+
+
+def _expand_all_events(
+    state: SessionState, seams: _Seams
+) -> Iterator[GraphCandidateItem]:
+    """依事件順序展開候選項目，並以 item ID 去重。"""
+    seen_item_ids: set[str] = set()
+    for event_id in _resolved_event_ids(state):
+        for candidate in seams.entitlement_repository.expand_from_event(
+            event_id, state.attributes
+        ):
+            if candidate.item_id in seen_item_ids:
+                continue
+            seen_item_ids.add(candidate.item_id)
+            yield candidate
+
+
+def _refresh_entitlements(state: SessionState, seams: _Seams) -> SessionState:
+    """用最新結構化答案重查相關項目，同時保留仍存在項目的判定狀態。
+
+    這是 repository 的一般能力：目前 fixture 用它篩 Case 2、配偶過世 fixture 用它加入
+    地方項目；未來 SQLite adapter 也會在同一個呼叫點依 graph conditions 回傳結果。
+    """
+    event_ids = _resolved_event_ids(state)
+    if not event_ids:
+        return state
+    if "occupational_injury" not in event_ids:
+        return _merge_local_entitlements(state)
+
+    existing_by_id = {item.item_id: item for item in state.items}
+    refreshed: list[CandidateItem] = []
+    for candidate in _expand_all_events(state, seams):
+        incoming = adapt_graph_candidate(candidate)
+        existing = existing_by_id.get(incoming.item_id)
+        if existing is None:
+            refreshed.append(incoming)
+            continue
+        refreshed.append(
+            existing.model_copy(
+                update={
+                    "program_status": incoming.program_status,
+                    "missing_field_ids": incoming.missing_field_ids,
+                }
+            )
+        )
+
+    visible = visible_items(tuple(refreshed))
+    if visible == state.items:
+        return state
+    return state.model_copy(update={"items": visible})
+
+
+def _merge_local_entitlements(state: SessionState) -> SessionState:
+    """既有配偶過世流程只依所在地增刪地方項目，避免重展開全國項目。"""
+    from app.orchestration.jurisdiction_items import (
+        LOCAL_ITEM_IDS,
+        local_items_for_attributes,
+    )
+
+    kept = tuple(item for item in state.items if item.item_id not in LOCAL_ITEM_IDS)
+    life_event_ids = state.life_events or (
+        (state.life_event,) if state.life_event else ()
+    )
+    local = local_items_for_attributes(state.attributes, life_event_ids=life_event_ids)
+    if not local:
+        if len(kept) == len(state.items):
+            return state
+        return state.model_copy(update={"items": kept})
+
+    existing_ids = {item.item_id for item in kept}
+    extras = tuple(
+        adapt_graph_candidate(candidate)
+        for candidate in local
+        if candidate.item_id not in existing_ids
+    )
+    merged = kept + extras
+    if merged == state.items:
+        return state
+    return state.model_copy(update={"items": merged})
+
+
+# 對話蒐集用正面問句（purpose 只說明「為什麼問」，不能當題目）。
+# 文案與 frontend `FIELD_LABELS` 對齊；查不到時退回簡短正面句，絕不貼 purpose。
+_COLLECTOR_FIELD_QUESTIONS: dict[str, str] = {
+    "applicant_jurisdiction": "你主要在哪個縣市辦理或居住？",
+    "caregiver_relationship": "你和需要照顧的人是什麼關係？",
+    "disability_cause": "造成失能的原因是？",
+    "occupational_injury_recognition": "是否已經取得職業災害認定？",
+    "care_recipient_insurance_type": "被照顧者目前是哪一種投保身分？",
+    "disability_assessment_status": "目前是否已辦理身心障礙鑑定？",
+    "current_care_arrangement": "目前主要由誰照顧？",
+    "caregiver_employment_impact": "照顧目前如何影響你的工作？",
+    "involuntary_job_loss": "這次是否屬於非自願離職？",
+    "deceased_insurance_type": "過世者生前的投保身分是？",
+    "has_dependent_children": "家中是否有未成年子女？",
+    "applicant_age_band": "你目前的年齡大約在哪個範圍？",
+}
+
+
+def _default_collector_question(state: SessionState, seams: _Seams) -> str | None:
+    """依第一個缺漏欄位產生下一句正面問句。"""
+    groups = compute_question_groups(state, seams.registry)
+    if not groups or not groups[0].questions:
+        return None
+    field_id = groups[0].questions[0].field_id
+    if seams.registry.get(field_id) is None:
+        return None
+    return _COLLECTOR_FIELD_QUESTIONS.get(field_id, f"可以補充「{field_id}」嗎？")
 
 
 def _record_answers(
@@ -421,8 +612,9 @@ def _record_answers(
     if unknown:
         raise UnknownFieldError(unknown)
 
-    # 代號合格之後，值本身再交給隱私閘門。Phase 2 的閘門原樣回傳；型別與選項的
-    # 驗證屬於 Req 16.3（T11），換掉閘門的實作就能加上，狀態機不用改。
+    # 代號合格之後，值本身再交給隱私閘門。預設的 `RegistryBackedPrivacyGate` 會依登記表
+    # 驗證型別與選項，不合法就拒絕整筆（T11 已完成）。這裡的呼叫方式當初就設計成
+    # 可替換，所以加上驗證時狀態機一行都沒改。
     accepted = seams.privacy_gate.validate_attributes(
         dict(user_input.answers), seams.registry
     )
@@ -430,10 +622,78 @@ def _record_answers(
     merged = dict(state.attributes)
     merged.update(accepted)
 
-    return state.model_copy(
+    updated = state.model_copy(
         update={
             "attributes": merged,
             "workflow_state": WorkflowState.RETRIEVE_RULES,
+            "loop_iterations": state.loop_iterations + 1,
+            "collector_question": None,
+        }
+    )
+    return _refresh_entitlements(updated, seams)
+
+
+def _collect_from_chat(
+    state: SessionState, user_input: AttributeChatTurnInput, seams: _Seams
+) -> SessionState:
+    """對話式補欄位：抽取 attributes，未齊則留在 COLLECT_MISSING_FIELDS。"""
+    groups = compute_question_groups(state, seams.registry)
+    missing_fields = []
+    for group in groups:
+        for question in group.questions:
+            field = seams.registry.get(question.field_id)
+            if field is not None:
+                missing_fields.append(field)
+
+    try:
+        collected = collect_attributes_from_reply(
+            user_input.text,
+            fields=missing_fields,
+            model=seams.language_model,
+            registry=seams.registry,
+        )
+    except AttributeCollectionError:
+        # 抽不到就留在原狀態，換一句預設追問；不中斷整次諮詢。
+        log_event(
+            "attribute_chat_fallback",
+            tool="collect_attributes",
+            outcome="unavailable",
+        )
+        return state.model_copy(
+            update={
+                "collector_question": _default_collector_question(state, seams)
+                or "可以再說清楚一點嗎？或改用下方選項作答。",
+                "loop_iterations": state.loop_iterations + 1,
+            }
+        )
+
+    if collected.attributes:
+        accepted = seams.privacy_gate.validate_attributes(
+            dict(collected.attributes), seams.registry
+        )
+    else:
+        accepted = {}
+
+    merged = dict(state.attributes)
+    merged.update(accepted)
+    updated = state.model_copy(update={"attributes": merged})
+    updated = _refresh_entitlements(updated, seams)
+
+    still_missing = compute_question_groups(updated, seams.registry)
+    if still_missing:
+        next_q = collected.next_question or _default_collector_question(updated, seams)
+        return updated.model_copy(
+            update={
+                "workflow_state": WorkflowState.COLLECT_MISSING_FIELDS,
+                "collector_question": next_q,
+                "loop_iterations": state.loop_iterations + 1,
+            }
+        )
+
+    return updated.model_copy(
+        update={
+            "workflow_state": WorkflowState.RETRIEVE_RULES,
+            "collector_question": None,
             "loop_iterations": state.loop_iterations + 1,
         }
     )
@@ -508,6 +768,14 @@ def _auto_advance(
         if state.workflow_state == WorkflowState.EVALUATE_ELIGIBILITY:
             state = _check_loop_guardrails(state, state_before_input)
             if state.exit_reason is not None:
+                # 護欄中止流程。`guard` 記的是哪一道護欄，不是任何使用者資料。
+                log_event(
+                    "loop_guardrail_triggered",
+                    session_id=state.session_id,
+                    state=state.workflow_state.value,
+                    guard=state.exit_reason.value,
+                    agent_iterations=state.loop_iterations,
+                )
                 break
 
         # 走到下一步。
@@ -515,7 +783,24 @@ def _auto_advance(
         if next_ws is None:
             break
 
+        # 每一個內部轉換都記一筆。ADR-0007 把除錯手段限縮到只剩狀態轉換 ——
+        # 使用者的文字不留、值不進紀錄檔，所以這些狀態名稱幾乎是唯一能查的東西。
+        log_event(
+            "state_transitioned",
+            session_id=state.session_id,
+            state=state.workflow_state.value,
+            next_state=next_ws.value,
+            transition="auto_advance",
+        )
         state = state.model_copy(update={"workflow_state": next_ws})
+
+    if (
+        state.workflow_state is WorkflowState.COLLECT_MISSING_FIELDS
+        and not state.collector_question
+    ):
+        state = state.model_copy(
+            update={"collector_question": _default_collector_question(state, seams)}
+        )
 
     return state
 
@@ -545,6 +830,14 @@ def _resolve_next_state(state: SessionState) -> WorkflowState | None:
     # 在判定完成後，檢查是否需要回到追問欄位（迴圈）。
     if current == WorkflowState.EVALUATE_ELIGIBILITY:
         if _should_loop_back(state):
+            log_event(
+                "loop_iteration_started",
+                session_id=state.session_id,
+                state=current.value,
+                next_state=WorkflowState.COLLECT_MISSING_FIELDS.value,
+                transition="loop_back",
+                agent_iterations=state.loop_iterations,
+            )
             return WorkflowState.COLLECT_MISSING_FIELDS
 
     # 照正常路徑。
@@ -555,6 +848,15 @@ def _resolve_next_state(state: SessionState) -> WorkflowState | None:
     # 檢查守門條件。
     guard = ENTRY_GUARDS.get(next_ws)
     if guard is not None and not guard(state):
+        # 記下「哪個狀態因為哪道守門條件被跳過」。沒有這一筆，之後看到流程直接從
+        # explain_result 跳到 complete 時無法分辨是守門條件生效還是轉換表寫錯。
+        log_event(
+            "state_skipped",
+            session_id=state.session_id,
+            state=current.value,
+            next_state=next_ws.value,
+            guard=f"entry_guard:{next_ws.value}",
+        )
         # 跳過這個狀態，再往後找。
         # 暫存 state 的 workflow_state 設成那個被跳過的，然後遞迴往後。
         skipped = state.model_copy(update={"workflow_state": next_ws})
@@ -667,17 +969,31 @@ def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState
         # 已經有項目了（例如退回修改後再走一次），不重複展開。
         return state
 
-    if state.life_event is None:
-        # 還沒有事件代號就沒有東西可以展開。理論上到不了這裡（要先確認事件才會進
-        # RESOLVE_ENTITLEMENTS），但不猜一組項目比較安全。
+    event_ids = state.life_events or (
+        (state.life_event,) if state.life_event is not None else ()
+    )
+    if not event_ids:
         return state
 
-    candidates = seams.entitlement_repository.expand_from_event(
-        state.life_event, state.attributes
-    )
-    items = visible_items(
-        tuple(adapt_graph_candidate(candidate) for candidate in candidates)
-    )
+    # 複合情境：各事件展開後聯集去重；同一項目合併 source_life_events。
+    merged_by_id: dict[str, CandidateItem] = {}
+    for event_id in event_ids:
+        candidates = seams.entitlement_repository.expand_from_event(
+            event_id, state.attributes
+        )
+        for candidate in candidates:
+            adapted = adapt_graph_candidate(candidate).model_copy(
+                update={"source_life_events": (event_id,)}
+            )
+            existing = merged_by_id.get(adapted.item_id)
+            if existing is None:
+                merged_by_id[adapted.item_id] = adapted
+                continue
+            sources = tuple(dict.fromkeys([*existing.source_life_events, event_id]))
+            merged_by_id[adapted.item_id] = existing.model_copy(
+                update={"source_life_events": sources}
+            )
+    items = visible_items(tuple(merged_by_id.values()))
 
     # coverage 目前只用來決定要不要排 refresh。把它露給前端需要新的對外欄位，
     # 那屬於還沒開始的前端契約那一批。
@@ -685,12 +1001,14 @@ def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState
     # `respond_then_refresh` 保證這裡只做兩件事：讀一次目前的 committed coverage
     # 狀態、把工作排進佇列。它不等待任何抓取、附件處理或 LLM（Req 11.1、11.10），
     # 而且 worker 的延遲或失敗都不會改變這一輪的回應（Req 11.8）。
-    respond_then_refresh(
-        seams.source_refresh_service,
-        state.life_event,
-        seams.coverage_scope,
-        worker=seams.refresh_worker,
-    )
+    # 複數事件各自查 committed coverage 並排 refresh；不等待抓取或 LLM。
+    for event_id in event_ids:
+        respond_then_refresh(
+            seams.source_refresh_service,
+            event_id,
+            seams.coverage_scope,
+            worker=seams.refresh_worker,
+        )
 
     if not items:
         return state

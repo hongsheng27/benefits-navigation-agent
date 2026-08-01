@@ -252,6 +252,11 @@ def _build_sqlite_dependencies(
     """Build dependencies backed by SQLite (local development)."""
     # Default SQLite path
     resolved_db_path = db_path if db_path is not None else _DEFAULT_DB_PATH
+    if db_path is None:
+        # A clean clone intentionally has no tracked `data/local/` directory.
+        # Create only the known application-owned parent for the default path;
+        # explicit caller paths still fail closed when their parent is missing.
+        resolved_db_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Validate SQLite availability and schema (Req 1.3, 1.4)
     _validate_sqlite(resolved_db_path)

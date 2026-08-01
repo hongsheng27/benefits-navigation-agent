@@ -11,7 +11,7 @@
 
 | 服務 | IAM Namespace | 備註 |
 |------|---------------|------|
-| Amazon RDS | `rds` | ADR-0014 目標 (PostgreSQL) |
+| Amazon RDS | `rds` | ADR-0017 目標 (PostgreSQL) |
 | Amazon RDS Data API | `rds-data` | Serverless 存取方式 |
 | Amazon S3 | `s3` | 文件/附件儲存 |
 | Amazon DynamoDB | `dynamodb` | 備選 |

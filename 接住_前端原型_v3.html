@@ -1,0 +1,1334 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>接住 — 福利導航前端原型 v3（對話引導 + 即時備妥率）</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+ --ink:#1a2229;--ink2:#414d58;--ink3:#6c7883;--ink4:#98a3ad;
+ --line:#e5e9ed;--line2:#d3dae0;--bg:#f6f8f9;
+ --teal:#0d7360;--teal-s:#e6f2ef;--teal-l:#c3e2d9;
+ --slate:#3f5b73;--slate-s:#eaf0f5;
+ --amber:#96660f;--amber-s:#fbf1de;--amber-l:#f0dcb4;
+ --gray-s:#f1f3f5;--rose:#9e3a4e;--rose-s:#fbeef1;--rose-l:#f0d3da;
+ --violet:#54479c;--violet-s:#eeecf8;--violet-l:#d9d3f0;
+ --r:12px;--rs:8px;--rl:18px;
+ --sh:0 1px 2px rgba(26,34,41,.04),0 3px 14px rgba(26,34,41,.05);
+ --sh2:0 2px 8px rgba(26,34,41,.07),0 14px 36px rgba(26,34,41,.09);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.78;
+ font-family:"Noto Sans TC",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{margin:0;line-height:1.45}
+button{font-family:inherit}
+.hide{display:none!important}
+.blank{color:var(--ink4);font-style:italic}
+.deco{color:var(--ink4);font-size:13.5px}
+
+.topbar{background:rgba(255,255,255,.9);backdrop-filter:blur(12px) saturate(180%);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50}
+.tin{max-width:1180px;margin:0 auto;padding:0 30px;height:64px;display:flex;align-items:center;gap:18px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:900;font-size:19px;letter-spacing:-.02em;white-space:nowrap;cursor:pointer}
+.brand .mk{width:31px;height:31px;border-radius:9px;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px}
+.brand small{display:block;font-size:10.5px;font-weight:500;color:var(--ink4);letter-spacing:.14em;margin-top:-5px}
+.crumbs{display:flex;align-items:center;gap:2px;flex:1;overflow:hidden}
+.cb{font-size:12.5px;color:var(--ink4);padding:5px 10px;border-radius:99px;white-space:nowrap;cursor:pointer;transition:.2s}
+.cb.on{background:var(--teal-s);color:var(--teal);font-weight:700}
+.cb.done{color:var(--ink3)}.cb.done:hover{background:var(--gray-s);color:var(--ink)}
+.tact{display:flex;align-items:center;gap:9px;white-space:nowrap}
+.sync{font-size:12px;color:var(--ink4);display:flex;align-items:center;gap:5px}
+.sync .dot{width:7px;height:7px;border-radius:50%;background:var(--teal)}
+.tbtn{font-size:13.5px;color:var(--ink2);background:#fff;border:1px solid var(--line2);border-radius:99px;padding:6px 14px;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:7px}
+.tbtn:hover{border-color:var(--teal);color:var(--teal)}
+.tbtn.on{background:var(--teal-s);border-color:var(--teal-l);color:var(--teal);font-weight:700}
+.av{width:26px;height:26px;border-radius:50%;background:var(--slate-s);color:var(--slate);font-size:11.5px;font-weight:900;display:flex;align-items:center;justify-content:center}
+
+.wrap{max-width:1180px;margin:0 auto;padding:26px 30px 80px}
+.backbar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.back{background:#fff;border:1px solid var(--line2);border-radius:99px;padding:7px 16px;font-size:14px;color:var(--ink2);cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.2s}
+.back:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-s)}
+.backbar .where{font-size:13px;color:var(--ink4)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:var(--rl);box-shadow:var(--sh);padding:34px 38px;animation:in .4s cubic-bezier(.16,1,.3,1)}
+@keyframes in{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+.narrow{max-width:760px;margin:0 auto}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--teal);text-transform:uppercase;margin-bottom:10px}
+h2.title{font-size:27px;font-weight:900;letter-spacing:-.03em;margin-bottom:8px}
+p.sub{color:var(--ink3);margin:0 0 24px;max-width:62ch}
+.row{display:flex;gap:11px;flex-wrap:wrap;margin-top:26px;align-items:center}
+.btn{background:var(--teal);color:#fff;border:none;border-radius:var(--r);padding:14px 26px;font-size:16px;font-weight:700;cursor:pointer;transition:.2s;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{background:#0a5f50;transform:translateY(-1px)}
+.btn.ghost{background:#fff;color:var(--ink2);border:1.5px solid var(--line2)}
+.btn.ghost:hover{border-color:var(--ink3);color:var(--ink);background:#fafbfc}
+.btn.violet{background:var(--violet)}.btn.violet:hover{background:#463b85}
+.btn.danger{background:var(--rose)}.btn.danger:hover{background:#873041}
+.btn.sm{padding:10px 18px;font-size:14.5px}
+.t{font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:99px;white-space:nowrap;display:inline-block}
+.t-ok{background:var(--teal-s);color:var(--teal)}
+.t-info{background:var(--slate-s);color:var(--slate)}
+.t-no{background:var(--gray-s);color:var(--ink3)}
+.t-dead{background:var(--amber-s);color:var(--amber)}
+.t-must{background:var(--rose-s);color:var(--rose)}
+.t-my{background:var(--violet-s);color:var(--violet)}
+.t-pend{background:var(--gray-s);color:var(--ink3)}
+
+/* ---------- 首頁服務說明 ---------- */
+.hero{background:#fff;border:1px solid var(--line);border-radius:var(--rl);box-shadow:var(--sh);overflow:hidden;margin-bottom:18px;animation:in .4s}
+.herobanner{line-height:0}
+.herobanner svg{width:100%;height:auto;display:block}
+.herobody{padding:26px 30px 24px}
+.heroh{font-size:25px;font-weight:900;letter-spacing:-.03em;line-height:1.42;margin-bottom:10px}
+.herop{font-size:15.5px;color:var(--ink2);line-height:1.85;margin:0 0 20px;max-width:64ch}
+.herohow{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.hh{display:flex;gap:12px;align-items:flex-start}
+.hh .hhn{width:25px;height:25px;border-radius:50%;background:var(--teal-s);color:var(--teal);font-size:12.5px;
+ font-weight:900;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:2px}
+.hh b{font-size:14.5px;font-weight:700;display:block;line-height:1.5}
+.hh span:not(.hhn){font-size:12.5px;color:var(--ink3);line-height:1.6;display:block}
+.herofoot{display:flex;gap:20px;flex-wrap:wrap;padding-top:16px}
+.hf{font-size:12.5px;color:var(--ink3);line-height:1.6}
+.hf b{display:block;font-size:13.5px;font-weight:900;color:var(--teal)}
+
+/* ---------- 準備清單：頁首總覽卡 ---------- */
+.dhcard{background:#fff;border:1px solid var(--line);border-radius:var(--rl);box-shadow:var(--sh);overflow:hidden;margin-bottom:14px;animation:in .4s}
+.dhtop{padding:26px 30px 20px;display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.dhname{font-size:29px;font-weight:900;letter-spacing:-.035em;line-height:1.3}
+.dhorg{font-size:14px;color:var(--ink3);margin-top:4px}
+.dhkey{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.dk{background:#fafbfc;padding:15px 20px}
+.dk span{font-size:11.5px;font-weight:700;letter-spacing:.05em;color:var(--ink4);display:block;margin-bottom:3px}
+.dk b{font-size:18px;font-weight:900;letter-spacing:-.02em;line-height:1.35;display:block}
+.dk b.hl{color:var(--teal)}
+.dk b i{font-size:12px;font-weight:500;font-style:normal;color:var(--ink3);letter-spacing:0;margin-left:5px}
+.dhsec{padding:22px 30px;border-top:1px solid var(--line)}
+.dhsec h4{font-size:16px;font-weight:900;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.dhn{background:var(--teal-s);color:var(--teal);border-radius:99px;font-size:11.5px;font-weight:700;padding:3px 11px}
+/* ---------- 區塊跳轉 ---------- */
+.jumpbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:18px;padding:0 2px}
+.jumpbar .jl{font-size:12.5px;color:var(--ink4);font-weight:700}
+.jc{background:#fff;border:1px solid var(--line2);border-radius:99px;padding:6px 15px;font-size:13.5px;
+ color:var(--ink2);text-decoration:none;transition:.18s}
+.jc:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-s)}
+/* ---------- 準備清單：完整說明 / 機關 / 步驟 ---------- */
+.fulltext{font-size:15px;color:var(--ink2);line-height:1.9;text-align:justify}
+.orgbox{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.ob{background:#fafbfc;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.ob .obl{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--ink4);display:block;margin-bottom:3px}
+.ob b{font-size:15px;font-weight:700;display:block;line-height:1.55}
+.ob i{font-size:12.5px;color:var(--ink3);font-style:normal;display:block;margin-top:4px;line-height:1.55}
+.apstep{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.apstep:last-child{border:none;padding-bottom:0}
+.apstep .apn{width:27px;height:27px;border-radius:50%;background:var(--teal);color:#fff;font-size:13px;
+ font-weight:900;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:2px}
+.apstep.key .apn{background:var(--amber)}
+.apstep .apt{font-size:15.5px;font-weight:700;line-height:1.5;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.apstep .apd{font-size:13.5px;color:var(--ink3);line-height:1.75;margin-top:3px}
+.oflink{display:flex;align-items:center;gap:12px;padding:13px 15px;border:1px solid var(--line);border-radius:var(--r);
+ margin-bottom:9px;cursor:pointer;transition:.18s;background:#fff;text-decoration:none}
+.oflink:hover{border-color:var(--teal);background:var(--teal-s);transform:translateX(2px)}
+.oflink .oln{font-size:14.5px;font-weight:700;color:var(--teal);flex:1;line-height:1.5}
+.oflink .old{font-size:12.5px;color:var(--ink4);flex:0 0 auto;max-width:40%;text-align:right;line-height:1.5}
+.oflink .olx{color:var(--teal);font-size:15px;flex:0 0 auto}
+.docline .dn{font-size:14.5px;font-weight:500;line-height:1.5}
+.dsrc{font-size:12px;color:var(--ink3);margin-top:4px;line-height:1.6}
+.dsrc .dsl{background:var(--gray-s);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;color:var(--ink4);margin-right:6px}
+.dsrc a{color:var(--teal);font-weight:700;text-decoration:none;border-bottom:1px solid var(--teal-l);cursor:pointer}
+
+/* ---------- 對話 ---------- */
+.chatgrid{display:grid;grid-template-columns:minmax(0,1fr) 296px;gap:22px;align-items:start}
+.chatbox{background:#fff;border:1px solid var(--line);border-radius:var(--rl);box-shadow:var(--sh);overflow:hidden}
+.chd{padding:18px 24px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center}
+.chd .bot{width:34px;height:34px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
+.chd b{font-size:15.5px;font-weight:900;display:block}
+.chd span{font-size:12.5px;color:var(--ink4)}
+.msgs{padding:22px 24px;display:flex;flex-direction:column;gap:14px;min-height:320px}
+.m{display:flex;gap:11px;max-width:88%;animation:in .35s}
+.m.me{align-self:flex-end;flex-direction:row-reverse}
+.m .ic{width:29px;height:29px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:900;margin-top:2px}
+.m.ai .ic{background:var(--teal-s);color:var(--teal)}
+.m.me .ic{background:var(--slate-s);color:var(--slate)}
+.m .bb{border-radius:16px;padding:13px 17px;font-size:15.5px;line-height:1.72}
+.m.ai .bb{background:var(--gray-s);border-top-left-radius:5px}
+.m.me .bb{background:var(--teal);color:#fff;border-top-right-radius:5px}
+.typing{display:flex;gap:4px;padding:16px 18px}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--ink4);animation:bl 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes bl{0%,60%,100%{opacity:.25}30%{opacity:1}}
+.quick{padding:0 24px 14px;display:flex;flex-wrap:wrap;gap:8px}
+.qc{background:#fff;border:1px solid var(--line2);border-radius:99px;padding:7px 15px;font-size:14px;cursor:pointer;color:var(--ink2);transition:.2s}
+.qc:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-s)}
+.inputbar{border-top:1px solid var(--line);padding:15px 24px;display:flex;gap:11px;align-items:flex-end;background:#fcfdfd}
+.inputbar textarea{flex:1;min-height:48px;max-height:130px;border:1.5px solid var(--line2);border-radius:var(--r);padding:12px 15px;font-size:16px;font-family:inherit;line-height:1.6;resize:none;background:#fff}
+.inputbar textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 4px var(--teal-s)}
+.send{background:var(--teal);color:#fff;border:none;border-radius:var(--r);width:48px;height:48px;font-size:18px;cursor:pointer;flex:0 0 auto}
+.send:hover{background:#0a5f50}
+.mic{background:#fff;border:1.5px solid var(--line2);border-radius:var(--r);width:48px;height:48px;font-size:17px;cursor:pointer;flex:0 0 auto}
+.mic:hover{border-color:var(--teal)}
+
+.understand{position:sticky;top:88px;background:#fff;border:1px solid var(--line);border-radius:var(--rl);box-shadow:var(--sh);padding:20px 22px}
+.understand h4{font-size:13px;letter-spacing:.07em;color:var(--ink4);font-weight:700;text-transform:uppercase;margin-bottom:12px}
+.uev{font-size:19px;font-weight:900;letter-spacing:-.02em;color:var(--teal);margin-bottom:3px}
+.uev.non{color:var(--ink4);font-size:15px;font-weight:400;font-style:italic}
+.utags{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.utag{background:var(--violet-s);color:var(--violet);border-radius:99px;padding:4px 11px;font-size:12.5px;font-weight:700;animation:in .3s}
+.udesc{font-size:13.5px;color:var(--ink3);line-height:1.7;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.confirmcard{border:1.5px solid var(--teal-l);background:var(--teal-s);border-radius:var(--r);padding:16px 18px;margin-top:14px}
+.confirmcard p{margin:0 0 12px;font-size:14px;color:#0b5a4b;line-height:1.7}
+
+/* ---------- 顯眼的確認區塊（對話頁） ---------- */
+.bigconfirm{margin-top:16px;background:var(--teal);border-radius:var(--rl);padding:24px 28px;
+ box-shadow:0 6px 24px rgba(13,115,96,.22);display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap;animation:in .45s}
+.bigconfirm .bcl{display:flex;gap:14px;align-items:flex-start;flex:1;min-width:250px}
+.bigconfirm .bci{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.22);color:#fff;
+ display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;flex:0 0 auto}
+.bigconfirm b{color:#fff;font-size:18px;font-weight:900;display:block;letter-spacing:-.01em;line-height:1.5}
+.bigconfirm span:not(.bci){color:rgba(255,255,255,.86);font-size:14px;display:block;margin-top:2px}
+.bigconfirm .bcb{display:flex;gap:10px;flex-wrap:wrap}
+.bigconfirm .btn{background:#fff;color:var(--teal);font-weight:900}
+.bigconfirm .btn:hover{background:#f0faf7}
+.bigconfirm .btn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.55)}
+.bigconfirm .btn.ghost:hover{background:rgba(255,255,255,.14);color:#fff;border-color:#fff}
+/* ---------- 步驟 2：狀況解讀整頁 ---------- */
+.interphero{background:var(--teal);border-radius:var(--rl);padding:32px 36px;display:flex;gap:26px;
+ align-items:flex-start;justify-content:space-between;flex-wrap:wrap;box-shadow:0 6px 26px rgba(13,115,96,.2);animation:in .4s}
+.interphero .ihl{flex:1;min-width:280px}
+.interphero .ihev{font-size:34px;font-weight:900;letter-spacing:-.035em;color:#fff;line-height:1.25;margin:2px 0 10px}
+.interphero .ihs{font-size:15.5px;color:rgba(255,255,255,.9);line-height:1.75;max-width:56ch}
+.interphero .ihs b{color:#fff;font-weight:700}
+.interphero .ihr{text-align:center;background:rgba(255,255,255,.15);border-radius:var(--r);padding:18px 24px;flex:0 0 auto}
+.interphero .ihcnt{font-size:42px;font-weight:900;color:#fff;letter-spacing:-.04em;line-height:1}
+.interphero .ihr span{font-size:12.5px;color:rgba(255,255,255,.85);line-height:1.5;display:block;margin-top:4px}
+.utag.big{background:rgba(255,255,255,.2);color:#fff;font-size:14px;padding:6px 15px}
+.ipcard{background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);
+ padding:20px 22px;margin-bottom:13px;display:flex;gap:16px;align-items:flex-start;animation:in .4s}
+.ipcard .ipn{width:30px;height:30px;border-radius:50%;background:var(--teal-s);color:var(--teal);
+ font-size:14px;font-weight:900;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:2px}
+.ipcard .ipb{flex:1;min-width:0}
+.ipcard .ipt{font-size:17.5px;font-weight:900;letter-spacing:-.01em;line-height:1.5}
+.ipcard .ipd{font-size:14.5px;color:var(--ink2);line-height:1.75;margin-top:5px}
+.iprel{margin-top:13px;padding-top:12px;border-top:1px dashed var(--line2)}
+.iprel .irl{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--ink4);display:block;margin-bottom:7px}
+.iprel .irc{display:flex;flex-wrap:wrap;gap:7px}
+.relchip{background:var(--teal-s);color:var(--teal);border-radius:99px;padding:4px 12px;font-size:12.5px;font-weight:700}
+.quote{background:var(--slate-s);border-left:3px solid var(--slate);border-radius:0 var(--rs) var(--rs) 0;
+ padding:12px 15px;font-size:14.5px;color:#33455a;line-height:1.75;margin-bottom:9px}
+.steplist{display:flex;flex-direction:column;gap:12px}
+.sl{display:flex;gap:13px;align-items:flex-start}
+.sl .sln{width:25px;height:25px;border-radius:50%;background:var(--gray-s);color:var(--ink3);
+ font-size:12.5px;font-weight:900;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:2px}
+.sl b{font-size:15px;font-weight:700;display:block}
+.sl span{font-size:13px;color:var(--ink3);line-height:1.6;display:block}
+
+/* ---------- 媒合頁：問題主體 ---------- */
+.askhero{background:#fff;border:2px solid var(--teal);border-radius:var(--rl);box-shadow:0 4px 22px rgba(13,115,96,.13);
+ padding:28px 32px;margin-bottom:16px;animation:in .35s}
+.askhero .ah{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px}
+.askhero .ahl{font-size:13px;font-weight:900;letter-spacing:.04em;color:var(--teal)}
+.askhero .ahs{font-size:13.5px;color:var(--ink3);margin-top:2px;line-height:1.6}
+.askhero .askcnt{font-size:26px;font-weight:900;color:var(--teal);letter-spacing:-.03em;line-height:1}
+.askhero .askcnt small{font-size:14px;font-weight:500;color:var(--ink4)}
+.askq{font-size:25px;font-weight:900;letter-spacing:-.025em;margin:18px 0 16px;line-height:1.4}
+.askopts{display:flex;flex-wrap:wrap;gap:11px}
+.ao{border:1.5px solid var(--line2);border-radius:var(--r);padding:15px 24px;font-size:17px;cursor:pointer;background:#fcfdfd;transition:.18s;font-weight:500}
+.ao:hover{border-color:var(--teal);background:var(--teal-s);transform:translateY(-2px);box-shadow:0 3px 10px rgba(13,115,96,.12)}
+.ao.pre{border-color:var(--violet);background:var(--violet-s);color:var(--violet);font-weight:700}
+.ao.pre small{display:block;font-size:11.5px;font-weight:500;opacity:.8}
+.askwhy{font-size:13px;color:var(--ink3);background:#fafbfc;border-radius:var(--rs);padding:11px 14px;margin-top:16px;line-height:1.65}
+.askfoot{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.moneyslim{background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:14px 20px;
+ margin-bottom:20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;cursor:default}
+.moneyslim .msl{font-size:12.5px;color:var(--ink3);font-weight:700}
+.moneyslim b{font-size:22px;font-weight:900;color:var(--teal);letter-spacing:-.02em}
+.moneyslim b small{font-size:12.5px;font-weight:500;color:var(--ink4);letter-spacing:0}
+.moneyslim .msr{font-size:12.5px;color:var(--ink4);margin-left:auto}
+
+/* ---------- 分組標題 ---------- */
+.hdot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:9px;vertical-align:1px}
+.hdot.ok{background:var(--teal)}.hdot.info{background:var(--slate)}.hdot.no{background:var(--ink4)}
+/* ---------- 不符合分組（媒合頁） ---------- */
+.nogroup{margin-top:32px;padding:22px 24px;background:#f2f4f6;border:1px dashed var(--line2);border-radius:var(--rl)}
+.nogroup .sechd h3{font-size:17px}
+.nohint{font-size:13.5px;color:var(--ink3);line-height:1.7;margin:6px 0 14px}
+.nohint b{color:var(--ink2);font-weight:700}
+.nonames{display:flex;flex-direction:column;gap:8px}
+.norow{background:#fff;border:1px solid var(--line);border-radius:var(--rs);padding:12px 16px;
+ display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.norow b{font-size:15.5px;font-weight:700;color:var(--ink2)}
+.norow span{font-size:13px;color:var(--ink4)}
+.nolist{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+@media(max-width:960px){.nolist{grid-template-columns:1fr}}
+/* ---------- 不符合 / 待判定 區塊（準備清單頁） ---------- */
+.othersec{margin-top:30px;padding-top:26px;border-top:2px dashed var(--line2)}
+.nocard{background:#fafbfc;border:1px solid var(--line);border-radius:var(--r);padding:18px 20px;margin-bottom:13px}
+.nocard .nch{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.nocard .nch b{font-size:16.5px;font-weight:900;letter-spacing:-.01em}
+.nocard .ncorg{font-size:13px;color:var(--ink4);margin-top:1px}
+.ncwhy{background:#fff;border:1px solid var(--line);border-radius:var(--rs);padding:13px 15px;margin-top:12px}
+.ncwhy .ncl{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--ink4)}
+.ncwhy .ncc{font-size:16px;font-weight:900;margin:2px 0 5px}
+.ncwhy .ncv{font-size:13.5px;color:var(--ink3)}
+.ncwhy .ncv b{color:var(--ink);font-weight:700}
+.ncfoot{font-size:12.5px;color:var(--ink4);margin-top:11px;line-height:1.6}
+.infolist{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#fff}
+.inforow{display:flex;gap:14px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.inforow:last-child{border:none}
+.inforow>div:first-child{flex:1;min-width:150px}
+.inforow b{font-size:15.5px;font-weight:700;display:block}
+.inforow span{font-size:12.5px;color:var(--ink4)}
+.inforow .im{font-size:13px;color:var(--slate);background:var(--slate-s);border-radius:var(--rs);padding:6px 12px}
+.pg{height:6px;background:#eceff2;border-radius:99px;overflow:hidden;margin-top:12px}
+.pg i{display:block;height:100%;background:var(--teal);border-radius:99px;transition:width .5s}
+.donepanel{background:var(--teal-s);border:1.5px solid var(--teal-l);border-radius:var(--rl);padding:20px 26px;margin-bottom:20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.donepanel .dt{flex:1;min-width:220px}
+.donepanel b{font-size:17px;font-weight:900;color:var(--teal);display:block}
+.donepanel span{font-size:13.5px;color:#0b5a4b}
+
+.moneybox{background:#fff;border:1.5px solid var(--teal-l);border-radius:var(--rl);box-shadow:var(--sh);padding:24px 28px;margin-bottom:16px}
+.mbh{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px}
+.mbl{font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--ink3)}
+.mbig{font-size:38px;font-weight:900;letter-spacing:-.035em;color:var(--teal);line-height:1.15;margin-top:2px}
+.mbig small{font-size:15px;font-weight:500;color:var(--ink4);letter-spacing:0}
+.mbrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.mb{background:#fafbfc;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.mb span{font-size:12.5px;color:var(--ink3);display:block}
+.mb b{font-size:20px;font-weight:900;letter-spacing:-.02em;display:block;margin:2px 0 1px}
+.mb b.hl{color:var(--teal)}
+.mb i{font-size:11.5px;color:var(--ink4);font-style:normal;line-height:1.5;display:block}
+.mbnote{margin-top:14px;padding-top:13px;border-top:1px solid var(--line);font-size:12.5px;color:var(--amber);line-height:1.7;background:var(--amber-s);border-radius:var(--rs);padding:12px 14px;border-top:none}
+.amt{background:var(--teal-s);border:1px solid var(--teal-l);border-radius:var(--r);padding:12px 15px;margin-bottom:12px}
+.amt.off{background:#fafbfc;border-color:var(--line)}
+.amt .al{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--teal)}
+.amt.off .al{color:var(--ink4)}
+.amt .av{font-size:24px;font-weight:900;letter-spacing:-.03em;color:var(--teal);line-height:1.25}
+.amt .av small{font-size:13px;font-weight:500;color:#0b5a4b;letter-spacing:0}
+.amt .av.off{font-size:15px;font-weight:500;color:var(--ink4);font-style:italic}
+.amt .ax{font-size:12px;color:#0b5a4b;font-weight:700;margin-top:2px}
+.amt .an{font-size:11.5px;color:var(--ink3);line-height:1.55;margin-top:4px}
+.sumrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:12px;margin-bottom:20px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:15px 17px;box-shadow:var(--sh)}
+.stat b{font-size:22px;font-weight:900;display:block;letter-spacing:-.02em}
+.stat span{font-size:12.5px;color:var(--ink3)}
+.sechd{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 14px}
+.sechd h3{font-size:19px;font-weight:900;letter-spacing:-.02em}
+.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:12.5px;color:var(--ink3)}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.rgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.rcard{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;cursor:pointer;transition:.22s;display:flex;flex-direction:column;box-shadow:var(--sh)}
+.rcard:hover{box-shadow:var(--sh2);transform:translateY(-2px)}
+.rcard.v-ok{border-color:var(--teal-l)}
+.rcard.v-info{border-color:#d7e1ea}
+.rcard.v-no{opacity:.72}
+.rt{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.rcard h3{font-size:17px;font-weight:900;letter-spacing:-.01em;line-height:1.45}
+.rcard .org{color:var(--ink4);font-size:13px;margin:2px 0 12px}
+.rwhy{font-size:13.5px;color:var(--ink2);background:#fafbfc;border-radius:var(--rs);padding:10px 13px;line-height:1.65;margin-bottom:12px}
+.rmiss{font-size:13px;color:var(--slate);background:var(--slate-s);border-radius:var(--rs);padding:9px 12px;margin-bottom:12px;line-height:1.6}
+.ready{margin-top:auto;border-top:1px solid var(--line);padding-top:13px}
+.ready .rl{display:flex;justify-content:space-between;font-size:13px;color:var(--ink3);margin-bottom:7px}
+.ready .rl b{color:var(--ink);font-weight:700}
+.rbar{height:7px;background:#eceff2;border-radius:99px;overflow:hidden}
+.rbar i{display:block;height:100%;border-radius:99px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+.rbar i.hi{background:var(--teal)}.rbar i.mid{background:var(--amber)}.rbar i.lo{background:var(--ink4)}
+.rdocs{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap}
+.dchip{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--gray-s);color:var(--ink3)}
+.dchip.on{background:var(--teal-s);color:var(--teal);font-weight:700}
+.dchip.my{background:var(--violet-s);color:var(--violet);font-weight:700}
+
+/* ---------- 詳情 ---------- */
+.dgrid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px}
+.sec{background:#fff;border:1px solid var(--line);border-radius:var(--rl);padding:22px 24px;box-shadow:var(--sh);margin-bottom:16px}
+.sec>h3{font-size:16.5px;font-weight:900;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.sec>.sd{font-size:13.5px;color:var(--ink3);line-height:1.65;margin-bottom:14px}
+.kv{display:flex;justify-content:space-between;gap:14px;padding:9px 0;font-size:15px;border-bottom:1px dashed var(--line)}
+.kv:last-child{border:none}.kv span{color:var(--ink3)}.kv b{text-align:right;font-weight:700}
+.docline{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);align-items:flex-start;font-size:14.5px}
+.docline:last-child{border:none}
+.docline .st{width:23px;height:23px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;flex:0 0 auto;font-weight:900;margin-top:3px}
+.s-auto{background:var(--teal);color:#fff}.s-my{background:var(--violet);color:#fff}
+.s-self{background:var(--gray-s);color:var(--ink4);border:1.5px dashed var(--line2)}
+.docline .dm{font-size:12.5px;color:var(--ink4);margin-top:2px;line-height:1.55}
+.basis{font-size:13px;color:var(--ink3);margin-top:12px;padding-top:12px;border-top:1px dashed var(--line2);display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.basis a{color:var(--teal);font-weight:700;text-decoration:none;border-bottom:1px solid var(--teal-l);cursor:pointer}
+.plain{background:var(--teal-s);border:1px solid var(--teal-l);border-radius:var(--r);padding:15px 17px;font-size:15px;line-height:1.75;color:#0b5a4b;margin-bottom:16px}
+.plain .pl{font-size:11.5px;font-weight:700;color:var(--teal);letter-spacing:.06em;margin-bottom:4px}
+.mdcard{border:1.5px solid var(--violet-l);background:var(--violet-s);border-radius:var(--r);padding:18px 20px;display:flex;gap:15px;align-items:flex-start}
+.mdcard .ic{font-size:22px;line-height:1.2}
+.mdcard h4{font-size:15.5px;font-weight:900;color:var(--violet);margin-bottom:4px}
+.mdcard p{margin:0 0 13px;font-size:13.5px;color:#4a4270;line-height:1.7}
+
+/* ---------- 我的資料 ---------- */
+.mywrap{display:grid;grid-template-columns:230px minmax(0,1fr);gap:22px;align-items:start}
+.mynav{position:sticky;top:88px;background:#fff;border:1px solid var(--line);border-radius:var(--rl);padding:10px;box-shadow:var(--sh)}
+.mynav a{display:block;padding:10px 14px;border-radius:var(--rs);font-size:14.5px;color:var(--ink2);cursor:pointer}
+.mynav a:hover{background:var(--gray-s)}
+.mynav a.on{background:var(--teal-s);color:var(--teal);font-weight:700}
+.acct{background:#fff;border:1px solid var(--line);border-radius:var(--rl);padding:20px 22px;box-shadow:var(--sh);margin-bottom:16px;display:flex;gap:15px;align-items:center;flex-wrap:wrap}
+.acct .big{width:50px;height:50px;border-radius:50%;background:var(--slate-s);color:var(--slate);font-size:18px;font-weight:900;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.acct .ai{flex:1;min-width:170px}
+.acct .ai b{font-size:17.5px;font-weight:900;display:block}
+.acct .ai span{font-size:13px;color:var(--ink3)}
+.saved{background:var(--teal-s);color:var(--teal);border:1px solid var(--teal-l);border-radius:99px;padding:6px 14px;font-size:12.5px;font-weight:700}
+.fld{display:flex;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid var(--line);align-items:flex-start;flex-wrap:wrap}
+.fld:last-child{border:none;padding-bottom:0}
+.fld .fl{flex:1;min-width:150px}
+.fld .fl b{font-size:15px;font-weight:500;display:block}
+.fld .fl span{font-size:12.5px;color:var(--ink4);line-height:1.55;display:block;margin-top:2px}
+.fld .fr{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.fld .fv{font-size:15px;font-weight:700;text-align:right}
+.fld .fv.none{color:var(--ink4);font-weight:400;font-style:italic}
+.src{font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;white-space:nowrap}
+.src-self{background:var(--slate-s);color:var(--slate)}
+.src-my{background:var(--violet-s);color:var(--violet)}
+.src-calc{background:var(--teal-s);color:var(--teal)}
+.edit{background:none;border:1px solid var(--line2);border-radius:99px;font-size:12px;padding:3px 12px;color:var(--ink3);cursor:pointer}
+.edit:hover{border-color:var(--teal);color:var(--teal)}
+.dangerzone{border:1px solid var(--rose-l);background:var(--rose-s);border-radius:var(--rl);padding:20px 22px}
+.dangerzone h3{color:var(--rose);font-size:16px;font-weight:900;margin-bottom:5px}
+.dangerzone p{margin:0 0 13px;font-size:13.5px;color:#7a3546;line-height:1.7}
+.privacy{display:flex;gap:11px;background:var(--slate-s);border:1px solid #d7e1ea;border-radius:var(--r);padding:14px 16px;font-size:13.5px;color:#3a4d5e;line-height:1.7;margin-top:16px}
+
+.modal{position:fixed;inset:0;background:rgba(26,34,41,.44);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.mbox{background:#fff;border-radius:var(--rl);max-width:430px;width:100%;padding:26px 28px;box-shadow:var(--sh2)}
+.mbox h3{font-size:18.5px;font-weight:900;margin-bottom:5px}
+.mbox p{margin:0 0 16px;font-size:13.5px;color:var(--ink3);line-height:1.7}
+.mopt{border:1.5px solid var(--line2);border-radius:var(--r);padding:12px 16px;font-size:16px;cursor:pointer;margin-bottom:9px}
+.mopt:hover{border-color:var(--teal);background:var(--teal-s)}
+.mopt.cur{border-color:var(--teal);background:var(--teal-s);font-weight:700}
+
+.foot{max-width:1180px;margin:0 auto;padding:0 30px 40px;font-size:12.5px;color:var(--ink4);line-height:1.8;text-align:center}
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--ink);color:#fff;padding:13px 24px;
+ border-radius:99px;font-size:15px;z-index:130;opacity:0;transition:.32s cubic-bezier(.16,1,.3,1);pointer-events:none;box-shadow:0 10px 34px rgba(0,0,0,.22)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:960px){
+ .wrap{padding:18px 16px 60px}.panel{padding:24px 20px}.crumbs,.sync{display:none}
+ h2.title{font-size:22px}.chatgrid,.rgrid,.dgrid,.mywrap{grid-template-columns:1fr}
+ .understand,.mynav{position:static}.askq{font-size:19px}
+}
+@media print{.topbar,.row,.askfoot,.foot,.tact,.mynav,.backbar,.inputbar,.quick{display:none!important}.panel,.sec{border:none;box-shadow:none;padding:0}}
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="tin">
+ <div class="brand" onclick="go(1)"><span class="mk">◗</span><span>接住<small>WELFARE NAVIGATOR</small></span></div>
+ <div class="crumbs" id="crumbs"></div>
+ <div class="tact">
+  <span class="sync"><span class="dot"></span><span id="syncTxt">已同步</span></span>
+  <button class="tbtn" id="btnMy" onclick="openMy()"><span class="av">李</span>我的資料</button>
+ </div>
+</div></div>
+
+<div class="wrap"><div id="stage"></div></div>
+<div class="foot">接住提供福利導航與申請準備，不受理申請、不代為送件。判定結果請以主管機關審查為準。<br>本原型中的法規條號、天數與金額一律留白，待官方文件確認後填入。</div>
+<div class="toast" id="toast"></div>
+<div id="modalLayer"></div>
+
+<script>
+/* ================== 狀態 ================== */
+var S={step:1,mySection:'basic',confirmed:false,detail:null,explained:false,
+ mydata:{authorized:false,at:null,expires:null},
+ account:{name:'李○芳',id:'usr_8f3a21',since:'2026 年 3 月',last:'剛剛'},
+ chat:[],turn:0,dims:{},summaryShown:false,event:null,asking:false,showNo:false};
+
+var ANS={};
+
+/* 對話會抓到的情境維度 */
+var DIMS=[
+ {k:'bereave',tag:'喪偶',kw:['過世','走了','往生','去世','死','喪']},
+ {k:'children',tag:'育兒',kw:['小孩','孩子','子女','兒子','女兒','念書','上學']},
+ {k:'jobless',tag:'收入中斷',kw:['工作','失業','離職','資遣','裁員','沒收入','沒工作']},
+ {k:'money',tag:'生活困難',kw:['錢','生活費','撐不下','付不出','困難','經濟']},
+ {k:'rent',tag:'居住負擔',kw:['房租','租金','房子','住']},
+ {k:'care',tag:'照顧負擔',kw:['生病','照顧','住院','失能','長輩','父母']}
+];
+/* AI 追問（依尚未涵蓋的維度挑選） */
+var FOLLOWUPS=[
+ {need:'children',ask:'我了解了，這一定很不容易。想再多問一點：家裡還有其他人需要你照顧嗎？例如小孩或長輩。',
+  chips:['有兩個小孩要養','有一個小孩','要照顧長輩','只有我自己']},
+ {need:'jobless',ask:'謝謝你告訴我。那你目前還有在工作嗎？家裡現在的經濟來源大概是什麼狀況？',
+  chips:['最近也失業了','有工作但收入不夠','沒有固定收入','還在工作'] },
+ {need:'money',ask:'我想確認一下你現在最急的是什麼——是生活費、房租，還是有其他馬上要處理的支出？',
+  chips:['生活費不夠','房租快付不出來','喪葬費用','還不確定']}
+];
+
+var PROFILE={
+ basic:{title:'基本資料',desc:'用於判斷戶籍地適用的地方性補助，以及年齡相關的資格門檻。',fields:[
+  {c:'name',l:'姓名',w:'產生申請表預填內容時使用',v:'李○芳',src:'self'},
+  {c:'birth',l:'出生年',w:'年齡是多數給付的基本門檻條件',v:'1979 年',src:'self'},
+  {c:'city',l:'戶籍地',w:'決定由哪個縣市受理，以及適用哪一套地方標準',v:'臺北市 中山區',src:'self',opts:['臺北市 中山區','新北市 板橋區','桃園市 中壢區','其他']},
+  {c:'phone',l:'聯絡電話',w:'僅用於你主動要求人工協助時回撥',v:'09xx-xxx-xxx',src:'self'}]},
+ family:{title:'家庭狀況',desc:'家戶組成影響平均收入計算，以及特殊境遇、育兒等項目的認定。',fields:[
+  {c:'marital',l:'婚姻狀況',w:'喪偶、離婚是特殊境遇家庭的認定條件之一',v:'喪偶',src:'self',opts:['未婚','已婚','離婚','喪偶']},
+  {c:'household',l:'同戶籍人數',w:'家戶人數是計算每人每月平均收入的分母',v:'3 人',src:'self',opts:['1 人','2 人','3 人','4 人以上']},
+  {c:'children',l:'未成年子女數',w:'影響遺屬給付加給、育兒津貼與生活津貼核算',v:'2 位',src:'self',opts:['沒有','1 位','2 位','3 位以上']},
+  {c:'relation',l:'與過世者關係',w:'請領資格與順位依親屬關係認定',v:'配偶',src:'self',opts:['配偶','子女','父母','其他親屬']}]},
+ econ:{title:'經濟狀況',desc:'資力審查的核心欄位。授權 MyData 後可由官方資料直接帶入。',fields:[
+  {c:'income',l:'家庭年所得',w:'低收、中低收與各項生活扶助的門檻依據',v:'',src:'self'},
+  {c:'avg',l:'每人每月平均收入',w:'由年所得與家戶人數自動推算',v:'',src:'calc'},
+  {c:'property',l:'不動產與車輛',w:'財產是否超過門檻會直接決定資格',v:'',src:'self'},
+  {c:'deposit',l:'存款總額',w:'部分項目設有存款上限',v:'',src:'self'},
+  {c:'labor',l:'本人勞保投保狀態',w:'影響就業保險相關給付的請領資格',v:'',src:'self'},
+  {c:'employment',l:'目前就業狀況',w:'部分給付排除同時領取性質相同的補助',v:'',src:'self',opts:['未就業','非自願離職','有工作','退休','無工作能力']}]},
+ status:{title:'身分別',desc:'具備特定身分可開啟專屬補助項目，多數需官方證明認定。',fields:[
+  {c:'lowincome',l:'低收 / 中低收入戶',w:'許多項目以此為前提條件',v:'',src:'self'},
+  {c:'disability',l:'身心障礙證明',w:'身障相關補助的認定基礎',v:'',src:'self'},
+  {c:'indigenous',l:'原住民身分',w:'原民會專屬補助項目的認定條件',v:'',src:'self',opts:['是','否']}]}
+};
+var MYSETS=[
+ {n:'個人所得資料',o:'財政部財政資訊中心',f:'income'},
+ {n:'財產歸屬清單',o:'財政部財政資訊中心',f:'property'},
+ {n:'勞保被保險人投保資料',o:'勞動部勞工保險局',f:'labor'},
+ {n:'全戶戶籍資料',o:'內政部戶政司',f:'household'},
+ {n:'低收入戶／中低收入戶證明',o:'衛生福利部',f:'lowincome'},
+ {n:'身心障礙證明',o:'衛生福利部',f:'disability'}
+];
+
+/* 問題（決定備妥率的關鍵） */
+var Q=[
+ {c:'insured_type',l:'過世者的投保身分',q:'過世者生前的投保身分是？',opts:['勞工保險','國民年金','農民保險','公教人員保險','不確定'],
+  why:'投保身分決定由哪個機關受理，以及適用哪一套給付規則。'},
+ {c:'relation',l:'你與過世者的關係',q:'你與過世者的關係是？',opts:['配偶','子女','父母','其他親屬'],profile:'relation',
+  why:'請領資格與順位依親屬關係認定。'},
+ {c:'insured_years',l:'過世者的投保年資',q:'過世者的投保年資大約多久？',opts:['未滿 1 年','1 – 5 年','5 – 15 年','15 年以上','不確定'],mydata:true,
+  why:'年資是遺屬年金的門檻條件之一。'},
+ {c:'children',l:'未成年子女',q:'家中有幾位未滿 18 歲的子女？',opts:['沒有','1 位','2 位','3 位以上'],profile:'children',
+  why:'影響遺屬給付加給與育兒相關項目。'},
+ {c:'employment',l:'你目前的就業狀況',q:'你目前的就業狀況是？',opts:['未就業','非自願離職','有工作','退休'],profile:'employment',
+  why:'部分給付排除同時領取性質相同的補助。'},
+ {c:'household',l:'同戶籍人數',q:'同一戶籍內目前有幾人？',opts:['1 人','2 人','3 人','4 人以上'],profile:'household',
+  why:'家戶人數是計算每人每月平均收入的分母。'}
+];
+
+/* 補助項目；docs.needs = 該文件要哪些答案才能自動帶入 */
+var ITEMS=[
+ {id:'funeral',name:'喪葬給付',org:'勞動部勞工保險局',kind:'welfare',deadline:'有請領時效',basis:'〈條例名稱〉第 〇 條',
+  loc:'勞動部勞工保險局（可線上辦理）',amt:'依投保薪資計算',requires:['insured_type','relation'],
+  reason:'過世者生前有投保，且你為適格請領人。',
+  plain:'因為過世者生前有勞工保險，而你是配偶，所以可以申請這筆給付。請留意有請領時效，建議先辦死亡登記取得文件後儘早提出。',
+  docs:[
+   {n:'喪葬給付申請書',t:'auto',needs:['relation'],m:'請領人與親屬關係由你的資料帶入'},
+   {n:'死亡證明書或除戶戶籍謄本',t:'my',needs:[],m:'MyData 戶政除戶資料'},
+   {n:'請領人與過世者關係證明',t:'my',needs:[],m:'MyData 全戶戶籍資料可佐證'},
+   {n:'投保單位與投保資料',t:'auto',needs:['insured_type'],m:'依你填的投保身分帶入受理機關'},
+   {n:'喪葬費用收據',t:'self',needs:[],m:'需由禮儀公司開立，系統無法取得'},
+   {n:'請領人金融帳戶封面影本',t:'self',needs:[],m:'請自行準備存摺影本'}]},
+ {id:'survivor',name:'遺屬年金',org:'勞動部勞工保險局',kind:'welfare',deadline:'有請領時效',basis:'〈條例名稱〉第 〇 條',
+  loc:'勞動部勞工保險局',amt:'依年資與投保薪資計算',requires:['insured_type','insured_years','relation'],
+  reason:'須確認投保年資是否達到門檻。',
+  plain:'遺屬年金需要確認過世者的投保年資是否達到門檻。年資確認後即可判定，也會影響是否有未成年子女加給。',
+  docs:[
+   {n:'遺屬年金申請書',t:'auto',needs:['relation'],m:'請領人資料與親屬關係已可預填'},
+   {n:'過世者投保年資資料',t:'my',needs:[],m:'MyData 勞保局被保險人投保資料'},
+   {n:'全戶戶籍謄本',t:'my',needs:[],m:'MyData 內政部戶政資料'},
+   {n:'未成年子女加給申報',t:'auto',needs:['children'],m:'依你填的子女數自動帶入'},
+   {n:'在學證明（子女加給）',t:'self',needs:[],m:'需向學校申請'},
+   {n:'金融帳戶封面影本',t:'self',needs:[],m:'請自行準備存摺影本'}]},
+ {id:'special',name:'特殊境遇家庭扶助',org:'地方社會局處',kind:'welfare',deadline:null,basis:'〈條例名稱〉第 〇 條',
+  loc:'戶籍地公所社會課',amt:'依縣市與子女數核算',requires:['relation','children','employment'],
+  reason:'喪偶且獨力扶養未成年子女，符合特殊境遇認定方向。',
+  plain:'你符合喪偶且獨力扶養未成年子女的條件方向，還須經家庭收入審查。收入資料可由 MyData 帶入後即時試算。',
+  docs:[
+   {n:'扶助申請書',t:'auto',needs:['relation','children'],m:'家庭組成由你的資料帶入'},
+   {n:'全戶戶籍謄本',t:'my',needs:[],m:'MyData 內政部戶政資料'},
+   {n:'全戶所得清單',t:'my',needs:[],m:'MyData 財政部所得資料'},
+   {n:'全戶財產歸屬清單',t:'my',needs:[],m:'MyData 財政部財產資料'},
+   {n:'就業狀況說明',t:'auto',needs:['employment'],m:'依你填的就業狀況帶入'},
+   {n:'子女在學證明',t:'self',needs:[],m:'需向學校申請'},
+   {n:'存款餘額證明',t:'self',needs:[],m:'需向往來銀行申請'}]},
+ {id:'unemploy',name:'失業給付（就業保險）',org:'勞動部勞工保險局',kind:'welfare',deadline:'退保後 2 年內',basis:'〈條例名稱〉第 〇 條',
+  loc:'公立就業服務機構辦理求職登記後轉送',amt:'投保薪資 60%，最長 6 個月',requires:['employment'],
+  reason:'須為非自願離職且就保年資符合。',
+  plain:'你目前為非自願離職，方向上符合請領條件，但須確認就保年資與求職登記程序。',
+  docs:[
+   {n:'失業給付申請書',t:'auto',needs:['employment'],m:'離職狀況由你的資料帶入'},
+   {n:'離職證明書（載明非自願）',t:'self',needs:[],m:'需向原雇主索取，最關鍵文件'},
+   {n:'本人勞保投保資料',t:'my',needs:[],m:'MyData 勞保局投保資料'},
+   {n:'國民身分證影本',t:'my',needs:[],m:'MyData 戶政身分證影像'},
+   {n:'扶養眷屬證明（加給）',t:'auto',needs:['children'],m:'依你填的子女數帶入'},
+   {n:'金融帳戶封面影本',t:'self',needs:[],m:'請自行準備存摺影本'}]},
+ {id:'relief',name:'急難紓困',org:'衛福部 · 公所社會課',kind:'welfare',deadline:'事件後 6 個月內',basis:'〈條例名稱〉第 〇 條',
+  loc:'戶籍地或現居地公所社會課',amt:'一次性核發',requires:['employment','household'],
+  reason:'主要收入者過世且收入中斷，屬急難救助範圍。',
+  plain:'家庭主要收入者過世並導致收入中斷，屬急難救助受理範圍，訪視後從速核發。',
+  docs:[
+   {n:'急難救助申請書',t:'auto',needs:['household'],m:'家戶組成由你的資料帶入'},
+   {n:'國民身分證影本',t:'my',needs:[],m:'MyData 戶政身分證影像'},
+   {n:'致生急難事由證明',t:'self',needs:[],m:'需向醫院或原雇主取得'},
+   {n:'近三個月存摺明細',t:'self',needs:[],m:'請自行至銀行補摺'},
+   {n:'全戶戶籍資料',t:'my',needs:[],m:'MyData 內政部戶政資料'}]}
+];
+
+/* ---------- 各項目的完整說明、主管機關、地區、申請步驟 ---------- */
+var APPLY={
+ funeral:{
+  full:'被保險人死亡時，由支出殯葬費的遺屬請領的一次性給付。給付金額依過世者死亡當月起前 6 個月的平均月投保薪資計算，發給一定月數。若同一被保險人的遺屬有多人，應共同具領；未共同具領時，由順序在先者具領。',
+  authority:'勞動部勞工保險局',level:'中央機關',area:'全國適用（不分縣市）',
+  online:'可線上辦理（勞保局 e 化服務系統）',
+  steps:[
+   {t:'先辦理死亡登記',d:'向戶籍地戶政事務所辦理，取得除戶證明。這是後續所有申請的前置文件。',dep:true},
+   {t:'確認過世者的投保身分與投保單位',d:'不同保險別由不同機關受理。可透過 MyData 調閱投保資料確認。'},
+   {t:'備齊申請書與證明文件',d:'申請書可於勞保局網站下載，或使用本站的預填版本。'},
+   {t:'選擇送件方式',d:'臨櫃至勞保局各地辦事處、郵寄、或以自然人憑證線上申辦。'},
+   {t:'等待審核與撥款',d:'審核通過後匯入指定帳戶。若文件不全，勞保局會函請補正。'}
+  ],
+  links:[['勞動部勞工保險局 · 喪葬給付專區','給付說明與申請書下載'],
+         ['勞保局 e 化服務系統','線上申辦入口'],
+         ['全國法規資料庫 · 勞工保險條例','法規原文']]},
+ survivor:{
+  full:'被保險人在保險有效期間死亡，其符合條件的遺屬可按月請領的年金給付。給付金額依投保年資與平均月投保薪資計算，並設有最低保障金額。有符合條件的遺屬多人時，每多一人加發一定比例，最多加計上限。請領人須符合親屬順位與年齡、身心障礙或扶養未成年子女等條件。',
+  authority:'勞動部勞工保險局',level:'中央機關',area:'全國適用（不分縣市）',
+  online:'可線上辦理（需自然人憑證）',
+  steps:[
+   {t:'先辦理死亡登記',d:'取得除戶證明與死亡證明書。',dep:true},
+   {t:'查明過世者的投保年資',d:'年資直接影響是否符合門檻與給付金額，可透過 MyData 調閱勞保投保資料。'},
+   {t:'確認自己是否為適格請領人',d:'依親屬順位認定，配偶、子女、父母等各有不同條件。'},
+   {t:'填具申請書並檢附關係證明',d:'需證明與過世者的親屬關係，戶籍資料可由 MyData 取得。'},
+   {t:'送件並等待核定',d:'核定後按月撥入指定帳戶，首次核發可能追溯自請領日。'}
+  ],
+  links:[['勞動部勞工保險局 · 遺屬年金專區','資格條件與試算'],
+         ['勞保局 · 給付金額試算服務','線上試算'],
+         ['全國法規資料庫 · 勞工保險條例','法規原文']]},
+ special:{
+  full:'針對特殊境遇家庭提供的扶助措施，包含子女生活津貼、緊急生活扶助、子女教育費補助、傷病醫療補助等項目。認定條件包含喪偶、離婚、未婚生子、家暴受害、配偶失蹤或入獄等情形之一，且家庭總收入按全家人口平均分配須低於當地最低生活費一定倍數，並符合不動產與存款的財產限額。',
+  authority:'衛生福利部社會及家庭署（政策）',level:'中央訂定 · 地方執行',
+  area:'各縣市受理，實際金額與加給依地方規定',
+  online:'部分縣市可線上申辦，多數需臨櫃',
+  steps:[
+   {t:'確認是否符合特殊境遇認定',d:'須符合喪偶、離婚、家暴等法定情形之一。'},
+   {t:'查明家庭收入與財產是否低於門檻',d:'以全家人口平均分配計算。所得與財產資料可由 MyData 取得。'},
+   {t:'向戶籍地公所社會課提出申請',d:'各縣市受理窗口與應備文件略有差異，建議先電話確認。'},
+   {t:'配合家庭訪視或資料補正',d:'承辦人員可能進行訪視或要求補充說明。'},
+   {t:'核定後按月或按次撥款',d:'子女生活津貼通常按月核發，需定期重新審核。'}
+  ],
+  links:[['衛福部社會及家庭署 · 特殊境遇家庭專區','法定條件與扶助項目'],
+         ['各縣市政府社會局處 · 申辦資訊','依戶籍地查詢受理窗口'],
+         ['全國法規資料庫 · 特殊境遇家庭扶助條例','法規原文']]},
+ unemploy:{
+  full:'被保險人非自願離職，且辦理退保當日前 3 年內保險年資合計滿一定期間，具工作能力及繼續工作意願，向公立就業服務機構辦理求職登記後，經一定期間仍無法推介就業或安排職業訓練者，得請領失業給付。給付標準為離職退保前平均月投保薪資的一定比例，並設有給付月數上限；有扶養無工作收入之眷屬者可加給。',
+  authority:'勞動部勞工保險局（核發）· 公立就業服務機構（受理）',level:'中央機關',
+  area:'全國適用，於各地就業服務站辦理',
+  online:'須先臨櫃辦理求職登記，後續認定可線上',
+  steps:[
+   {t:'向原雇主索取離職證明書',d:'必須載明「非自願離職」字樣，這是最關鍵且無法由系統代取的文件。',dep:true},
+   {t:'至公立就業服務機構辦理求職登記',d:'須本人臨櫃，並填寫失業給付申請書及給付收據。'},
+   {t:'接受就業推介或職訓安排',d:'經 14 日內無法推介就業或安排職訓，才符合請領條件。'},
+   {t:'由就業服務機構轉送勞保局核定',d:'不需自行送件至勞保局。'},
+   {t:'每月辦理失業再認定',d:'須定期回報求職情形，未辦理將停止發給。'}
+  ],
+  links:[['勞動部勞工保險局 · 失業給付','給付條件與金額計算'],
+         ['台灣就業通 · 就業服務站查詢','查詢最近的辦理地點'],
+         ['全國法規資料庫 · 就業保險法','法規原文']]},
+ relief:{
+  full:'針對家庭因負擔家計者失業、罹患重傷病、死亡、失蹤或其他原因，導致生活陷於困境的家庭，提供一次性的救助金。核發金額依家庭人口數與困境程度認定，經訪視評估後從速核發，屬急需救助性質，處理時程通常較其他項目快。',
+  authority:'衛生福利部社會救助及社工司（政策）',level:'中央訂定 · 地方執行',
+  area:'各縣市公所受理，可於戶籍地或現居地申請',
+  online:'須臨櫃申請（因需訪視評估）',
+  steps:[
+   {t:'準備致生急難的事由證明',d:'例如死亡證明書、診斷證明書、非自願離職證明等。',dep:true},
+   {t:'向公所社會課提出申請',d:'可於戶籍地或實際居住地的公所辦理，不限戶籍地。'},
+   {t:'配合訪視小組實地訪查',d:'承辦人員會實地了解家庭狀況與急迫程度。'},
+   {t:'審查會核定金額',d:'依家庭人口數與困境程度決定核發額度。'},
+   {t:'核定後撥款',d:'屬急難性質，核定與撥款時程通常較短。'}
+  ],
+  links:[['衛福部 · 急難紓困實施方案','受理條件與核發標準'],
+         ['1957 福利諮詢專線','電話諮詢與轉介'],
+         ['各縣市公所社會課','查詢受理窗口']]}
+};
+
+/* ---------- 文件的資料來源判定 ---------- */
+function docSource(d){
+ var n=d.n;
+ if(/戶籍|戶口|除戶|關係證明|眷屬/.test(n))return {o:'內政部戶政司',l:'戶政司 · 戶籍謄本申請',my:true};
+ if(/身分證/.test(n))return {o:'內政部戶政司',l:'戶政司 · 國民身分證資料',my:true};
+ if(/所得/.test(n))return {o:'財政部財政資訊中心',l:'財政部 · 所得資料查詢',my:true};
+ if(/財產|不動產/.test(n))return {o:'財政部財政資訊中心',l:'財政部 · 財產歸屬清單',my:true};
+ if(/勞保|投保|年資/.test(n))return {o:'勞動部勞工保險局',l:'勞保局 · 被保險人投保資料',my:true};
+ if(/死亡證明/.test(n))return {o:'開立死亡證明的醫院或衛生所',l:'衛福部 · 死亡證明書開立規定',my:false};
+ if(/離職證明/.test(n))return {o:'原任職單位（雇主）',l:'勞動部 · 非自願離職證明說明',my:false};
+ if(/在學/.test(n))return {o:'子女就讀學校',l:'教育部 · 在學證明申請說明',my:false};
+ if(/存摺|帳戶/.test(n))return {o:'你的往來金融機構',l:'—',my:false};
+ if(/存款餘額/.test(n))return {o:'各往來金融機構',l:'—',my:false};
+ if(/收據/.test(n))return {o:'開立收據的禮儀公司或業者',l:'—',my:false};
+ if(/申請書|申報|調查表|說明|收據/.test(n))return {o:'受理機關表單',l:'機關網站 · 表單下載',my:false};
+ return {o:'—',l:'—',my:false};}
+
+/* ================== 工具 ================== */
+function el(i){return document.getElementById(i);}
+function toast(t){var e=el('toast');e.textContent=t;e.classList.add('show');clearTimeout(window._t);window._t=setTimeout(function(){e.classList.remove('show')},2500);}
+function saveDB(m){el('syncTxt').textContent='儲存中…';setTimeout(function(){el('syncTxt').textContent='已同步';S.account.last='剛剛';if(m)toast(m);},400);}
+function findP(c){var r=null;Object.keys(PROFILE).forEach(function(s){PROFILE[s].fields.forEach(function(f){if(f.c===c)r={s:s,f:f};});});return r;}
+function P(s,c){return PROFILE[s].fields.filter(function(f){return f.c===c;})[0];}
+
+var STEPS=[{n:1,t:'描述狀況'},{n:2,t:'狀況解讀'},{n:3,t:'媒合與評估'},{n:4,t:'準備清單'}];
+function crumbs(cur){el('crumbs').innerHTML=STEPS.map(function(s){
+ var cls=s.n===cur?'cb on':(s.n<cur?'cb done':'cb');
+ var click=s.n<cur?' onclick="go('+s.n+')"':'';
+ return '<span class="'+cls+'"'+click+'>'+s.t+'</span>';}).join('<span style="color:var(--line2);font-size:11px">›</span>');}
+
+function backbar(label,fn,where){
+ return '<div class="backbar"><button class="back" onclick="'+fn+'">← '+label+'</button>'+
+  (where?'<span class="where">'+where+'</span>':'')+'</div>';}
+
+function go(n){S.step=n;el('btnMy').classList.remove('on');window.scrollTo({top:0,behavior:'smooth'});
+ if(n===1)el('stage').innerHTML=viewChat();
+ if(n===2)el('stage').innerHTML=viewInterp();
+ if(n===3)el('stage').innerHTML=viewMatch();
+ if(n===4)el('stage').innerHTML=viewDetail();
+ crumbs(n);}
+
+/* ================== 步驟 1：對話引導 ================== */
+var INTERP={
+ bereave:['家中有親人過世','這通常會牽動死亡登記、健保身分變更，以及喪葬給付、遺屬年金等給付項目。'],
+ children:['你有未成年子女需要扶養','子女人數會影響子女生活津貼、遺屬給付加給與育兒相關項目。'],
+ jobless:['你的工作收入中斷了','可能符合就業保險的失業給付，也會影響生活扶助類項目的資力審查。'],
+ money:['目前的生活費出現缺口','屬於急難救助可以考量的範圍，這類項目通常核發較快。'],
+ rent:['居住費用造成負擔','可以一併檢視租金補貼與居住支持類的項目。'],
+ care:['你身上有照顧他人的負擔','可以一併檢視長照服務與照顧者支持資源。']
+};
+/* ================== 步驟 2：狀況解讀（獨立整頁） ================== */
+var RELATED={
+ bereave:['死亡登記','健保身分變更','喪葬給付','遺屬年金'],
+ children:['子女生活津貼','遺屬給付子女加給','育兒相關補助'],
+ jobless:['失業給付','就業促進津貼','生活扶助'],
+ money:['急難紓困','生活扶助'],
+ rent:['租金補貼','居住支持'],
+ care:['長照服務','照顧者支持資源']
+};
+function viewInterp(){
+ var ks=DIMS.filter(function(d){return S.dims[d.k];}).map(function(d){return d.k;});
+ var tags=DIMS.filter(function(d){return S.dims[d.k];}).map(function(d){
+  return '<span class="utag big">'+d.tag+'</span>';}).join('');
+ var cards=ks.filter(function(k){return INTERP[k];}).map(function(k,i){
+  var rel=(RELATED[k]||[]).map(function(r){return '<span class="relchip">'+r+'</span>';}).join('');
+  return '<div class="ipcard"><span class="ipn">'+(i+1)+'</span><div class="ipb">'+
+   '<div class="ipt">'+INTERP[k][0]+'</div>'+
+   '<div class="ipd">'+INTERP[k][1]+'</div>'+
+   (rel?'<div class="iprel"><span class="irl">可能牽動的項目</span><div class="irc">'+rel+'</div></div>':'')+
+   '</div></div>';}).join('');
+
+ var mine=S.chat.filter(function(m){return m.r==='me';});
+ var quotes=mine.length?'<div class="sec"><h3>你剛才說的話</h3>'+
+  '<div class="sd">我的解讀就是從下面這些內容整理出來的。你可以核對一下有沒有被誤解。</div>'+
+  mine.map(function(m){return '<div class="quote">「'+m.t+'」</div>';}).join('')+'</div>':'';
+
+ var known=[];
+ ['marital','children','household','relation','employment'].forEach(function(c){
+  var p=findP(c);if(p&&p.f.v)known.push([p.f.l,p.f.v]);});
+
+ return backbar('回到對話補充','go(1)','步驟 2 · 狀況解讀')+
+ '<div class="interphero">'+
+  '<div class="ihl"><div class="eyebrow" style="color:#fff;opacity:.85">我對你狀況的解讀</div>'+
+  '<h2 class="ihev">'+(S.event||'生活陷入困難')+'</h2>'+
+  '<div class="ihs">以下是我從你剛才的描述中讀到的內容。<b>請先確認我有沒有理解錯</b>，再往下進行資格評估。</div>'+
+  (tags?'<div class="utags" style="margin-top:14px">'+tags+'</div>':'')+'</div>'+
+  '<div class="ihr"><div class="ihcnt">'+ks.length+'</div><span>個面向<br>需要處理</span></div>'+
+ '</div>'+
+ '<div class="dgrid" style="margin-top:20px"><div>'+
+  '<div class="sechd" style="margin-bottom:12px"><h3>逐項解讀</h3>'+
+  '<span class="deco" style="font-size:13px">每一項都會影響接下來要檢視哪些補助</span></div>'+
+  (cards||'<div class="sec"><div class="sd">你的描述還需要再釐清一些細節，建議回到對話多說一點。</div></div>')+
+ '</div><div>'+
+  quotes+
+  (known.length?'<div class="sec"><h3>將一併納入評估的既有資料</h3>'+
+   '<div class="sd">這些來自你的帳戶，不需要重新填寫。</div>'+
+   known.map(function(k){return '<div class="fld"><div class="fl"><b>'+k[0]+'</b></div>'+
+    '<div class="fr"><span class="fv">'+k[1]+'</span><span class="src src-self">我的資料</span></div></div>';}).join('')+
+   '</div>':'')+
+  '<div class="sec"><h3>接下來會做什麼</h3>'+
+   '<div class="steplist">'+
+   '<div class="sl"><span class="sln">1</span><div><b>回答幾個必要問題</b><span>只問判定資格真正需要的欄位</span></div></div>'+
+   '<div class="sl"><span class="sln">2</span><div><b>即時判定與金額試算</b><span>每答一題，結果與可領金額同步更新</span></div></div>'+
+   '<div class="sl"><span class="sln">3</span><div><b>產出準備清單</b><span>應備文件與備妥率，可列印帶去辦理</span></div></div>'+
+   '</div></div>'+
+ '</div></div>'+
+ '<div class="bigconfirm" style="margin-top:22px">'+
+  '<div class="bcl"><span class="bci">✓</span><div><b>以上的解讀正確嗎？</b>'+
+  '<span>確認後我才會開始判斷你符合哪些補助。理解有誤請回到對話補充。</span></div></div>'+
+  '<div class="bcb">'+
+   '<button class="btn" style="font-size:17px;padding:16px 34px" onclick="go(3)">正確，開始媒合評估 →</button>'+
+   '<button class="btn ghost" onclick="reviseUnderstand()">不太對，我要補充</button>'+
+  '</div></div>';}
+
+/* ---------- 服務說明 + Banner ---------- */
+function bannerSVG(){
+ return '<svg viewBox="0 0 1000 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="接住服務示意圖：人生突然的變動，由一張安全網承接">'+
+ '<rect width="1000" height="260" rx="16" fill="#e6f2ef"/>'+
+ '<circle cx="878" cy="46" r="58" fill="#d4e9e3"/><circle cx="86" cy="212" r="70" fill="#d4e9e3"/>'+
+ /* 安全網 */
+ '<g stroke="#0d7360" stroke-opacity=".34" stroke-width="2" fill="none">'+
+  '<path d="M40 196 Q500 262 960 196"/><path d="M40 210 Q500 276 960 210"/>'+
+  '<path d="M120 200 L150 232"/><path d="M200 205 L228 238"/><path d="M290 210 L316 242"/>'+
+  '<path d="M390 214 L414 246"/><path d="M500 216 L522 248"/><path d="M610 214 L632 246"/>'+
+  '<path d="M710 210 L734 242"/><path d="M800 205 L826 238"/><path d="M880 199 L906 231"/>'+
+ '</g>'+
+ /* 情境一：家人過世 */
+ '<g transform="translate(112,58)">'+
+  '<rect x="-46" y="-8" width="132" height="120" rx="12" fill="#fff" fill-opacity=".72"/>'+
+  '<circle cx="8" cy="30" r="15" fill="#3f5b73"/><path d="M-8 88 q16-32 32-32 t32 32z" fill="#3f5b73"/>'+
+  '<circle cx="48" cy="42" r="10" fill="#8fa6b8"/><path d="M34 88 q14-22 28-22 t14 22z" fill="#8fa6b8"/>'+
+  '<path d="M62 16 v-14" stroke="#96660f" stroke-width="3"/><circle cx="62" cy="-2" r="4" fill="#efa32a"/>'+
+  '<text x="20" y="108" text-anchor="middle" font-size="13" font-weight="700" fill="#0d7360" font-family="sans-serif">親人過世</text>'+
+ '</g>'+
+ /* 情境二：獨自育兒 */
+ '<g transform="translate(330,50)">'+
+  '<rect x="-44" y="0" width="128" height="128" rx="12" fill="#fff" fill-opacity=".72"/>'+
+  '<circle cx="10" cy="38" r="15" fill="#54479c"/><path d="M-6 96 q16-32 32-32 t32 32z" fill="#54479c"/>'+
+  '<circle cx="52" cy="62" r="10" fill="#a49bd8"/><path d="M40 96 q12-20 24-20 t12 20z" fill="#a49bd8"/>'+
+  '<path d="M26 62 h18" stroke="#54479c" stroke-width="3" stroke-linecap="round"/>'+
+  '<text x="20" y="118" text-anchor="middle" font-size="13" font-weight="700" fill="#0d7360" font-family="sans-serif">獨自照顧孩子</text>'+
+ '</g>'+
+ /* 情境三：失去工作 */
+ '<g transform="translate(548,50)">'+
+  '<rect x="-44" y="0" width="128" height="128" rx="12" fill="#fff" fill-opacity=".72"/>'+
+  '<circle cx="20" cy="36" r="15" fill="#a35a2c"/><path d="M4 94 q16-32 32-32 t32 32z" fill="#a35a2c"/>'+
+  '<rect x="-24" y="56" width="34" height="26" rx="4" fill="#d8874f"/><path d="M-16 56 v-6 h18 v6" stroke="#a35a2c" stroke-width="3" fill="none"/>'+
+  '<text x="20" y="118" text-anchor="middle" font-size="13" font-weight="700" fill="#0d7360" font-family="sans-serif">失去收入</text>'+
+ '</g>'+
+ /* 情境四：照顧長輩 */
+ '<g transform="translate(766,50)">'+
+  '<rect x="-44" y="0" width="128" height="128" rx="12" fill="#fff" fill-opacity=".72"/>'+
+  '<circle cx="14" cy="38" r="14" fill="#0d7360"/><path d="M0 94 q14-30 28-30 t28 30z" fill="#0d7360"/>'+
+  '<circle cx="54" cy="46" r="11" fill="#7bbfa9"/><path d="M40 94 q14-24 28-24 t10 24z" fill="#7bbfa9"/>'+
+  '<path d="M74 52 v42" stroke="#5f6b74" stroke-width="3" stroke-linecap="round"/>'+
+  '<text x="20" y="118" text-anchor="middle" font-size="13" font-weight="700" fill="#0d7360" font-family="sans-serif">照顧長輩</text>'+
+ '</g>'+
+ '<text x="500" y="30" text-anchor="middle" font-size="15" font-weight="700" fill="#0a5f50" font-family="sans-serif" letter-spacing="2">生活突然改變的時候，不必自己一個人查</text>'+
+ '</svg>';}
+
+function introBlock(){
+ return '<div class="hero">'+
+  '<div class="herobanner">'+bannerSVG()+'</div>'+
+  '<div class="herobody">'+
+   '<h1 class="heroh">先說說你的狀況，我幫你找出可以申請的補助</h1>'+
+   '<p class="herop">遇到親人過世、失去工作、獨自照顧家人這類突然的變動時，'+
+   '往往不知道政府有哪些補助、該去哪個機關、要準備什麼文件。'+
+   '接住會先聽你說明處境，再幫你判斷可能符合的項目，並整理成一份可以帶去辦理的清單。</p>'+
+   '<div class="herohow">'+
+    '<div class="hh"><span class="hhn">1</span><div><b>說說發生了什麼事</b><span>用你自己的話就好，我會慢慢問清楚</span></div></div>'+
+    '<div class="hh"><span class="hhn">2</span><div><b>確認我有沒有理解錯</b><span>由你拍板，理解錯了可以重新描述</span></div></div>'+
+    '<div class="hh"><span class="hhn">3</span><div><b>回答幾個必要問題</b><span>只問判定資格真正需要的欄位</span></div></div>'+
+    '<div class="hh"><span class="hhn">4</span><div><b>拿到準備清單</b><span>應備文件、辦理順序與受理機關</span></div></div>'+
+   '</div>'+
+   '<div class="herofoot">'+
+    '<span class="hf"><b>免費</b>不收任何費用</span>'+
+    '<span class="hf"><b>不代辦</b>僅提供查詢與準備，申請仍由你自行送件</span>'+
+    '<span class="hf"><b>可隨時刪除</b>你的資料由你控制</span>'+
+   '</div>'+
+  '</div></div>';}
+
+function viewChat(){
+ if(!S.chat.length){S.chat.push({r:'ai',t:'你好，我是接住。可以跟我說說最近發生了什麼事嗎？不用講得完整或有條理，想到什麼說什麼就好。'});}
+ var msgs=S.chat.map(function(m){
+  return '<div class="m '+(m.r==='ai'?'ai':'me')+'"><span class="ic">'+(m.r==='ai'?'接':'你')+'</span>'+
+   '<div class="bb">'+m.t+'</div></div>';}).join('');
+ var chips=S.chat.length===1
+  ?['我先生上週過世了','家人剛過世，不知道要辦什麼','我最近失業，生活有困難']
+  :(S.lastChips||[]);
+ var quick=(chips.length&&!S.summaryShown)?'<div class="quick">'+chips.map(function(c){
+   return '<span class="qc" onclick="say(this.textContent)">'+c+'</span>';}).join('')+'</div>':'';
+
+ /* 顯眼的確認區塊：直接壓在對話框下方，不藏在側邊 */
+ var confirmBar=(S.summaryShown&&!S.confirmed)
+  ? '<div class="bigconfirm">'+
+    '<div class="bcl"><span class="bci">✓</span><div><b>以上是我的理解，跟你的認知一致嗎？</b>'+
+    '<span>確認後我才會開始判斷你可能符合哪些補助。</span></div></div>'+
+    '<div class="bcb">'+
+     '<button class="btn" style="font-size:17px;padding:16px 34px" onclick="confirmUnderstand()">對，就是這樣 →</button>'+
+     '<button class="btn ghost" onclick="reviseUnderstand()">不太對，我再補充</button>'+
+    '</div></div>'
+  : '';
+
+ var intro=(S.chat.length<=1&&!S.confirmed)?introBlock():'';
+ return '<div class="narrow">'+
+   (S.confirmed?backbar('回到狀況解讀','go(2)','步驟 1 · 描述狀況'):'')+
+   intro+
+   '<div class="chatbox">'+
+   '<div class="chd"><span class="bot">接</span><div><b>接住 · 引導對話</b>'+
+   '<span>先聊清楚你的處境，再開始判斷資格</span></div></div>'+
+   '<div class="msgs" id="msgs">'+msgs+'</div>'+quick+
+   '<div class="inputbar">'+
+    '<button class="mic" onclick="toast(\'（示範）開始語音輸入…\')">🎙️</button>'+
+    '<textarea id="inp" placeholder="用你自己的話說就好…" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();say(this.value)}"></textarea>'+
+    '<button class="send" onclick="say(el(\'inp\').value)">↑</button></div>'+
+   '</div>'+confirmBar+
+   '<div class="row" style="margin-top:16px">'+
+    '<button class="back" onclick="resetChat()">← 重新開始對話</button>'+
+    (S.confirmed?'<button class="btn ghost sm" onclick="go(2)">看我的狀況解讀 →</button>':'')+
+   '</div></div>';}
+
+function say(txt){
+ txt=(txt||'').trim();if(!txt)return;
+ S.chat.push({r:'me',t:txt});S.lastChips=[];
+ DIMS.forEach(function(d){if(d.kw.some(function(k){return txt.indexOf(k)>=0;}))S.dims[d.k]=true;});
+ if(S.dims.bereave)S.event='配偶／家人過世';
+ S.turn++;S.asking=true;el('stage').innerHTML=viewChat();
+ var m=el('msgs');m.innerHTML+='<div class="m ai" id="ty"><span class="ic">接</span><div class="bb typing"><i></i><i></i><i></i></div></div>';
+ m.scrollTop=m.scrollHeight;
+ setTimeout(aiReply,900);}
+
+function aiReply(){
+ var fu=null;
+ for(var i=0;i<FOLLOWUPS.length;i++){if(!S.dims[FOLLOWUPS[i].need]){fu=FOLLOWUPS[i];break;}}
+ if(fu&&S.turn<3){
+  S.chat.push({r:'ai',t:fu.ask});S.lastChips=fu.chips;
+ }else{
+  S.event=S.event||'生活陷入困難';
+  var tags=DIMS.filter(function(d){return S.dims[d.k];}).map(function(d){return d.tag;});
+  S.chat.push({r:'ai',t:'謝謝你願意說這些。我把你的狀況整理成這樣：<br><br>'+
+   '<b>'+S.event+'</b>，你目前'+(tags.length?'面臨 <b>'+tags.join('、')+'</b> 的處境':'的處境還需要再釐清')+'。<br><br>'+
+   '請看右邊的整理，如果沒問題就按「對，就是這樣」，我會開始判斷你可能符合哪些補助。如果我理解錯了，也可以繼續補充。'});
+  S.lastChips=[];S.summaryShown=true;}
+ S.asking=false;saveDB();el('stage').innerHTML=viewChat();
+ var m=el('msgs');if(m)m.scrollTop=m.scrollHeight;}
+
+function confirmUnderstand(){S.confirmed=true;saveDB('已確認你的狀況描述');
+ if(S.dims.jobless){var e=findP('employment');if(e&&!e.f.v){e.f.v='非自願離職';}}
+ S.chat.push({r:'ai',t:'好，我已經記下你的狀況。我整理了一份完整的解讀，請你看一下我有沒有理解錯。'});
+ go(2);}
+function reviseUnderstand(){S.summaryShown=false;S.confirmed=false;S.turn=1;
+ S.chat.push({r:'ai',t:'沒問題，是哪個部分不太對？你可以直接補充，我再重新整理一次。'});
+ S.lastChips=['我的狀況不只這些','家庭情況不一樣','我想補充經濟狀況'];go(1);}
+function resetChat(){S.chat=[];S.turn=0;S.dims={};S.event=null;S.summaryShown=false;S.confirmed=false;S.lastChips=[];
+ toast('已重新開始對話');go(1);}
+
+/* ================== 步驟 2：問題 + 即時備妥率 ================== */
+function prefillOf(q){
+ if(q.profile){var p=findP(q.profile);if(p&&p.f.v)return p.f.v;}
+ if(q.mydata&&S.mydata.authorized)return '15 年以上';
+ return null;}
+function nextQ(){for(var i=0;i<Q.length;i++){if(!ANS[Q[i].c])return Q[i];}return null;}
+function docReady(d){
+ if(d.t==='my')return S.mydata.authorized;
+ if(d.t==='self')return false;
+ return (d.needs||[]).every(function(c){return !!ANS[c];});}
+function ready(it){var g=it.docs.filter(docReady).length;return {g:g,t:it.docs.length,p:Math.round(g/it.docs.length*100)};}
+function verdict(it){
+ var miss=(it.requires||[]).filter(function(c){return !ANS[c]||ANS[c]==='不確定';});
+ if(miss.length===(it.requires||[]).length)return 'pend';
+ if(miss.length)return 'info';
+ if(it.id==='special'&&ANS.children==='沒有')return 'no';
+ if(it.id==='unemploy'&&ANS.employment!=='非自願離職')return 'no';
+ return 'ok';}
+function noReason(it){
+ if(it.id==='special')return {c:'家中有未成年子女',mine:'沒有未成年子女',need:'至少 1 名未滿 18 歲子女'};
+ if(it.id==='unemploy')return {c:'離職原因',mine:ANS.employment||'—',need:'非自願離職'};
+ return null;}
+
+/* ---------- 金額估算（示範值，正式版須以官方公告數字為準） ---------- */
+var WAGE_DEFAULT=34800, WAGE_MYDATA=36300;
+function money(n){return 'NT$ '+Math.round(n).toLocaleString('en-US');}
+function nkids(){return ({'沒有':0,'1 位':1,'2 位':2,'3 位以上':3})[ANS.children];}
+function nhh(){return ({'1 人':1,'2 人':2,'3 人':3,'4 人以上':4})[ANS.household];}
+function estimate(it){
+ var miss=(it.requires||[]).filter(function(c){return !ANS[c]||ANS[c]==='不確定';});
+ if(miss.length)return {ok:false,why:'資料不足，尚無法估算'};
+ var exact=S.mydata.authorized, wage=exact?WAGE_MYDATA:WAGE_DEFAULT;
+ var k=nkids()||0, hh=nhh()||0;
+ switch(it.id){
+  case 'funeral':
+   if(ANS.insured_type==='國民年金')
+    return {ok:true,type:'once',amt:wage*3,note:'國保喪葬給付，示範以 3 個月計',exact:exact};
+   return {ok:true,type:'once',amt:wage*5,note:'投保薪資 '+money(wage)+' × 5 個月',exact:exact};
+  case 'survivor':
+   var y=ANS.insured_years;
+   var base=y==='15 年以上'?wage*0.30:(y==='5 – 15 年'?wage*0.22:wage*0.15);
+   var add=Math.min(k,2)*0.25;
+   return {ok:true,type:'monthly',months:null,amt:base*(1+add),
+    note:'年資 '+y+(k?'　·　含 '+Math.min(k,2)+' 名子女加給':'　·　無加給'),exact:exact};
+  case 'special':
+   if(k<=0)return {ok:false,why:'無未成年子女，無子女生活津貼'};
+   return {ok:true,type:'monthly',months:null,amt:5600*k,note:k+' 名子女 × '+money(5600),exact:true};
+  case 'unemploy':
+   if(ANS.employment!=='非自願離職')return {ok:false,why:'須為非自願離職才可請領'};
+   return {ok:true,type:'monthly',months:6,amt:wage*0.6*(1+Math.min(k,2)*0.1),
+    note:'投保薪資 60%'+(k?'　·　含眷屬加給 '+(Math.min(k,2)*10)+'%':'')+'　·　最長 6 個月',exact:exact};
+  case 'relief':
+   var a=hh>=4?40000:(hh===3?30000:(hh===2?20000:10000));
+   return {ok:true,type:'once',amt:a,note:'依家戶 '+(hh||'—')+' 人核算，一次性核發',exact:true};
+ }
+ return {ok:false,why:'尚未設定估算規則'};}
+function amtBox(it){
+ var e=estimate(it);
+ if(!e.ok)return '<div class="amt off"><div class="al">預估可領</div>'+
+  '<div class="av off">尚無法估算</div><div class="an">'+(e.why||'')+'</div></div>';
+ return '<div class="amt"><div class="al">預估可領</div>'+
+  '<div class="av">'+money(e.amt)+'<small>'+(e.type==='monthly'?' / 月':'　一次性')+'</small></div>'+
+  (e.type==='monthly'&&e.months?'<div class="ax">最長 '+e.months+' 個月 · 合計約 '+money(e.amt*e.months)+'</div>':'')+
+  '<div class="an">'+e.note+(e.exact?'':'　·　以平均投保薪資估算')+'</div></div>';}
+function totals(){
+ var mo=0,once=0,first=0,n=0,anyEst=false,allExact=true;
+ ITEMS.forEach(function(it){
+  if(verdict(it)==='no')return;
+  var e=estimate(it);if(!e.ok)return;
+  anyEst=true;n++;if(!e.exact)allExact=false;
+  if(e.type==='monthly'){mo+=e.amt;first+=e.amt*Math.min(12,e.months||12);}
+  else{once+=e.amt;first+=e.amt;}});
+ return {mo:mo,once:once,first:first,n:n,any:anyEst,exact:allExact};}
+var VL={ok:['符合','t-ok','v-ok'],info:['需補充資訊','t-info','v-info'],no:['不符合','t-no','v-no'],pend:['待確認','t-pend','']};
+
+function viewMatch(){
+ var q=nextQ(),ansN=Object.keys(ANS).length;
+ var pct=Math.round(ansN/Q.length*100);
+ var top;
+ if(q){
+  var pre=prefillOf(q);
+  top='<div class="askhero"><div class="ah">'+
+   '<div><span class="ahl">✎ 回答問題來完成評估</span>'+
+   '<div class="ahs">每回答一題，下方的判定結果、可領金額與文件備妥率都會即時更新。</div></div>'+
+   '<span class="askcnt">'+(ansN+1)+' <small>/ '+Q.length+'</small></span></div>'+
+   '<div class="pg"><i style="width:'+pct+'%"></i></div>'+
+   '<div class="askq">'+q.q+'</div><div class="askopts">'+
+   (pre?'<div class="ao pre" onclick="pick(\''+q.c+'\',\''+pre+'\')">'+pre+'<small>來自我的資料</small></div>':'')+
+   q.opts.filter(function(o){return o!==pre;}).map(function(o){
+     return '<div class="ao" onclick="pick(\''+q.c+'\',\''+o+'\')">'+o+'</div>';}).join('')+'</div>'+
+   '<div class="askwhy">為什麼問這個：'+q.why+'</div>'+
+   '<div class="askfoot">'+
+    (ansN>0?'<button class="back" onclick="undoAns()">← 回上一題</button>':'')+
+    '<button class="btn ghost sm" onclick="skipQ(\''+q.c+'\')">先跳過這題</button>'+
+    '<span class="deco" style="font-size:13px">還有 '+(Q.length-ansN)+' 題就完成</span>'+
+   '</div></div>';
+ }else{
+  top='<div class="donepanel"><div class="dt"><b>問題都回答完了</b>'+
+   '<span>下方是依你的情況評估的結果與文件備妥率。想調整答案可以按右邊的按鈕。</span></div>'+
+   '<button class="btn ghost sm" onclick="ANS={};go(3)">重新回答問題</button>'+
+   (S.mydata.authorized?'':'<button class="btn violet sm" onclick="mydataAuth()">🔐 授權 MyData 提高備妥率</button>')+
+   '</div>';}
+
+ var all=0,got=0,okN=0;
+ ITEMS.forEach(function(it){var r=ready(it);all+=r.t;got+=r.g;if(verdict(it)==='ok')okN++;});
+ var overall=Math.round(got/all*100);
+
+ function card(it){
+  var v=verdict(it),vl=VL[v],r=ready(it);
+  var bcls=r.p>=66?'hi':(r.p>=33?'mid':'lo');
+  var miss=(it.requires||[]).filter(function(c){return !ANS[c]||ANS[c]==='不確定';})
+    .map(function(c){var f=Q.filter(function(x){return x.c===c;})[0];return f?f.l:c;});
+  var body=v==='ok'?'<div class="rwhy">'+it.reason+'</div>'
+    :'<div class="rmiss">還需要確認：<b>'+(miss.join('、')||'—')+'</b></div>';
+  var chips=['auto','my','self'].map(function(t){
+   var ds=it.docs.filter(function(d){return d.t===t;});if(!ds.length)return '';
+   var rd=ds.filter(docReady).length;
+   var cls=t==='my'?(S.mydata.authorized?'dchip my':'dchip'):(rd?'dchip on':'dchip');
+   var lbl=({auto:'帳戶帶入',my:'MyData',self:'自行準備'})[t];
+   return '<span class="'+cls+'">'+lbl+' '+(t==='self'?ds.length:rd+'/'+ds.length)+'</span>';}).join('');
+  return '<div class="rcard '+vl[2]+'" onclick="openDetail(\''+it.id+'\')">'+
+   '<div class="rt"><h3>'+it.name+'</h3><span class="t '+vl[1]+'">'+vl[0]+'</span></div>'+
+   '<div class="org">'+it.org+(it.deadline?'　·　'+it.deadline:'')+'</div>'+
+   body+amtBox(it)+
+   '<div class="ready"><div class="rl"><span>文件備妥率</span><b>'+r.p+'%（'+r.g+'/'+r.t+' 項）</b></div>'+
+   '<div class="rbar"><i class="'+bcls+'" style="width:'+r.p+'%"></i></div>'+
+   '<div class="rdocs">'+chips+'</div></div></div>';}
+
+ /* 依判定結果分組，不符合的完全拉出來 */
+ var G={ok:[],info:[],no:[]};
+ ITEMS.forEach(function(it){var v=verdict(it);G[v==='pend'?'info':v].push(it);});
+
+ var secOK=G.ok.length?
+  '<div class="sechd"><h3><span class="hdot ok"></span>你可能符合 <span class="t t-ok">'+G.ok.length+' 項</span></h3>'+
+  '<div class="legend"><span><i style="background:var(--teal)"></i>帳戶資料可帶入</span>'+
+  '<span><i style="background:var(--violet)"></i>MyData 可取得</span>'+
+  '<span><i style="background:#dfe4e9"></i>需自行準備</span></div></div>'+
+  '<div class="rgrid">'+G.ok.map(card).join('')+'</div>':'';
+
+ var secInfo=G.info.length?
+  '<div class="sechd" style="margin-top:30px"><h3><span class="hdot info"></span>還需要補充資訊 <span class="t t-info">'+G.info.length+' 項</span></h3>'+
+  '<span class="deco" style="font-size:13px">補齊條件後就能確認，先不用準備文件</span></div>'+
+  '<div class="rgrid">'+G.info.map(card).join('')+'</div>':'';
+
+ var secNo=G.no.length?
+  '<div class="nogroup">'+
+  '<div class="sechd" style="margin:0 0 4px"><h3><span class="hdot no"></span>不符合資格 <span class="t t-no">'+G.no.length+' 項</span></h3>'+
+  '<button class="back" onclick="S.showNo=!S.showNo;go(3)">'+(S.showNo?'收合 ▴':'展開看原因 ▾')+'</button></div>'+
+  '<div class="nohint">這些項目經判定不符合，<b>你不需要為它們準備文件或跑一趟</b>。每一項都會說明差在哪個條件。</div>'+
+  (S.showNo?'<div class="nolist">'+G.no.map(function(it){var nr=noReason(it);
+    return '<div class="nocard"><div class="nch"><b>'+it.name+'</b><span class="t t-no">不符合</span></div>'+
+     '<div class="ncorg">'+it.org+'</div>'+
+     '<div class="ncwhy"><span class="ncl">差在這個條件</span>'+
+     '<div class="ncc">'+(nr?nr.c:'〈條件名稱〉')+'</div>'+
+     '<div class="ncv">你的情況：<b>'+(nr?nr.mine:'〈值〉')+'</b>　／　需要：<b>'+(nr?nr.need:'〈值〉')+'</b></div></div>'+
+     '<div class="basis">依據：<span class="blank">'+it.basis+'</span>'+
+     '<a onclick="toast(\'（示範）將開啟官方法規頁面\')">官方連結 ↗</a>'+
+     '<span class="blank">發布日期 〇</span></div>'+
+     '<div class="ncfoot">情況之後有變化的話，回到上方重新回答問題，判定會即時更新。</div></div>';}).join('')+'</div>'
+   :'<div class="nonames">'+G.no.map(function(it){var nr=noReason(it);
+     return '<div class="norow"><b>'+it.name+'</b><span>差在：'+(nr?nr.c:'〈條件名稱〉')+'</span></div>';}).join('')+'</div>')+
+  '</div>':'';
+
+ var T=totals();
+ var moneyCompact='<div class="moneyslim" onclick="toast(\'回答完所有問題後會顯示完整金額試算\')">'+
+  '<span class="msl">預估可領金額</span>'+
+  '<b>'+(T.any?money(T.first):'—')+'<small> / 首年（估算中）</small></b>'+
+  '<span class="msr">已納入 '+T.n+' 項 · 回答問題後會更精確</span></div>';
+ var moneyPanel='<div class="moneybox">'+
+  '<div class="mbh"><div><span class="mbl">若下列補助全數核准，預估可領</span>'+
+   '<div class="mbig">'+(T.any?money(T.first):'—')+'<small> / 首年合計</small></div></div>'+
+   '<span class="t '+(T.any?(T.exact?'t-ok':'t-info'):'t-pend')+'">'+
+   (T.any?(T.exact?'已用 MyData 實際資料估算':'以平均值估算，授權 MyData 更準')+'　·　'+T.n+' 項':'回答問題後開始估算')+'</span></div>'+
+  '<div class="mbrow">'+
+   '<div class="mb"><span>每月可領</span><b>'+(T.mo?money(T.mo):'—')+'</b><i>持續性給付合計</i></div>'+
+   '<div class="mb"><span>一次性給付</span><b>'+(T.once?money(T.once):'—')+'</b><i>單次核發合計</i></div>'+
+   '<div class="mb"><span>首年合計</span><b class="hl">'+(T.any?money(T.first):'—')+'</b><i>月領 × 給付月數 ＋ 一次性</i></div>'+
+  '</div>'+
+  '<div class="mbnote">⚠️ 以上為<b>示範估算值</b>，依你目前填答的條件推算，非核定金額。實際給付以主管機關審查結果為準；正式版金額須以官方公告數字計算。</div>'+
+ '</div>';
+
+ return backbar('回到狀況解讀','go(2)','步驟 3 · 媒合與評估　·　'+(S.event||'—'))+
+  (q?(top+moneyCompact):(moneyPanel+top))+
+  '<div class="sumrow">'+
+   '<div class="stat"><b>'+ITEMS.length+'</b><span>可能相關的項目</span></div>'+
+   '<div class="stat"><b style="color:var(--teal)">'+okN+'</b><span>目前判定符合</span></div>'+
+   '<div class="stat"><b>'+ansN+' / '+Q.length+'</b><span>已回答問題</span></div>'+
+   '<div class="stat"><b style="color:'+(overall>=66?'var(--teal)':'var(--amber)')+'">'+overall+'%</b><span>整體文件備妥率</span></div>'+
+  '</div>'+
+  secOK+secInfo+secNo+
+  '<div class="privacy"><span>ℹ️</span><div>備妥率會隨你回答的問題與 MyData 授權狀態即時變動。'+
+  '接住不受理申請、不代為送件，實際應備文件請以承辦單位要求為準。</div></div>';}
+
+function pick(c,v){ANS[c]=v;
+ var q=Q.filter(function(x){return x.c===c;})[0];
+ if(q&&q.profile){var p=findP(q.profile);if(p){p.f.v=v;}}
+ saveDB();go(3);}
+function skipQ(c){ANS[c]='不確定';toast('已跳過，相關項目會標為需補充資訊');go(3);}
+function undoAns(){var ks=Object.keys(ANS);if(!ks.length)return;delete ANS[ks[ks.length-1]];go(3);}
+function mydataAuth(){
+ S.mydata={authorized:true,at:'2026/07/26 16:40',expires:'2026/08/25'};
+ MYSETS.forEach(function(d){var p=findP(d.f);if(p){p.f.src='mydata';
+  if(!p.f.v)p.f.v={income:'NT$ 312,000',property:'無不動產 · 汽車 1 輛',labor:'已退保（2026/05）',
+   household:'3 人',lowincome:'未取得資格',disability:'無'}[d.f]||'已取得';}});
+ var a=P('econ','avg');if(a)a.v='NT$ 8,667';
+ if(!ANS.insured_years)ANS.insured_years='15 年以上';
+ saveDB();toast('✅ MyData 授權完成，已帶入 6 項官方資料，備妥率已更新');
+ setTimeout(function(){go(S.step===4?4:3);},600);}
+
+/* ================== 步驟 3：詳情 / 準備清單 ================== */
+function openDetail(id){S.detail=id;go(4);}
+function viewDetail(){
+ var it=ITEMS.filter(function(x){return x.id===S.detail;})[0];
+ if(!it)return viewMatch();
+ var v=verdict(it),vl=VL[v],r=ready(it);
+ var a=it.docs.filter(function(d){return d.t==='auto';}),
+     m=it.docs.filter(function(d){return d.t==='my';}),
+     s=it.docs.filter(function(d){return d.t==='self';});
+ var docHtml=it.docs.map(function(d){
+  var ok=docReady(d), src=docSource(d);
+  var cls=ok?(d.t==='auto'?'s-auto':'s-my'):(d.t==='my'?'s-my':'s-self');
+  var pill=ok?(d.t==='auto'?'<span class="t t-ok">已帶入</span>':'<span class="t t-my">已取得</span>')
+   :(d.t==='my'?'<span class="t t-my">授權後可得</span>'
+    :(d.t==='auto'?'<span class="t t-info">補答問題後可帶入</span>':'<span class="t t-pend">需自行準備</span>'));
+  return '<div class="docline"><span class="st '+cls+'">'+(ok?'✓':'·')+'</span><div style="flex:1;min-width:0">'+
+   '<div class="dn">'+d.n+' '+pill+'</div><div class="dm">'+d.m+'</div>'+
+   '<div class="dsrc"><span class="dsl">來源</span>'+src.o+
+   (src.l!=='—'?'　<a onclick="event.stopPropagation();toast(\'（示範）將開啟：'+src.l+'\')">'+src.l+' ↗</a>':'')+
+   '</div></div></div>';}).join('');
+ var AP=APPLY[it.id]||{};
+ var stepHtml=(AP.steps||[]).map(function(st,i){
+  return '<div class="apstep'+(st.dep?' key':'')+'"><span class="apn">'+(i+1)+'</span><div class="apb">'+
+   '<div class="apt">'+st.t+(st.dep?'<span class="t t-dead">前置步驟</span>':'')+'</div>'+
+   '<div class="apd">'+st.d+'</div></div></div>';}).join('');
+ var linkHtml=(AP.links||[]).map(function(L){
+  return '<a class="oflink" onclick="toast(\'（示範）將開啟：'+L[0]+'\')">'+
+   '<span class="oln">'+L[0]+'</span><span class="old">'+L[1]+'</span><span class="olx">↗</span></a>';}).join('');
+ var miss=(it.requires||[]).filter(function(c){return !ANS[c]||ANS[c]==='不確定';})
+   .map(function(c){var f=Q.filter(function(x){return x.c===c;})[0];return f?f.l:c;});
+
+ var e=estimate(it);
+ var city=findP('city')&&findP('city').f.v;
+
+ /* ── 區塊 A：頁首總覽（標題 + 補助說明 + 主管機關 + 關鍵指標） ── */
+ var head='<div class="dhcard">'+
+  '<div class="dhtop">'+
+   '<div class="dhl"><div class="eyebrow" style="margin-bottom:7px">申請準備清單</div>'+
+   '<h2 class="dhname">'+it.name+'</h2>'+
+   '<div class="dhorg">'+it.org+'</div></div>'+
+   '<span class="t '+vl[1]+'" style="font-size:13.5px;padding:7px 16px">'+vl[0]+'</span>'+
+  '</div>'+
+  /* 關鍵指標帶 */
+  '<div class="dhkey">'+
+   '<div class="dk"><span>預估可領</span><b'+(e.ok?' class="hl"':'')+'>'+
+    (e.ok?money(e.amt)+'<i>'+(e.type==='monthly'?'／月':'一次性')+'</i>':'尚無法估算')+'</b></div>'+
+   '<div class="dk"><span>文件備妥率</span><b class="'+(r.p>=66?'hl':'')+'">'+r.p+'%<i>'+r.g+'／'+r.t+' 項</i></b></div>'+
+   '<div class="dk"><span>受理期間</span><b>'+(it.deadline||'全年受理')+'</b></div>'+
+   '<div class="dk"><span>辦理方式</span><b>'+(AP.online||'—')+'</b></div>'+
+  '</div>'+
+  /* 補助說明 */
+  '<div class="dhsec"><h4><span class="dhn">說明</span>這項補助是什麼</h4>'+
+   '<div class="fulltext">'+(AP.full||'〈完整說明待官方文件確認後填入〉')+'</div>'+
+   '<div class="basis" style="margin-top:12px">說明來源：<span class="blank">'+it.basis+'</span>'+
+   '<a onclick="toast(\'（示範）將開啟官方法規頁面\')">法規原文 ↗</a>'+
+   '<span class="blank">發布日期 〇</span></div></div>'+
+  /* 主管機關 */
+  '<div class="dhsec"><h4><span class="dhn">機關</span>主管機關與適用地區</h4>'+
+   '<div class="orgbox">'+
+    '<div class="ob"><span class="obl">主管機關</span><b>'+(AP.authority||it.org)+'</b><i>'+(AP.level||'—')+'</i></div>'+
+    '<div class="ob"><span class="obl">適用地區</span><b>'+(AP.area||'—')+'</b>'+
+     '<i>'+(city?'你的戶籍地：'+city:'尚未填寫戶籍地')+'</i></div>'+
+    '<div class="ob"><span class="obl">辦理地點</span><b>'+it.loc+'</b><i>'+(AP.online||'—')+'</i></div>'+
+   '</div></div>'+
+ '</div>';
+
+ /* ── 區塊內快速跳轉 ── */
+ var jump='<div class="jumpbar"><span class="jl">跳至</span>'+
+  [['#j-verdict','判定原因'],['#j-steps','申請步驟'],['#j-docs','應備文件'],['#j-links','官方連結']]
+   .map(function(j){return '<a class="jc" href="'+j[0]+'">'+j[1]+'</a>';}).join('')+'</div>';
+
+ /* ── 區塊 B：左＝為什麼／步驟／連結　右＝文件 ── */
+ var left=
+  '<div class="sec" id="j-verdict"><h3>為什麼'+(v==='ok'?'可能符合':'還不能確認')+'</h3>'+
+   '<div class="sd">'+it.reason+'</div>'+
+   (S.explained?'<div class="plain" style="margin:12px 0 0"><div class="pl">白話說明</div>'+it.plain+'</div>'
+    :'<button class="btn ghost sm" style="margin-top:12px" onclick="S.explained=true;go(4)">用白話再說一次</button>')+
+   (miss.length?'<div class="rmiss" style="margin-top:12px">還需要確認：<b>'+miss.join('、')+'</b>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="go(3)">回去補答問題</button></div></div>':'')+
+   '<div class="basis">判定依據：<span class="blank">'+it.basis+'</span>'+
+   '<a onclick="toast(\'（示範）將開啟官方法規頁面\')">官方連結 ↗</a>'+
+   (it.deadline?'<span class="t t-dead">'+it.deadline+'</span>':'')+'</div></div>'+
+  '<div class="sec" id="j-steps"><h3>完整申請步驟 '+
+   '<span class="t t-info">共 '+((AP.steps||[]).length)+' 步</span></h3>'+
+   '<div class="sd">本站不代為送件，以下是你需要自行完成的流程。標示<b>前置步驟</b>的必須先完成，否則後面辦不下去。</div>'+
+   (stepHtml||'<div class="deco">〈申請步驟待官方文件確認後填入〉</div>')+
+   '<div class="kv" style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">'+
+   '<span>給付計算方式</span><b>'+it.amt+'</b></div></div>'+
+  (linkHtml?'<div class="sec" id="j-links"><h3>官方資料來源與連結</h3>'+
+   '<div class="sd">本頁所有說明都可以回到下列官方頁面核對。</div>'+linkHtml+'</div>':'');
+
+ var right=
+  '<div class="sec" id="j-docs"><h3>應備文件 <span class="t '+(r.p>=66?'t-ok':'t-info')+'">備妥 '+r.p+'%</span></h3>'+
+   '<div class="sd">共 '+it.docs.length+' 項，其中 '+r.g+' 項可由系統自動備妥。</div>'+
+   '<div class="rbar"><i class="'+(r.p>=66?'hi':(r.p>=33?'mid':'lo'))+'" style="width:'+r.p+'%"></i></div>'+
+   '<div class="legend" style="margin:13px 0 4px;padding-bottom:12px;border-bottom:1px solid var(--line)">'+
+   '<span><i style="background:var(--teal)"></i>帳戶帶入 '+a.filter(docReady).length+'/'+a.length+'</span>'+
+   '<span><i style="background:var(--violet)"></i>MyData '+m.filter(docReady).length+'/'+m.length+'</span>'+
+   '<span><i style="background:#dfe4e9"></i>自備 '+s.length+'</span></div>'+
+   docHtml+'</div>'+
+  (S.mydata.authorized?'':'<div class="mdcard"><span class="ic">🔐</span><div style="flex:1">'+
+   '<h4>授權 MyData 可再備妥 '+m.length+' 項</h4>'+
+   '<p>戶籍、所得、財產、勞保等官方證明可由你本人授權後自動取得，不必臨櫃調閱。</p>'+
+   '<button class="btn violet sm" onclick="mydataAuth()">前往 MyData 授權</button></div></div>')+
+  '<div class="sec"><h3>帶著這份清單去辦理</h3>'+
+   '<div class="sd">建議印出來，或存成 PDF 存在手機裡。</div>'+
+   '<div class="row" style="margin-top:0">'+
+   '<button class="btn sm" onclick="window.print()">列印 / 存成 PDF</button>'+
+   '<button class="btn ghost sm" onclick="toast(\'（示範）已下載預填申請表\')">下載預填表單</button></div></div>';
+
+ return backbar('回媒合結果','go(3)','步驟 4 · 準備清單　·　共 '+ITEMS.length+' 項可能相關的補助')+
+  head+jump+'<div class="dgrid"><div>'+left+'</div><div>'+right+'</div></div>'+
+  notEligibleSection(it.id);}
+
+/* 不符合 / 待補的項目也列出來，讓使用者知道不用為這些跑一趟 */
+function notEligibleSection(curId){
+ var no=ITEMS.filter(function(x){return x.id!==curId&&verdict(x)==='no';});
+ var info=ITEMS.filter(function(x){return x.id!==curId&&(verdict(x)==='info'||verdict(x)==='pend');});
+ if(!no.length&&!info.length)return '';
+ var h='<div class="othersec">';
+ if(no.length){
+  h+='<div class="sechd" style="margin-top:0"><h3>不符合資格的項目 <span class="t t-no">'+no.length+' 項</span></h3>'+
+   '<span class="deco" style="font-size:13px">這些你不需要準備文件，也不用為它們跑一趟</span></div>';
+  h+=no.map(function(x){var nr=noReason(x);
+   return '<div class="nocard"><div class="nch"><b>'+x.name+'</b>'+
+    '<span class="t t-no">不符合</span></div>'+
+    '<div class="ncorg">'+x.org+'</div>'+
+    '<div class="ncwhy"><span class="ncl">差在這個條件</span>'+
+    '<div class="ncc">'+(nr?nr.c:'〈條件名稱〉')+'</div>'+
+    '<div class="ncv">你的情況：<b>'+(nr?nr.mine:'〈值〉')+'</b>　／　需要：<b>'+(nr?nr.need:'〈值〉')+'</b></div></div>'+
+    '<div class="basis">依據：<span class="blank">'+x.basis+'</span>'+
+    '<a onclick="event.stopPropagation();toast(\'（示範）將開啟官方法規頁面\')">官方連結 ↗</a>'+
+    '<span class="blank">發布日期 〇</span></div>'+
+    '<div class="ncfoot">如果你的情況之後有變化，可以回到<b>媒合與評估</b>重新回答，判定會即時更新。</div>'+
+   '</div>';}).join('');}
+ if(info.length){
+  h+='<div class="sechd"><h3>尚未能判定的項目 <span class="t t-info">'+info.length+' 項</span></h3>'+
+   '<span class="deco" style="font-size:13px">補齊條件後就能確認，先不用準備文件</span></div>';
+  h+='<div class="infolist">'+info.map(function(x){
+   var miss=(x.requires||[]).filter(function(c){return !ANS[c]||ANS[c]==='不確定';})
+     .map(function(c){var f=Q.filter(function(y){return y.c===c;})[0];return f?f.l:c;});
+   return '<div class="inforow"><div><b>'+x.name+'</b><span>'+x.org+'</span></div>'+
+    '<div class="im">還缺：'+(miss.join('、')||'—')+'</div>'+
+    '<button class="btn ghost sm" onclick="go(3)">回去補答</button></div>';}).join('')+'</div>';}
+ return h+'<div class="row"><button class="btn ghost" onclick="go(3)">← 回媒合結果看全部項目</button></div></div>';}
+
+/* ================== 我的資料 ================== */
+function openMy(){S.step='my';el('btnMy').classList.add('on');crumbs(0);
+ window.scrollTo({top:0,behavior:'smooth'});el('stage').innerHTML=viewMy();}
+function counts(){var t=0,f=0,m=0;Object.keys(PROFILE).forEach(function(s){PROFILE[s].fields.forEach(function(x){
+ t++;if(x.v)f++;if(x.src==='mydata')m++;});});return {t:t,f:f,m:m};}
+function viewMy(){
+ var c=counts();
+ var nav=Object.keys(PROFILE).map(function(k){
+  return '<a class="'+(S.mySection===k?'on':'')+'" onclick="S.mySection=\''+k+'\';openMy()">'+PROFILE[k].title+'</a>';}).join('')+
+  '<a class="'+(S.mySection==='mydata'?'on':'')+'" onclick="S.mySection=\'mydata\';openMy()">MyData 授權</a>'+
+  '<a class="'+(S.mySection==='privacy'?'on':'')+'" onclick="S.mySection=\'privacy\';openMy()">隱私與資料管理</a>';
+ var body='';
+ if(PROFILE[S.mySection]){var sec=PROFILE[S.mySection];
+  body='<div class="sec"><h3>'+sec.title+'</h3><div class="sd">'+sec.desc+'</div>'+
+  '<div class="legend" style="padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:4px">'+
+  '<span><i style="background:var(--slate)"></i>自行填寫</span>'+
+  '<span><i style="background:var(--violet)"></i>MyData 帶入</span>'+
+  '<span><i style="background:var(--teal)"></i>系統推算</span></div>'+
+  sec.fields.map(function(f){
+   var sl={self:['src-self','自行填寫'],mydata:['src-my','MyData'],calc:['src-calc','系統推算']}[f.src];
+   return '<div class="fld"><div class="fl"><b>'+f.l+'</b><span>'+f.w+'</span></div>'+
+    '<div class="fr"><span class="fv'+(f.v?'':' none')+'">'+(f.v||'尚未填寫')+'</span>'+
+    '<span class="src '+sl[0]+'">'+sl[1]+'</span>'+
+    (f.src==='calc'?'':'<button class="edit" onclick="editP(\''+S.mySection+'\',\''+f.c+'\')">修改</button>')+
+    '</div></div>';}).join('')+'</div>';}
+ else if(S.mySection==='mydata'){
+  body='<div class="sec"><h3>MyData 授權狀態 '+(S.mydata.authorized?'<span class="t t-my">已授權</span>':'<span class="t t-pend">尚未授權</span>')+'</h3>'+
+  '<div class="sd">'+(S.mydata.authorized?'授權時間 '+S.mydata.at+'　·　有效期至 '+S.mydata.expires+'。資料已存入你的帳戶，下次諮詢不需重填。'
+   :'授權後可自動取得所得、財產、勞保、戶籍等官方資料，省去臨櫃調閱，也讓備妥率大幅提升。')+'</div>'+
+  MYSETS.map(function(d){var p=findP(d.f);
+   return '<div class="fld"><div class="fl"><b>'+d.n+'</b><span>'+d.o+'　→　'+(p?p.f.l:d.f)+'</span></div>'+
+   '<div class="fr">'+(S.mydata.authorized?'<span class="src src-my">已取得</span>':'<span class="src src-self">未取得</span>')+'</div></div>';}).join('')+
+  '<div class="row">'+(S.mydata.authorized
+   ?'<button class="btn ghost sm" onclick="mydataAuth();setTimeout(openMy,700)">重新授權更新資料</button>'+
+    '<button class="btn danger sm" onclick="revoke()">撤回授權並刪除帶入資料</button>'
+   :'<button class="btn violet" onclick="mydataAuth();setTimeout(openMy,800)">前往 MyData 授權</button>')+'</div></div>'+
+  '<div class="privacy"><span>🔐</span><div>接住以<b>服務提供者</b>身分介接 MyData，所有資料都由你本人在官方平台單次同意後傳送。我們不會、也無法主動查詢你的任何資料。</div></div>';}
+ else{
+  body='<div class="sec"><h3>你的資料存在哪裡</h3>'+
+  '<div class="sd">為了讓你下次不用重填、也能追蹤準備進度，這些資料儲存在接住的資料庫中，與你的帳戶綁定。</div>'+
+  '<div class="fld"><div class="fl"><b>儲存位置</b><span>接住服務資料庫（加密儲存）</span></div><div class="fr"><span class="fv">帳戶綁定</span></div></div>'+
+  '<div class="fld"><div class="fl"><b>帳戶識別碼</b><span>系統內部使用</span></div><div class="fr"><span class="fv">'+S.account.id+'</span></div></div>'+
+  '<div class="fld"><div class="fl"><b>最後更新</b><span>任何欄位變更都會即時同步</span></div><div class="fr"><span class="fv">'+S.account.last+'</span></div></div>'+
+  '<div class="fld"><div class="fl"><b>MyData 資料有效期</b><span>期滿自動失效，需重新授權</span></div>'+
+  '<div class="fr"><span class="fv">'+(S.mydata.authorized?'至 '+S.mydata.expires:'無')+'</span></div></div></div>'+
+  '<div class="sec"><h3>你可以做的事</h3><div class="sd">資料是你的，隨時可以帶走或刪除。</div>'+
+  '<div class="row" style="margin-top:0"><button class="btn ghost sm" onclick="toast(\'（示範）已匯出個人資料 JSON\')">下載我的所有資料</button>'+
+  '<button class="btn ghost sm" onclick="toast(\'（示範）已產生資料使用紀錄\')">查看資料使用紀錄</button></div></div>'+
+  '<div class="dangerzone"><h3>刪除我的資料</h3>'+
+  '<p>會從資料庫永久刪除你填寫的所有個人資料、MyData 帶入內容與歷次諮詢紀錄。此動作無法復原。</p>'+
+  '<button class="btn danger sm" onclick="wipe()">永久刪除我的資料</button></div>';}
+
+ return backbar('回到流程','go('+(S.confirmed?3:1)+')','我的資料')+
+ '<div class="acct"><span class="big">李</span><div class="ai"><b>'+S.account.name+'</b>'+
+ '<span>接住帳戶 · 自 '+S.account.since+' 起使用</span></div>'+
+ '<span class="saved">✓ 已儲存至你的帳戶 · '+S.account.last+'</span></div>'+
+ '<div class="sumrow"><div class="stat"><b>'+c.f+' / '+c.t+'</b><span>已填寫欄位</span></div>'+
+ '<div class="stat"><b style="color:var(--violet)">'+(S.mydata.authorized?c.m:0)+'</b><span>MyData 帶入</span></div>'+
+ '<div class="stat"><b style="color:var(--teal)">'+Math.round(c.f/c.t*100)+'%</b><span>資料完整度</span></div>'+
+ '<div class="stat"><b>'+Object.keys(ANS).length+'</b><span>本次已答問題</span></div></div>'+
+ '<div class="mywrap"><nav class="mynav">'+nav+'</nav><div>'+body+'</div></div>';}
+
+function editP(sec,code){var f=P(sec,code);
+ if(!f.opts){el('modalLayer').innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()"><div class="mbox">'+
+  '<h3>修改「'+f.l+'」</h3><p>'+f.w+'</p>'+
+  '<input id="mv" value="'+(f.v||'')+'" style="width:100%;border:1.5px solid var(--line2);border-radius:var(--r);padding:12px 15px;font-size:16px;font-family:inherit">'+
+  '<div class="row" style="margin-top:16px"><button class="btn sm" onclick="saveP(\''+sec+'\',\''+code+'\',el(\'mv\').value)">儲存</button>'+
+  '<button class="btn ghost sm" onclick="closeModal()">取消</button></div></div></div>';return;}
+ el('modalLayer').innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()"><div class="mbox">'+
+ '<h3>修改「'+f.l+'」</h3><p>'+f.w+'</p>'+
+ f.opts.map(function(o){return '<div class="mopt'+(o===f.v?' cur':'')+'" onclick="saveP(\''+sec+'\',\''+code+'\',\''+o+'\')">'+o+'</div>';}).join('')+
+ '<div class="row" style="margin-top:12px"><button class="btn ghost sm" onclick="closeModal()">取消</button></div></div></div>';}
+function saveP(sec,code,v){var f=P(sec,code);f.v=v;if(f.src==='mydata')f.src='self';
+ closeModal();saveDB('已更新並同步至你的帳戶');setTimeout(openMy,300);}
+function closeModal(){el('modalLayer').innerHTML='';}
+function revoke(){S.mydata={authorized:false,at:null,expires:null};
+ Object.keys(PROFILE).forEach(function(s){PROFILE[s].fields.forEach(function(f){if(f.src==='mydata'){f.v='';f.src='self';}});});
+ saveDB('已撤回 MyData 授權並刪除帶入的資料');setTimeout(openMy,300);}
+function wipe(){Object.keys(PROFILE).forEach(function(s){PROFILE[s].fields.forEach(function(f){f.v='';f.src='self';});});
+ ANS={};S.mydata={authorized:false,at:null,expires:null};resetChat();
+ saveDB('已從資料庫永久刪除你的所有資料');}
+
+go(1);
+</script>
+</body>
+</html>

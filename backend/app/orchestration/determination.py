@@ -193,17 +193,20 @@ def _resolve_item(
     if item.status != ItemStatus.PENDING:
         return item
 
-    blocked = gated_status(item.program_status)
-    if blocked is not None:
-        return item.model_copy(update={"status": blocked, "resolved_at": now})
-
     if item.item_id in undeclared_ids:
         return item.model_copy(
             update={"status": ItemStatus.NEEDS_HUMAN_REVIEW, "resolved_at": now}
         )
 
+    # 欄位還沒湊齊：維持 PENDING，讓缺漏欄位迴圈繼續問。
+    # 不可對未就緒的 candidate 提前套用閘門定案，否則一題一題作答時
+    # 所有項目會在第一輪就被定成 needs_human_review，追問直接中斷。
     if item.item_id not in ready_ids:
         return item
+
+    blocked = gated_status(item.program_status)
+    if blocked is not None:
+        return item.model_copy(update={"status": blocked, "resolved_at": now})
 
     try:
         decision = eligibility_service.evaluate(item.item_id, state.attributes)

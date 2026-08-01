@@ -23,7 +23,7 @@ class BenefitCatalogTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def write_source_seed(self) -> Path:
+    def write_source_seed(self, publisher_oid: str | None = None) -> Path:
         seed_path = Path(self.temporary_directory.name) / "sources.json"
         payload = {
             "sources": [
@@ -33,7 +33,7 @@ class BenefitCatalogTests(unittest.TestCase):
                     "source_type": "benefit_index",
                     "jurisdiction_code": "TW",
                     "organization_name": "測試機關",
-                    "publisher_oid": None,
+                    "publisher_oid": publisher_oid,
                     "base_url": "https://example.gov.tw/",
                     "entry_url": "https://example.gov.tw/benefits",
                     "canonical_host": "example.gov.tw",
@@ -51,6 +51,20 @@ class BenefitCatalogTests(unittest.TestCase):
             encoding="utf-8",
         )
         return seed_path
+
+    def test_missing_publisher_oid_is_deferred_until_oid_import(self) -> None:
+        """Source seeds can load before the separate government OID dataset."""
+        seed_path = self.write_source_seed("2.16.886.101.missing")
+
+        initialize_database(self.database_path, source_seed_path=seed_path)
+
+        with closing(sqlite3.connect(self.database_path)) as connection:
+            publisher_oid = connection.execute(
+                "SELECT publisher_oid FROM source_registry WHERE source_id = ?",
+                ("test_source",),
+            ).fetchone()
+
+        self.assertEqual(publisher_oid, (None,))
 
     def test_initialization_is_idempotent_and_reports_sources(self) -> None:
         seed_path = self.write_source_seed()

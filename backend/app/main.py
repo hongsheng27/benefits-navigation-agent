@@ -20,10 +20,10 @@ from app.api.health import router as health_router
 from app.api.sessions import router as sessions_router
 from app.application.composition import (
     ApplicationOverrides,
-    DependencyConfigurationError,
     build_dependencies,
 )
 from app.config import get_settings
+from app.llm.factory import build_language_model
 from app.observability.logging import configure_logging
 from app.orchestration.session_store import InMemorySessionStore
 
@@ -74,6 +74,12 @@ def create_app(
     # DependencyConfigurationError propagates as a startup failure (Req 2.10).
     deps = build_dependencies(overrides, db_path=db_path)
     app.state.dependencies = deps
+
+    # Chosen once at startup, not per request: whether a live model is
+    # available does not change while the process runs, and re-deciding per
+    # request would make it possible for one request to use the real model and
+    # the next to silently use demo data. See ADR-0015.
+    app.state.language_model = build_language_model(settings)
 
     install_error_handlers(app)
 

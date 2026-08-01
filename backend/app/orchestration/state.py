@@ -213,6 +213,9 @@ class CandidateItem(BaseModel):
     kind: ItemKind  # 福利或行政事項
     status: ItemStatus = ItemStatus.PENDING  # 這個項目自己的狀態，與其他項目無關
 
+    # 複合情境展開時，此項目來自哪些 life_event（用於結果分區）。
+    source_life_events: tuple[str, ...] = ()
+
     # 資料層對這筆方案資料的治理狀態，決定 runtime 敢對它做到什麼程度
     # （閘門實作見 `determination.py`）。這不是使用者的判定結果 —— `status` 才是。
     #
@@ -272,7 +275,13 @@ class SessionState(BaseModel):
 
     # 正規化後的事件代號，例如 `spouse_death`。刻意不用列舉：事件的集合是由
     # entitlement graph 擁有的 curated 資料，寫死在這裡會把政策放進應用程式碼。
+    #
+    # `life_event` 保留給舊客戶端：永遠等於 `life_events` 的第一筆（或 None）。
+    # `life_events` 是確認後（或辨識後待確認）的複合情境，最多 5 個。
+    # `extra_candidate_life_events` 是確認頁「另外可能相關」的未預選選項（最多 3）。
     life_event: str | None = None
+    life_events: tuple[str, ...] = ()
+    extra_candidate_life_events: tuple[str, ...] = ()
 
     # 去識別化的答案，以欄位代號為鍵。用對照表而不是清單，因為一個欄位只能有一個
     # 值，而使用者在 CONFIRM 修正答案時是直接覆蓋。
@@ -292,6 +301,9 @@ class SessionState(BaseModel):
     # 因為一次請求是同步處理完的；把它保留在形狀裡，是為了將來改成非同步時前端
     # 不需要跟著改。
     is_processing: bool = False
+
+    # 對話式補欄位時，下一句要問使用者的話（系統／模型產生，不是使用者原文）。
+    collector_question: str | None = None
 
     created_at: datetime  # 建立時間，回訪畫面用它顯示「幾點開始的諮詢」
     updated_at: datetime  # 最後更新時間

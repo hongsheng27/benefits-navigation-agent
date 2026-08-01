@@ -602,12 +602,24 @@ def seed_source_registry(
             "SELECT 1 FROM source_registry WHERE source_id = ?",
             (seed.source_id,),
         ).fetchone()
+        publisher_oid = seed.publisher_oid
+        if publisher_oid is not None:
+            publisher_exists = connection.execute(
+                "SELECT 1 FROM government_organizations WHERE oid = ?",
+                (publisher_oid,),
+            ).fetchone()
+            if publisher_exists is None:
+                # The reviewed source registry can be initialized before the
+                # separately downloaded government OID dataset. Keep the
+                # human-readable organization name and attach the FK on a
+                # later idempotent seed run once that OID exists.
+                publisher_oid = None
         values = (
             seed.name,
             seed.source_type,
             seed.jurisdiction_code,
             seed.organization_name,
-            seed.publisher_oid,
+            publisher_oid,
             seed.base_url,
             seed.entry_url,
             seed.canonical_host,
