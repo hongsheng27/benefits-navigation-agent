@@ -146,11 +146,21 @@ class _Input(BaseModel):
 class LifeEventTextInput(_Input):
     """畫面 1：使用者描述發生了什麼事。
 
-    這是整個 API 唯一帶自由文字的請求形狀。文字在抽取出屬性後即丟棄，不會存進
-    session、不會寫進紀錄檔，也不會出現在任何回應裡。
+    自由文字在抽取出屬性／事件後即丟棄，不會存進 session、不會寫進紀錄檔，
+    也不會出現在任何回應裡。對話式補欄位見 `AttributeChatTurnInput`。
     """
 
     kind: Literal["life_event_text"] = "life_event_text"
+    text: str = Field(min_length=1, max_length=MAX_LIFE_EVENT_TEXT_LENGTH)
+
+
+class AttributeChatTurnInput(_Input):
+    """畫面 4 對話模式：用一句話補資格欄位。
+
+    文字只用於抽取 `attributes`，用完即丟；不寫入 session。
+    """
+
+    kind: Literal["attribute_chat_turn"] = "attribute_chat_turn"
     text: str = Field(min_length=1, max_length=MAX_LIFE_EVENT_TEXT_LENGTH)
 
 
@@ -209,16 +219,17 @@ AdvanceInput = Annotated[
     LifeEventTextInput
     | EventConfirmationInput
     | AttributeAnswersInput
+    | AttributeChatTurnInput
     | ItemDeclineInput
     | ReviewConfirmationInput
     | ReferralChoiceInput
     | HelpRequestInput,
     Field(discriminator="kind"),
 ]
-"""推進一步時可以送的七種輸入。
+"""推進一步時可以送的輸入種類。
 
-用 `kind` 當判別欄位，所以 Pydantic 看到 kind 的值就知道其餘欄位該長什麼樣。
-這也是「自由文字只存在第一步」的結構保證：其他六種形狀沒有文字欄位。
+用 `kind` 當判別欄位。自由文字只出現在 `life_event_text` 與
+`attribute_chat_turn`，兩者都在抽取後丟棄原文。
 """
 
 
@@ -396,6 +407,9 @@ class SessionSnapshot(_View):
     # 還有工作沒完成時為 True，輪詢的前端依此決定要不要再問一次。
     is_processing: bool = False
 
+    # 對話式補欄位的下一問（系統產生）。
+    collector_question: str | None = None
+
     created_at: datetime
     expires_at: datetime
 
@@ -461,6 +475,7 @@ class SessionSnapshot(_View):
             question_groups=question_groups,
             exit_reason=state.exit_reason,
             referral_requested=state.referral_requested,
+            collector_question=state.collector_question,
             is_processing=state.is_processing,
             created_at=state.created_at,
             expires_at=state.expires_at,

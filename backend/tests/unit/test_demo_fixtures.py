@@ -45,7 +45,14 @@ def _run_to_determination(*, with_demo: bool) -> SessionState:
     state = advance(state, EventConfirmationInput(confirmed=True), **seams)
     return advance(
         state,
-        AttributeAnswersInput(answers={DEMO_FIELD_ID: DEMO_EXPECTED_VALUE}),
+        AttributeAnswersInput(
+            answers={
+                "applicant_jurisdiction": "TPE",
+                DEMO_FIELD_ID: DEMO_EXPECTED_VALUE,
+                "has_dependent_children": True,
+                "applicant_age_band": "25_to_55",
+            }
+        ),
         **seams,
     )
 

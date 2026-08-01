@@ -28,8 +28,11 @@ from app.orchestration.state import (
 
 _NOW = datetime(2026, 7, 28, 12, 0, tzinfo=UTC)
 
-# funeral_benefit 在種子登記表裡只需要這一個欄位，所以答了它就算就緒。
-_ANSWERED = {"deceased_insurance_type": "labor_insurance"}
+# funeral_benefit 在種子登記表需要所在地與投保身分，答齊才算就緒。
+_ANSWERED = {
+    "applicant_jurisdiction": "TPE",
+    "deceased_insurance_type": "labor_insurance",
+}
 
 
 def _registry() -> FieldRegistry:

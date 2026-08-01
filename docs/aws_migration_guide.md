@@ -368,6 +368,18 @@ Do not read the current behaviour as Option B having been chosen.
 
 ---
 
+## Conversational attribute collection (T21b-style)
+
+| Concern | Local now | Target |
+|---|---|---|
+| Chat turn API | `attribute_chat_turn` on `POST /sessions/advance` + `collect_attributes` task | Same; Bedrock when `BEDROCK_MODEL_ID` set |
+| Jurisdiction filter | `applicant_jurisdiction` + `jurisdiction_items.py` fixtures | Entitlement graph rows with `jurisdiction_code` |
+| MCQ fallback | Frontend `AttributeChatPanel` → `QuestionGroupList` | Keep as offline / low-confidence path |
+
+Reuse `BEDROCK_MODEL_ID` / AWS credentials above. No new frontend env required.
+
+---
+
 ## Frontend post-consult panels (related law + application guide)
 
 | Concern | Local mock now | Target |

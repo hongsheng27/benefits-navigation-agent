@@ -41,11 +41,16 @@ from dataclasses import dataclass
 
 from app.llm.fake import FakeLanguageModel
 from app.llm.port import LanguageModelPort
+from app.llm.tasks.collect_attributes import (
+    AttributeCollectionError,
+    collect_attributes_from_reply,
+)
 from app.llm.tasks.resolve_life_event import resolve_life_event
 from app.observability.logging import log_event
 from app.orchestration.determination import evaluate_ready_items, visible_items
 from app.orchestration.field_registry import FieldRegistry
 from app.orchestration.life_events import LifeEventRegistry, default_life_events
+from app.orchestration.missing_fields import compute_question_groups
 from app.orchestration.protocols import (
     EligibilityService,
     EntitlementGraphRepository,
@@ -69,6 +74,7 @@ from app.privacy.attribute_gate import RegistryBackedPrivacyGate
 from app.schemas.session import (
     AdvanceInput,
     AttributeAnswersInput,
+    AttributeChatTurnInput,
     EventConfirmationInput,
     HelpRequestInput,
     ItemDeclineInput,
@@ -109,6 +115,7 @@ ALLOWED_INPUTS: dict[WorkflowState, set[type]] = {
     WorkflowState.RESOLVE_ENTITLEMENTS: set(),  # 自動推進
     WorkflowState.COLLECT_MISSING_FIELDS: {
         AttributeAnswersInput,
+        AttributeChatTurnInput,
         ItemDeclineInput,
     },
     WorkflowState.RETRIEVE_RULES: set(),  # 自動推進
@@ -339,6 +346,8 @@ def _handle_input(
             return _confirm_event(state, user_input)
         case AttributeAnswersInput():
             return _record_answers(state, user_input, seams)
+        case AttributeChatTurnInput():
+            return _collect_from_chat(state, user_input, seams)
         case ItemDeclineInput():
             return _decline_item(state, user_input)
         case ReviewConfirmationInput():
@@ -404,6 +413,47 @@ def _confirm_event(
     return state.model_copy(update={"life_event": None, "event_retry_count": retries})
 
 
+def _merge_local_entitlements(state: SessionState, seams: _Seams) -> SessionState:
+    """所在地就緒後，只增刪地方方案；不重寫全國項目清單。
+
+    全國項目在 RESOLVE_ENTITLEMENTS 已展開。此處若整表重展開，會把測試／退回
+    修改時刻意保留的精簡 items 撐大，並誤觸「有進展」護欄。
+    """
+    from app.orchestration.jurisdiction_items import (
+        LOCAL_ITEM_IDS,
+        local_items_for_attributes,
+    )
+
+    kept = tuple(item for item in state.items if item.item_id not in LOCAL_ITEM_IDS)
+    local = local_items_for_attributes(state.attributes)
+    if not local:
+        if len(kept) == len(state.items):
+            return state
+        return state.model_copy(update={"items": kept})
+
+    existing_ids = {item.item_id for item in kept}
+    extras = tuple(
+        adapt_graph_candidate(candidate)
+        for candidate in local
+        if candidate.item_id not in existing_ids
+    )
+    merged = kept + extras
+    if merged == state.items:
+        return state
+    return state.model_copy(update={"items": merged})
+
+
+def _default_collector_question(state: SessionState, seams: _Seams) -> str | None:
+    """依第一個缺漏欄位的 purpose 產生下一問。"""
+    groups = compute_question_groups(state, seams.registry)
+    if not groups or not groups[0].questions:
+        return None
+    field = seams.registry.get(groups[0].questions[0].field_id)
+    if field is None:
+        return None
+    return f"請補充：{field.purpose}"
+
+
 def _record_answers(
     state: SessionState, user_input: AttributeAnswersInput, seams: _Seams
 ) -> SessionState:
@@ -434,10 +484,80 @@ def _record_answers(
     merged = dict(state.attributes)
     merged.update(accepted)
 
-    return state.model_copy(
+    updated = state.model_copy(
         update={
             "attributes": merged,
             "workflow_state": WorkflowState.RETRIEVE_RULES,
+            "loop_iterations": state.loop_iterations + 1,
+            "collector_question": None,
+        }
+    )
+    return _merge_local_entitlements(updated, seams)
+
+
+def _collect_from_chat(
+    state: SessionState, user_input: AttributeChatTurnInput, seams: _Seams
+) -> SessionState:
+    """對話式補欄位：抽取 attributes，未齊則留在 COLLECT_MISSING_FIELDS。"""
+    groups = compute_question_groups(state, seams.registry)
+    missing_fields = []
+    for group in groups:
+        for question in group.questions:
+            field = seams.registry.get(question.field_id)
+            if field is not None:
+                missing_fields.append(field)
+
+    try:
+        collected = collect_attributes_from_reply(
+            user_input.text,
+            fields=missing_fields,
+            model=seams.language_model,
+            registry=seams.registry,
+        )
+    except AttributeCollectionError:
+        # 抽不到就留在原狀態，換一句預設追問；不中斷整次諮詢。
+        log_event(
+            "attribute_chat_fallback",
+            tool="collect_attributes",
+            outcome="unavailable",
+        )
+        return state.model_copy(
+            update={
+                "collector_question": _default_collector_question(state, seams)
+                or "可以再說清楚一點嗎？或改用下方選項作答。",
+                "loop_iterations": state.loop_iterations + 1,
+            }
+        )
+
+    if collected.attributes:
+        accepted = seams.privacy_gate.validate_attributes(
+            dict(collected.attributes), seams.registry
+        )
+    else:
+        accepted = {}
+
+    merged = dict(state.attributes)
+    merged.update(accepted)
+    updated = state.model_copy(update={"attributes": merged})
+    updated = _merge_local_entitlements(updated, seams)
+
+    still_missing = compute_question_groups(updated, seams.registry)
+    if still_missing:
+        next_q = collected.next_question or _default_collector_question(
+            updated, seams
+        )
+        return updated.model_copy(
+            update={
+                "workflow_state": WorkflowState.COLLECT_MISSING_FIELDS,
+                "collector_question": next_q,
+                "loop_iterations": state.loop_iterations + 1,
+            }
+        )
+
+    return updated.model_copy(
+        update={
+            "workflow_state": WorkflowState.RETRIEVE_RULES,
+            "collector_question": None,
             "loop_iterations": state.loop_iterations + 1,
         }
     )
@@ -537,6 +657,14 @@ def _auto_advance(
             transition="auto_advance",
         )
         state = state.model_copy(update={"workflow_state": next_ws})
+
+    if (
+        state.workflow_state is WorkflowState.COLLECT_MISSING_FIELDS
+        and not state.collector_question
+    ):
+        state = state.model_copy(
+            update={"collector_question": _default_collector_question(state, seams)}
+        )
 
     return state
 

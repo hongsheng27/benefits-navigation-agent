@@ -84,15 +84,20 @@ def test_no_items_ready_when_nothing_answered() -> None:
 
 
 def test_funeral_benefit_ready_when_its_field_answered() -> None:
-    """funeral_benefit 只需要 deceased_insurance_type。"""
-    state = _state(attributes={"deceased_insurance_type": "labor_insurance"})
+    """funeral_benefit 需要所在地與投保身分。"""
+    state = _state(
+        attributes={
+            "applicant_jurisdiction": "TPE",
+            "deceased_insurance_type": "labor_insurance",
+        }
+    )
     ready = find_ready_item_ids(state, _registry())
 
     assert "funeral_benefit" in ready
 
 
-def test_survivor_pension_needs_all_three_fields() -> None:
-    """survivor_pension 需要三個欄位，只答一個還不算就緒。"""
+def test_survivor_pension_needs_all_declared_fields() -> None:
+    """survivor_pension 需要多個欄位，只答一個還不算就緒。"""
     state = _state(attributes={"deceased_insurance_type": "labor_insurance"})
     ready = find_ready_item_ids(state, _registry())
 
@@ -102,6 +107,7 @@ def test_survivor_pension_needs_all_three_fields() -> None:
 def test_survivor_pension_ready_with_all_fields() -> None:
     state = _state(
         attributes={
+            "applicant_jurisdiction": "TPE",
             "deceased_insurance_type": "labor_insurance",
             "has_dependent_children": True,
             "applicant_age_band": "25_to_55",
@@ -124,7 +130,10 @@ def test_already_resolved_items_are_skipped() -> None:
         CandidateItem(item_id="survivor_pension", kind=ItemKind.BENEFIT),
     )
     state = _state(
-        attributes={"deceased_insurance_type": "labor_insurance"},
+        attributes={
+            "applicant_jurisdiction": "TPE",
+            "deceased_insurance_type": "labor_insurance",
+        },
         items=items,
     )
     ready = find_ready_item_ids(state, _registry())
@@ -147,7 +156,10 @@ def test_a_verified_ready_item_gets_the_full_decision() -> None:
         ),
     )
     state = _state(
-        attributes={"deceased_insurance_type": "labor_insurance"},
+        attributes={
+            "applicant_jurisdiction": "TPE",
+            "deceased_insurance_type": "labor_insurance",
+        },
         items=items,
     )
 
@@ -167,7 +179,12 @@ def test_a_candidate_ready_item_goes_to_human_review_instead() -> None:
     這個測試取代原本的 test_stub_marks_ready_items_as_eligible。差別就是
     `program_status`：預設的 `"candidate"` 讓結論從「符合」變成「需人工協助」。
     """
-    state = _state(attributes={"deceased_insurance_type": "labor_insurance"})
+    state = _state(
+        attributes={
+            "applicant_jurisdiction": "TPE",
+            "deceased_insurance_type": "labor_insurance",
+        }
+    )
 
     result = evaluate_ready_items(
         state, _registry(), _eligible_service("funeral_benefit")
@@ -178,7 +195,12 @@ def test_a_candidate_ready_item_goes_to_human_review_instead() -> None:
 
 
 def test_resolved_items_get_a_timestamp() -> None:
-    state = _state(attributes={"deceased_insurance_type": "labor_insurance"})
+    state = _state(
+        attributes={
+            "applicant_jurisdiction": "TPE",
+            "deceased_insurance_type": "labor_insurance",
+        }
+    )
 
     result = evaluate_ready_items(
         state, _registry(), _eligible_service("funeral_benefit")
@@ -256,7 +278,10 @@ def test_undeclared_items_become_needs_human_review() -> None:
     )
     state = _state(
         items=items,
-        attributes={"deceased_insurance_type": "labor_insurance"},
+        attributes={
+            "applicant_jurisdiction": "TPE",
+            "deceased_insurance_type": "labor_insurance",
+        },
     )
 
     result = evaluate_ready_items(

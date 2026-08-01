@@ -293,6 +293,9 @@ class SessionState(BaseModel):
     # 不需要跟著改。
     is_processing: bool = False
 
+    # 對話式補欄位時，下一句要問使用者的話（系統／模型產生，不是使用者原文）。
+    collector_question: str | None = None
+
     created_at: datetime  # 建立時間，回訪畫面用它顯示「幾點開始的諮詢」
     updated_at: datetime  # 最後更新時間
     expires_at: datetime  # 自動失效時間，過期後 session 不再存在

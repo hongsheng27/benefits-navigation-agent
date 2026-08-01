@@ -139,13 +139,38 @@ def test_loop_does_not_exit_before_the_limit() -> None:
     assert result.workflow_state is WorkflowState.COLLECT_MISSING_FIELDS
 
 
+def test_partial_answers_keep_collecting_for_candidate_items() -> None:
+    """只答一題時，未就緒的 candidate 項目必須維持 PENDING 並回到追問。"""
+    state = _state_at_collect(attributes={}).model_copy(
+        update={
+            "items": (
+                CandidateItem(
+                    item_id="funeral_benefit",
+                    kind=ItemKind.BENEFIT,
+                    program_status="candidate",
+                ),
+            ),
+        }
+    )
+
+    result = advance(
+        state,
+        AttributeAnswersInput(answers={"applicant_jurisdiction": "TPE"}),
+    )
+
+    assert result.exit_reason is None
+    assert result.workflow_state is WorkflowState.COLLECT_MISSING_FIELDS
+    funeral = next(i for i in result.items if i.item_id == "funeral_benefit")
+    assert funeral.status is ItemStatus.PENDING
+
+
 def test_loop_exits_when_no_progress_is_made() -> None:
     """繞了一圈但「沒有任何項目狀態改變」也「沒有收到新屬性」，設 exit_reason。
 
     模擬方式：項目需要 deceased_insurance_type（在登記表上），使用者已經答過了，
     但還需要其他欄位（survivor_pension 還需要 has_dependent_children 和
     applicant_age_band）。這次送的是同一個 key 的新值 —— key 數量沒增加，
-    而 stub 判斷 survivor_pension 還沒湊齊所以不會改狀態。
+    而判定時 survivor_pension 還沒湊齊所以不會改狀態。
     """
     state = _state_at_collect(
         loop_iterations=1,
