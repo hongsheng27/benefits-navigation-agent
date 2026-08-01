@@ -7,18 +7,28 @@ import {
   BackendStatusLine,
   type BackendConnectionState,
 } from "../components/alt/BackendStatusLine";
+import {
+  EVENT_NOT_RECOGNIZED_MESSAGE,
+  errorMessage,
+  lifeEventName,
+} from "../components/alt/copy";
+import { EventConfirmation } from "../components/alt/EventConfirmation";
 import { ExamplePrompts } from "../components/alt/ExamplePrompts";
 import { PrivacyNotice } from "../components/alt/PrivacyNotice";
-import { SkeletonResult } from "../components/alt/SkeletonResult";
+import { QuestionGroupList } from "../components/alt/QuestionGroupList";
+import { ResultList } from "../components/alt/ResultList";
 import { ThreadStep } from "../components/alt/ThreadStep";
+import { useBackendSession } from "../hooks/useBackendSession";
+import { MAX_LIFE_EVENT_TEXT_LENGTH } from "../types/session";
 
 const LEDE =
-  "接住會判斷哪些補助與行政程序和你有關、要用什麼順序辦、去哪個機關，並附上可以帶去問承辦人的官方依據。目前開放的情境是配偶過世。";
+  "用你自己的話說發生了什麼事就好。系統會自動判斷是哪一種生活變故，再整理可能相關的補助與行政程序、辦理順序與機關，並附上可帶去問承辦人的官方依據。部分情境的福利圖譜仍在建置中。";
 
+/** 不知道怎麼開頭時的少量例句（不是選單；送出後仍由 LLM 辨識）。 */
 const EXAMPLE_PROMPTS = [
-  "家人剛過世，不知道接下來要辦什麼。",
   "配偶過世一個月了，想確認還有哪些給付來得及申請。",
-  "我在幫媽媽處理爸爸的後事，她沒有工作。",
+  "公司裁員被資遣了，想知道失業給付或其他協助怎麼申請。",
+  "爸媽需要長期照顧，想知道長照服務與補助怎麼開始申請。",
 ] as const;
 
 const BOUNDARIES = [
@@ -36,20 +46,23 @@ const BOUNDARIES = [
   },
 ] as const;
 
-const UPCOMING_QUESTIONS = [
-  "與過世者的關係",
-  "過世者的投保身分與年資",
-  "你目前是否在工作、有無投保",
-  "家中是否有未成年子女",
-] as const;
-
 export function HomePageAlt() {
   const [description, setDescription] = useState("");
-  const [submittedLength, setSubmittedLength] = useState<number | null>(null);
   const [connection, setConnection] = useState<BackendConnectionState>("checking");
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+
+  const {
+    snapshot,
+    status,
+    errorCode,
+    eventNotRecognized,
+    describeEvent,
+    confirmEvent,
+    answerFields,
+    resetSession,
+  } = useBackendSession();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -77,32 +90,55 @@ export function HomePageAlt() {
     };
   }, []);
 
+  const workflowState = snapshot?.workflowState ?? null;
+  const hasResult = workflowState !== null && workflowState !== "understand_event";
+
   useEffect(() => {
-    if (submittedLength !== null) {
+    if (hasResult) {
       resultRef.current?.focus();
     }
-  }, [submittedLength]);
+  }, [hasResult]);
 
+  const busy = status === "working" || status === "restoring";
   const trimmed = description.trim();
-  const canSubmit = trimmed.length > 0;
+  const canSubmit =
+    trimmed.length > 0 && trimmed.length <= MAX_LIFE_EVENT_TEXT_LENGTH && !busy;
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  // 事件已辨識但還沒確認：後端維持在 understand_event，並且已經給出 lifeEvent。
+  const awaitingConfirmation =
+    workflowState === "understand_event" && (snapshot?.lifeEvent ?? null) !== null;
+
+  // 只有「尚未確認事件」時才能送描述。中途若仍顯示表單，再送會拿到 invalid_transition。
+  const canDescribeEvent =
+    snapshot === null ||
+    (workflowState === "understand_event" && snapshot.lifeEvent === null);
+
+  const questionGroups = snapshot?.questionGroups ?? [];
+  const showQuestions =
+    workflowState === "collect_missing_fields" && questionGroups.length > 0;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canSubmit) {
       return;
     }
-    setSubmittedLength(trimmed.length);
+    await describeEvent(trimmed);
   }
 
   function handleExampleSelect(prompt: string) {
     setDescription(prompt);
-    setSubmittedLength(null);
     inputRef.current?.focus();
   }
 
-  function handleReset() {
+  async function handleReset() {
     setDescription("");
-    setSubmittedLength(null);
+    await resetSession();
+    inputRef.current?.focus();
+  }
+
+  async function handleRedescribe() {
+    await confirmEvent(false);
+    setDescription("");
     inputRef.current?.focus();
   }
 
@@ -161,6 +197,22 @@ export function HomePageAlt() {
           ))}
         </ul>
 
+        {errorCode ? (
+          <div
+            role="alert"
+            className="mt-10 border-l-2 border-[#8a2a2a] bg-[#f7ecec] px-4 py-4 text-[0.9rem] leading-[2] text-[#5c2323] sm:px-5"
+          >
+            <p>{errorMessage(errorCode)}</p>
+            <button
+              type="button"
+              onClick={() => void handleReset()}
+              className="mt-3 rounded-sm border border-[#c9a0a0] bg-[#faf3f3] px-4 py-2 text-[0.88rem] leading-[1.8] text-[#5c2323] transition-colors hover:border-[#8a2a2a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8a2a2a]"
+            >
+              清除這次諮詢，重新開始
+            </button>
+          </div>
+        ) : null}
+
         <div className="mt-14 ml-[1.15rem] border-l border-[#e0d8ca] sm:ml-6">
           <ThreadStep
             marker="一"
@@ -168,98 +220,138 @@ export function HomePageAlt() {
             titleId="step-describe"
             tone="active"
           >
-            <form onSubmit={handleSubmit} noValidate>
-              <label
-                htmlFor="intake-description"
-                className="block text-[0.95rem] leading-[1.9] font-semibold tracking-[0.02em]"
-              >
-                發生了什麼事？
-              </label>
-              <p
-                id="intake-hint"
-                className="mt-1.5 text-[0.85rem] leading-[2] text-[#6b6459]"
-              >
-                幾句話就好，不通順、想到哪寫到哪都沒關係。
-              </p>
-
-              <textarea
-                id="intake-description"
-                ref={inputRef}
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                aria-describedby="intake-hint intake-privacy"
-                rows={5}
-                placeholder="從最近發生的事開始寫就可以。"
-                className="mt-3 block w-full resize-y rounded-sm border border-[#cfc5b4] bg-[#fffdfa] px-4 py-3.5 text-[0.98rem] leading-[2] text-[#171513] placeholder:text-[#8b8377] focus-visible:border-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2f4f45]"
+            {awaitingConfirmation && snapshot?.lifeEvent ? (
+              <EventConfirmation
+                disabled={busy}
+                lifeEvent={snapshot.lifeEvent}
+                onConfirm={() => void confirmEvent(true)}
+                onRedescribe={() => void handleRedescribe()}
               />
-
-              <PrivacyNotice id="intake-privacy" />
-
-              <ExamplePrompts
-                labelId="intake-examples"
-                prompts={EXAMPLE_PROMPTS}
-                onSelect={handleExampleSelect}
-              />
-
-              <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
-                <button
-                  type="submit"
-                  disabled={!canSubmit}
-                  className="rounded-sm bg-[#2f4f45] px-6 py-3 text-[0.95rem] leading-[1.8] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
-                >
-                  整理我的下一步
-                </button>
-                <p className="text-[0.82rem] leading-[1.9] text-[#6b6459]">
-                  {canSubmit
-                    ? "送出不會離開這個頁面，也不會傳送任何資料。"
-                    : "先寫下發生的事，才能送出。"}
+            ) : !canDescribeEvent ? (
+              <div className="mt-2">
+                <p className="text-[0.9rem] leading-[2] text-[#5c564e]">
+                  這次諮詢已經過了描述事件的步驟。若要說另一件事，請重新開始。
                 </p>
+                <button
+                  type="button"
+                  onClick={() => void handleReset()}
+                  className="mt-4 rounded-sm border border-[#c9c0b0] bg-[#f7f4ee] px-4 py-2.5 text-[0.9rem] leading-[1.8] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                >
+                  清除這次諮詢，重新開始
+                </button>
               </div>
-            </form>
+            ) : (
+              <form onSubmit={(event) => void handleSubmit(event)} noValidate>
+                <label
+                  htmlFor="intake-description"
+                  className="block text-[0.95rem] leading-[1.9] font-semibold tracking-[0.02em]"
+                >
+                  發生了什麼事？
+                </label>
+                <p
+                  id="intake-hint"
+                  className="mt-1.5 text-[0.85rem] leading-[2] text-[#6b6459]"
+                >
+                  幾句話就好，不通順、想到哪寫到哪都沒關係。
+                </p>
+
+                <textarea
+                  id="intake-description"
+                  ref={inputRef}
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  aria-describedby="intake-hint intake-privacy"
+                  maxLength={MAX_LIFE_EVENT_TEXT_LENGTH}
+                  rows={5}
+                  placeholder="從最近發生的事開始寫就可以。"
+                  className="mt-3 block w-full resize-y rounded-sm border border-[#cfc5b4] bg-[#fffdfa] px-4 py-3.5 text-[0.98rem] leading-[2] text-[#171513] placeholder:text-[#8b8377] focus-visible:border-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2f4f45]"
+                />
+
+                {eventNotRecognized ? (
+                  <p
+                    aria-live="polite"
+                    className="mt-4 border-l-2 border-[#8a5a1a] bg-[#f6f1e6] px-4 py-3.5 text-[0.88rem] leading-[2] text-[#4a453d] sm:px-5"
+                  >
+                    {EVENT_NOT_RECOGNIZED_MESSAGE}
+                  </p>
+                ) : null}
+
+                <PrivacyNotice id="intake-privacy" />
+
+                <ExamplePrompts
+                  labelId="intake-examples"
+                  prompts={EXAMPLE_PROMPTS}
+                  onSelect={handleExampleSelect}
+                />
+
+                <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
+                  <button
+                    type="submit"
+                    disabled={!canSubmit}
+                    className="rounded-sm bg-[#2f4f45] px-6 py-3 text-[0.95rem] leading-[1.8] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
+                  >
+                    {busy ? "正在辨識…" : "整理我的下一步"}
+                  </button>
+                  <p className="text-[0.82rem] leading-[1.9] text-[#6b6459]">
+                    {canSubmit
+                      ? "這段文字會送到後端辨識事件，辨識完成後原文即被丟棄。"
+                      : "先寫下發生的事，才能送出。"}
+                  </p>
+                </div>
+              </form>
+            )}
           </ThreadStep>
 
           <ThreadStep
             marker="二"
             title="回答幾個必要的條件"
             titleId="step-questions"
-            tone="pending"
-            note="尚未實作"
+            tone={showQuestions ? "active" : "pending"}
+            note={showQuestions ? undefined : "等待上一步完成"}
           >
-            <p className="text-[0.9rem] leading-[2] text-[#5c564e]">
-              資格是由條件的組合決定的，所以接住會反問，例如：
-            </p>
-            <ul className="mt-3 flex flex-wrap gap-x-2 gap-y-2">
-              {UPCOMING_QUESTIONS.map((question) => (
-                <li
-                  key={question}
-                  className="border border-dashed border-[#d8cfc0] px-3 py-1.5 text-[0.85rem] leading-[1.9] text-[#6b6459]"
-                >
-                  {question}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-[0.85rem] leading-[2] text-[#6b6459]">
-              問到能判定為止就停下來，不會多問。
-            </p>
+            {showQuestions ? (
+              <QuestionGroupList
+                disabled={busy}
+                groups={questionGroups}
+                onSubmit={(answers) => void answerFields(answers)}
+              />
+            ) : (
+              <p className="text-[0.9rem] leading-[2] text-[#5c564e]">
+                確認事件之後，後端會依這個事件展開需要確認的條件，問到能判定為止就停。
+              </p>
+            )}
           </ThreadStep>
 
           <ThreadStep
             marker="三"
             title="拿到一張有順序的行動清單"
             titleId="step-result"
-            tone={submittedLength === null ? "pending" : "active"}
+            tone={hasResult ? "active" : "pending"}
           >
-            <div aria-live="polite">
-              {submittedLength === null ? (
-                <p className="border border-dashed border-[#d8cfc0] bg-[#f7f4ee] px-4 py-6 text-[0.88rem] leading-[2] text-[#6b6459]">
-                  送出之後，示意結果會出現在這裡。
-                </p>
+            <div aria-live="polite" ref={resultRef} tabIndex={-1}>
+              {snapshot && hasResult ? (
+                <>
+                  <p className="text-[0.85rem] leading-[1.9] tracking-[0.04em] text-[#6b6459]">
+                    事件：{snapshot.lifeEvent ? lifeEventName(snapshot.lifeEvent) : "—"}
+                    <span className="ml-3">
+                      進度 {snapshot.stepIndex} / {snapshot.stepTotal}
+                    </span>
+                  </p>
+                  <ResultList snapshot={snapshot} />
+                  <div className="mt-6">
+                    <button
+                      type="button"
+                      onClick={() => void handleReset()}
+                      className="rounded-sm border border-[#c9c0b0] bg-[#f7f4ee] px-4 py-2.5 text-[0.9rem] leading-[1.8] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                    >
+                      清除這次諮詢，重新開始
+                    </button>
+                  </div>
+                </>
               ) : (
-                <SkeletonResult
-                  ref={resultRef}
-                  characterCount={submittedLength}
-                  onReset={handleReset}
-                />
+                <p className="border border-dashed border-[#d8cfc0] bg-[#f7f4ee] px-4 py-6 text-[0.88rem] leading-[2] text-[#6b6459]">
+                  確認事件之後，後端評估出的項目會出現在這裡。
+                </p>
               )}
             </div>
           </ThreadStep>
@@ -269,7 +361,7 @@ export function HomePageAlt() {
       <footer className="border-t border-[#e0d8ca] bg-[#f4f0e8]">
         <div className="mx-auto flex w-full max-w-[46rem] flex-col gap-3 px-5 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <p className="text-[0.8rem] leading-[1.9] text-[#6b6459]">
-            接住 · 前端骨架。本頁不載入任何第三方服務。
+            接住 · 已串接後端 session API。本頁不載入任何第三方服務。
           </p>
           <BackendStatusLine state={connection} />
         </div>

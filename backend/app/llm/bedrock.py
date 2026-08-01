@@ -43,8 +43,9 @@ from app.llm.port import (
 ANTHROPIC_VERSION = "bedrock-2023-05-31"
 """Bedrock 上 Anthropic Messages 請求必填的版本字串。"""
 
-# 規範：Bedrock 請求限制在每秒 1 個以下。用略大於 1 秒的間隔，避免邊界剛好踩線。
-_MIN_SECONDS_BETWEEN_REQUESTS = 1.05
+# 規範：Bedrock 請求限制在每秒 1 個以下。略加大間隔，降低 ThrottlingException
+# （失敗時目前會被顯示成「看不懂」，使用者會誤以為判斷太嚴）。
+_MIN_SECONDS_BETWEEN_REQUESTS = 1.2
 
 _rate_lock = threading.Lock()
 _last_request_monotonic: float = 0.0
@@ -129,20 +130,53 @@ class BedrockLanguageModel:
         if self._enforce_rate_limit:
             _wait_for_rate_slot()
 
-        try:
-            response = self._get_client().invoke_model(
-                modelId=self._model_id,
-                body=json.dumps(body).encode("utf-8"),
-                contentType="application/json",
-                accept="application/json",
-            )
-        except Exception as error:
-            # boto3 的 ClientError 訊息可能含請求細節。不轉述原文（ADR-0007）。
-            error_name = type(error).__name__
+        last_error: Exception | None = None
+        response: Mapping[str, Any] | None = None
+        for attempt in range(2):
+            try:
+                response = self._get_client().invoke_model(
+                    modelId=self._model_id,
+                    body=json.dumps(body).encode("utf-8"),
+                    contentType="application/json",
+                    accept="application/json",
+                )
+                break
+            except Exception as error:
+                last_error = error
+                error_code = _client_error_code(error)
+                # 配額瞬間撞上時重試一次；其餘錯誤立刻失敗。
+                if attempt == 0 and error_code in {
+                    "ThrottlingException",
+                    "TooManyRequestsException",
+                    "ServiceUnavailableException",
+                }:
+                    if self._enforce_rate_limit:
+                        _wait_for_rate_slot()
+                    else:
+                        time.sleep(_MIN_SECONDS_BETWEEN_REQUESTS)
+                    continue
+                error_name = type(error).__name__
+                msg = f"呼叫 Bedrock 失敗：{error_name}"
+                raise LanguageModelUnavailableError(msg) from error
+
+        if response is None:
+            error_name = type(last_error).__name__ if last_error is not None else "Error"
             msg = f"呼叫 Bedrock 失敗：{error_name}"
-            raise LanguageModelUnavailableError(msg) from error
+            raise LanguageModelUnavailableError(msg) from last_error
 
         return _parse_response(response, request)
+
+
+def _client_error_code(error: BaseException) -> str | None:
+    """取出 boto3 ClientError 的 Code，沒有則回 None。"""
+    response = getattr(error, "response", None)
+    if not isinstance(response, Mapping):
+        return None
+    err = response.get("Error")
+    if not isinstance(err, Mapping):
+        return None
+    code = err.get("Code")
+    return code if isinstance(code, str) else None
 
 
 def _wait_for_rate_slot() -> None:
