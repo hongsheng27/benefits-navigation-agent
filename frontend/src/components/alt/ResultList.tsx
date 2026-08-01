@@ -2,10 +2,14 @@ import type { ItemStatus, ItemView, SessionSnapshot } from "../../types/session"
 import styles from "./alt.module.css";
 import {
   fieldLabel,
+  itemAudience,
   itemKindLabel,
   itemName,
   lifeEventName,
   optionLabel,
+  type ResultAudience,
+  resultAudienceDescription,
+  resultAudienceTitle,
   statusSectionTitle,
 } from "./copy";
 
@@ -19,29 +23,42 @@ const STATUS_ORDER: ItemStatus[] = [
   "declined_by_user",
 ];
 
+const AUDIENCE_ORDER: ResultAudience[] = ["care_recipient", "caregiver"];
+
 type ResultListProps = {
   snapshot: SessionSnapshot;
+  /** 示範用：依被照顧者／照顧者分組（不改 API）。 */
+  groupByAudience?: boolean;
 };
 
 /**
- * 依 status 分區顯示候選項目。
- *
- * 每個項目各自帶一個 status，所以同時有好幾項符合是正常情況。後端目前的資料一律回
- * needs_human_review，所以「你可能符合」分區短期內會是空的 —— 那是刻意的安全預設，
- * 不是前端的問題。
+ * 結果清單分組優先序：
+ * 1. `groupByAudience`（示範雙軌照顧）
+ * 2. 多個 `lifeEvents`／`sourceLifeEvents`（正式多事件聯集）
+ * 3. 僅依 status
  */
-export function ResultList({ snapshot }: ResultListProps) {
+export function ResultList({
+  snapshot,
+  groupByAudience = false,
+}: ResultListProps) {
   const { items, implementation, lifeEvents } = snapshot;
+
+  const audienceGroups = groupByAudience
+    ? AUDIENCE_ORDER.map((audience) => ({
+        audience,
+        items: items.filter((item) => itemAudience(item.itemId) === audience),
+      })).filter((group) => group.items.length > 0)
+    : [];
+  const ungroupedItems = groupByAudience
+    ? items.filter((item) => itemAudience(item.itemId) === null)
+    : items;
+  const hasAudienceGroups = audienceGroups.length > 0;
+
   const eventOrder =
     lifeEvents.length > 0
       ? lifeEvents
-      : [
-          ...new Set(
-            items.flatMap((item) => item.sourceLifeEvents ?? []),
-          ),
-        ];
-  const splitByEvent = eventOrder.length > 1;
-
+      : [...new Set(items.flatMap((item) => item.sourceLifeEvents ?? []))];
+  const splitByEvent = !hasAudienceGroups && eventOrder.length > 1;
   const eventBuckets = splitByEvent
     ? eventOrder
         .map((eventId) => ({
@@ -65,6 +82,33 @@ export function ResultList({ snapshot }: ResultListProps) {
         <p className="mt-4 border border-dashed border-[#d8cfc0] bg-[#f7f4ee] px-4 py-6 text-[0.88rem] leading-[2] text-[#6b6459]">
           目前還沒有整理出可辦的項目。你可以重新開始，或改用其他說法再試一次。
         </p>
+      ) : hasAudienceGroups ? (
+        <div>
+          {audienceGroups.map((group) => (
+            <section className="mt-8" key={group.audience}>
+              <h3
+                className={`${styles.serif} text-[1.18rem] leading-[1.7] text-[#2f4f45]`}
+              >
+                {resultAudienceTitle(group.audience)}
+              </h3>
+              <p className="mt-1 text-[0.88rem] leading-[1.9] text-[#6b6459]">
+                {resultAudienceDescription(group.audience)}
+              </p>
+              <StatusGroups items={group.items} nested />
+            </section>
+          ))}
+
+          {ungroupedItems.length > 0 ? (
+            <section className="mt-8">
+              <h3
+                className={`${styles.serif} text-[1.18rem] leading-[1.7] text-[#2f4f45]`}
+              >
+                其他相關方向
+              </h3>
+              <StatusGroups items={ungroupedItems} nested />
+            </section>
+          ) : null}
+        </div>
       ) : (
         eventBuckets.map((bucket) => (
           <div key={bucket.eventId ?? "all"} className="mt-6 first:mt-0">
@@ -81,33 +125,36 @@ export function ResultList({ snapshot }: ResultListProps) {
   );
 }
 
-function StatusGroups({ items }: { items: ItemView[] }) {
+function StatusGroups({
+  items,
+  nested = false,
+}: {
+  items: ItemView[];
+  nested?: boolean;
+}) {
   const grouped = STATUS_ORDER.map((status) => ({
     status,
     items: items.filter((item) => item.status === status),
   })).filter((group) => group.items.length > 0);
+  const Heading = nested ? "h4" : "h3";
 
-  return (
-    <>
-      {grouped.map((group) => (
-        <section key={group.status} className="mt-4">
-          <h3
-            className={`${styles.serif} text-[1.05rem] leading-[1.7] text-[#171513]`}
-          >
-            {statusSectionTitle(group.status)}
-            <span className="ml-2 text-[0.8rem] tracking-[0.08em] text-[#6b6459]">
-              {group.items.length} 項
-            </span>
-          </h3>
-          <ul className="mt-3 divide-y divide-[#eee7db] border border-[#e0d8ca] bg-[#fdfbf7]">
-            {group.items.map((item) => (
-              <ResultRow item={item} key={item.itemId} />
-            ))}
-          </ul>
-        </section>
-      ))}
-    </>
-  );
+  return grouped.map((group) => (
+    <section key={group.status} className={nested ? "mt-5" : "mt-6"}>
+      <Heading
+        className={`${styles.serif} text-[1.05rem] leading-[1.7] text-[#171513]`}
+      >
+        {statusSectionTitle(group.status)}
+        <span className="ml-2 text-[0.8rem] tracking-[0.08em] text-[#6b6459]">
+          {group.items.length} 項
+        </span>
+      </Heading>
+      <ul className="mt-3 divide-y divide-[#eee7db] border border-[#e0d8ca] bg-[#fdfbf7]">
+        {group.items.map((item) => (
+          <ResultRow item={item} key={item.itemId} />
+        ))}
+      </ul>
+    </section>
+  ));
 }
 
 function ResultRow({ item }: { item: ItemView }) {
