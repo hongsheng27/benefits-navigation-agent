@@ -191,7 +191,7 @@ def demo_language_model() -> FakeLanguageModel:
     """
     return FakeLanguageModel(
         responses={
-            LlmTask.RESOLVE_LIFE_EVENT: {"event_id": DEMO_EVENT_ID},
+            LlmTask.RESOLVE_LIFE_EVENT: {"event_ids": [DEMO_EVENT_ID]},
             # 離線時諮詢後 Copilot 仍要有可測的成功路徑；內容刻意標示為示範。
             LlmTask.ANSWER_WITH_REFERENCES: {
                 "answer": (
