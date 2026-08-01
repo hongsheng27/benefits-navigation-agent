@@ -584,7 +584,9 @@ def main() -> None:
         try:
             result = call_bedrock(bedrock, plain_text, publisher, title, url)
         except Exception as exc:
-            print(f"    ERROR calling Bedrock: {exc}")
+            import traceback
+            print(f"    ERROR calling Bedrock:")
+            traceback.print_exc()
             continue
 
         programs = result.get("programs", [])
