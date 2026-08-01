@@ -1,12 +1,13 @@
 """依所在地收斂地方型補助候選。
 
-全國項目一律保留；地方項目只在 `applicant_jurisdiction` 對得上時加入。
+全國項目一律保留；地方項目只在 `applicant_jurisdiction` 對得上、且生命事件
+與此類地方方案相關時才加入（目前種子資料皆為喪葬／環保葬，僅喪親事件適用）。
 資料來自 benefit discovery 候選，標成 candidate，不做資格判定。
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from app.orchestration.data_contracts import CandidateItem, GraphRelation
@@ -15,6 +16,17 @@ _DEATH_REGISTRATION = GraphRelation(
     item_id="death_registration",
     display_name="死亡登記",
     order=0,
+)
+
+# 目前 _LOCAL_ITEMS 全是喪葬相關，不可掛到失業／職災等非喪親事件。
+_FUNERAL_LOCAL_LIFE_EVENTS: frozenset[str] = frozenset(
+    {
+        "spouse_death",
+        "parent_death",
+        "child_death",
+        "sibling_death",
+        "other_relative_death",
+    }
 )
 
 # jurisdiction_code → 地方方案（與 data/benefit_discovery 對齊）
@@ -81,8 +93,16 @@ LOCAL_ITEM_IDS: frozenset[str] = frozenset(
 
 def local_items_for_attributes(
     user_attributes: Mapping[str, Any],
+    life_event_ids: Sequence[str] = (),
 ) -> tuple[CandidateItem, ...]:
-    """依 applicant_jurisdiction 回傳地方方案；未答或 unsure/OTHER_TW 則不回。"""
+    """依所在地與生命事件回傳地方方案。
+
+    - 未答縣市、或 unsure/OTHER_TW：不回
+    - 生命事件皆非喪親：不回（避免失業路徑出現環保葬）
+    - 複合事件只要含任一喪親事件：可附上對應縣市的喪葬地方方案
+    """
+    if not any(event_id in _FUNERAL_LOCAL_LIFE_EVENTS for event_id in life_event_ids):
+        return ()
     code = user_attributes.get("applicant_jurisdiction")
     if not isinstance(code, str):
         return ()

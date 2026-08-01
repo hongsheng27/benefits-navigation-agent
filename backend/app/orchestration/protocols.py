@@ -368,7 +368,9 @@ class FixtureEntitlementGraphRepository:
         base = _FIXTURE_ITEMS_BY_EVENT.get(event_id, ())
         if not base:
             return ()
-        local = local_items_for_attributes(user_attributes)
+        local = local_items_for_attributes(
+            user_attributes, life_event_ids=(event_id,)
+        )
         if not local:
             return base
         return base + local

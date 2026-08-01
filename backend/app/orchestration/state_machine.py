@@ -466,7 +466,12 @@ def _merge_local_entitlements(state: SessionState, seams: _Seams) -> SessionStat
     )
 
     kept = tuple(item for item in state.items if item.item_id not in LOCAL_ITEM_IDS)
-    local = local_items_for_attributes(state.attributes)
+    life_event_ids = state.life_events or (
+        (state.life_event,) if state.life_event else ()
+    )
+    local = local_items_for_attributes(
+        state.attributes, life_event_ids=life_event_ids
+    )
     if not local:
         if len(kept) == len(state.items):
             return state
