@@ -332,6 +332,42 @@ Do not read the current behaviour as Option B having been chosen.
 
 ---
 
+## Frontend agency directory and case tracking
+
+| Concern | Local mock now | Target |
+|---|---|---|
+| Agency directory UI | `frontend/src/mocks/agencies.ts` via `frontend/src/api/agencyClient.ts` | `GET /agencies` backed by SQLite / RDS source registry |
+| Case tracking UI | `frontend/src/mocks/trackedCases.ts` via `frontend/src/api/trackingClient.ts` | `GET /cases` (or equivalent) persisted session/case store |
+
+### What to change
+
+1. **Agencies**
+   - Implement backend `GET /agencies` returning
+     `{ agencies: AgencyDirectoryItem[], isMock: false }` shaped like
+     `frontend/src/types/agency.ts`.
+   - Seed / join from `data/source_registry` and related benefit tables.
+   - In `.env` / frontend env: set `VITE_USE_AGENCY_MOCK=false` so
+     `listAgencies()` stops short-circuiting to mock.
+   - Optional: `VITE_AGENCIES_API_PATH=/agencies` if the path differs.
+
+2. **Case tracking**
+   - Implement backend list endpoint for saved consult cases.
+   - Shape responses like `frontend/src/types/tracking.ts`.
+   - Default client already tries the API and falls back to mock on failure;
+     set `VITE_USE_CASE_TRACKING_MOCK=true` only when you want to force mock.
+
+### Environment variables
+
+```env
+# Frontend — agency directory / case tracking (fill when APIs exist)
+# VITE_USE_AGENCY_MOCK=false
+# VITE_AGENCIES_API_PATH=/agencies
+# VITE_USE_CASE_TRACKING_MOCK=false
+# VITE_CASES_API_PATH=/cases
+```
+
+---
+
 ## Notes
 
 - This file must be updated every time a new feature is added that uses a
