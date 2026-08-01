@@ -247,6 +247,11 @@ const ITEM_NAMES: Record<string, string> = {
   funeral_benefit: "喪葬給付",
   survivor_pension: "遺屬年金",
   health_insurance_change: "全民健保身分變更",
+  occupational_injury_recognition: "職業災害認定申請",
+  occupational_disability_benefit: "職災失能／傷病給付（示意）",
+  disability_assessment: "身心障礙鑑定",
+  unemployment_benefit: "失業給付",
+  employment_service: "就業服務／職訓諮詢",
   taipei_green_funeral_incentive: "臺北市多元環保葬鼓勵金",
   taipei_joint_funeral_service: "臺北市聯合奠祭",
   new_taipei_green_funeral_incentive: "新北市環保葬鼓勵金",
@@ -254,7 +259,6 @@ const ITEM_NAMES: Record<string, string> = {
   penghu_green_funeral_subsidy: "澎湖縣多元環保葬補助",
   occupational_injury_recognition_follow_up: "追蹤職業災害認定",
   occupational_accident_disability_benefit: "職災保險失能給付",
-  disability_assessment: "身心障礙鑑定",
   long_term_care_assessment: "長照需求評估",
   caregiver_support_services: "家庭照顧者支持與喘息服務",
   caregiver_employment_support: "照顧者就業支持",
@@ -264,12 +268,15 @@ const ITEM_NAMES: Record<string, string> = {
 /** 資格欄位的題目文字。 */
 const FIELD_LABELS: Record<string, string> = {
   applicant_jurisdiction: "你主要在哪個縣市辦理或居住？",
+  care_relationship: "你和需要照顧的人是什麼關係？",
+  caregiver_relationship: "你和需要照顧的人是什麼關係？",
+  disability_cause: "造成失能的原因是？",
+  occupational_recognition_status: "是否已經取得職業災害認定？",
+  occupational_injury_recognition: "是否已經取得職業災害認定？",
+  involuntary_job_loss: "這次是否屬於非自願離職？",
   deceased_insurance_type: "過世者生前的投保身分是？",
   has_dependent_children: "家中是否有未成年子女？",
   applicant_age_band: "你目前的年齡大約在哪個範圍？",
-  caregiver_relationship: "你和需要照顧的人是什麼關係？",
-  disability_cause: "造成失能的原因是？",
-  occupational_injury_recognition: "是否已經取得職業災害認定？",
   care_recipient_insurance_type: "父親受傷前的投保身分是？",
   disability_assessment_status: "是否已經完成身心障礙鑑定？",
   current_care_arrangement: "目前主要由誰照顧？",
@@ -278,16 +285,22 @@ const FIELD_LABELS: Record<string, string> = {
 
 /** 「為什麼問這個？」的說明。後端的 purposeId 形狀是 `<fieldId>.purpose`。 */
 const PURPOSE_TEXTS: Record<string, string> = {
-  "applicant_jurisdiction.purpose": "所在縣市決定有哪些地方型補助與受理窗口可以對照。",
-  "deceased_insurance_type.purpose": "不同投保身分，受理機關與可申請的給付不一樣。",
-  "has_dependent_children.purpose": "有沒有未成年子女，會影響遺屬年金是否加給。",
-  "applicant_age_band.purpose":
-    "遺屬年金依年齡有不同規定，我們需要大致了解你的年齡區間。",
+  "applicant_jurisdiction.purpose":
+    "所在縣市決定有哪些地方型補助與受理窗口可以對照。",
+  "care_relationship.purpose": "代辦與請領資格依親屬關係認定。",
   "caregiver_relationship.purpose": "代辦與部分請領資格會依親屬關係認定。",
   "disability_cause.purpose":
     "職業災害與一般意外或疾病的受理機關、申請路徑及給付不同。",
+  "occupational_recognition_status.purpose":
+    "職災給付以認定為前提；還沒認定的話，第一步就是先申請認定。",
   "occupational_injury_recognition.purpose":
     "職災相關給付通常需要確認認定狀態；這裡不詢問公司或事故經過。",
+  "involuntary_job_loss.purpose": "非自願離職才是失業給付常見門檻之一。",
+  "deceased_insurance_type.purpose":
+    "不同投保身分，受理機關與可申請的給付不一樣。",
+  "has_dependent_children.purpose": "有沒有未成年子女，會影響遺屬年金是否加給。",
+  "applicant_age_band.purpose":
+    "遺屬年金依年齡有不同規定，我們需要大致了解你的年齡區間。",
   "care_recipient_insurance_type.purpose": "投保身分會影響可能的給付與受理機關。",
   "disability_assessment_status.purpose":
     "鑑定進度會影響身障服務與部分照顧資源接續時的辦理順序。",
@@ -305,6 +318,16 @@ const OPTION_LABELS: Record<string, string> = {
   PEN: "澎湖縣",
   OTHER_TW: "其他縣市",
   unsure: "不確定",
+  spouse: "配偶",
+  child: "子女",
+  parent: "父母",
+  other_relative: "其他親屬",
+  occupational_injury: "職業災害（工作中發生）",
+  accident: "一般意外",
+  illness: "疾病（如中風）",
+  recognized: "已認定",
+  applying: "申請中",
+  not_started: "還沒申請",
   labor_insurance: "勞工保險",
   national_pension: "國民年金",
   farmers_insurance: "農民保險",
@@ -342,10 +365,12 @@ const OPTION_LABELS: Record<string, string> = {
 /** 問題分組的標題。 */
 const TOPIC_TITLES: Record<string, string> = {
   location: "所在地",
+  care_relationship: "你與被照顧者",
+  injury_context: "失能與職災",
+  employment_status: "就業狀況",
   deceased_insurance: "過世者的投保狀況",
   family_situation: "家庭狀況",
   applicant_situation: "你的狀況",
-  care_relationship: "你與被照顧者",
   occupational_injury_and_insurance: "職災與投保狀況",
   disability_and_long_term_care: "失能與長照銜接",
   caregiver_situation: "照顧者本人的狀況",

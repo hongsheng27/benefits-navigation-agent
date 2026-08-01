@@ -115,7 +115,8 @@ export function deriveUiStep(
   const { workflowState, lifeEvent, questionGroups } = snapshot;
 
   if (workflowState === "understand_event") {
-    if (lifeEvent !== null) {
+    const events = snapshot.lifeEvents ?? [];
+    if (lifeEvent !== null || events.length > 0) {
       return "confirm";
     }
     return "describe";
@@ -256,7 +257,7 @@ type IntakeStepsProps = {
   onStart?: () => void;
   onSubmitDescribe?: (event: FormEvent<HTMLFormElement>) => void;
   onExampleSelect?: (prompt: string) => void;
-  onConfirm?: () => void;
+  onConfirm?: (eventIds: string[]) => void;
   onRedescribe?: () => void;
   onAnswerFields?: (answers: Record<string, boolean | number | string>) => void;
   onAnswerChatTurn?: (text: string) => void | Promise<void>;
@@ -507,8 +508,10 @@ function IntakeSteps({
           </p>
           <EventConfirmation
             disabled={busy || actionsLocked}
-            lifeEvent={snapshot.lifeEvent}
-            onConfirm={() => onConfirm?.()}
+            lifeEvent={snapshot?.lifeEvent}
+            lifeEvents={snapshot?.lifeEvents ?? []}
+            extraCandidateLifeEvents={snapshot?.extraCandidateLifeEvents ?? []}
+            onConfirm={(eventIds) => onConfirm?.(eventIds)}
             onRedescribe={() => onRedescribe?.()}
           />
           {isReviewing && onReturnToCurrent ? (
@@ -1089,7 +1092,7 @@ function HomePageLive({
           setDescription(prompt);
           inputRef.current?.focus();
         }}
-        onConfirm={() => void confirmEvent(true)}
+        onConfirm={(eventIds) => void confirmEvent(true, eventIds)}
         onRedescribe={() => void handleRedescribe()}
         onAnswerFields={(answers) => void answerFields(answers)}
         onAnswerChatTurn={(text) => answerChatTurn(text)}

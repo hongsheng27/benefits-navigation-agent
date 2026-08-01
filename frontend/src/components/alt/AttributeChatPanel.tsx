@@ -55,16 +55,19 @@ function choiceOptionsFor(question: QuestionView): ChoiceOption[] {
   }));
 }
 
-function seedQuestion(
+/** 畫面優先用前端正面問句；後端 collector／purpose 說明不當題目。 */
+function promptForField(
   collectorQuestion: string | null,
-  groups: QuestionGroupView[],
+  fieldId: string | null,
 ): string {
+  if (fieldId) {
+    const label = fieldLabel(fieldId);
+    if (label !== fieldId) {
+      return label;
+    }
+  }
   if (collectorQuestion?.trim()) {
     return collectorQuestion.trim();
-  }
-  const first = firstMissingQuestion(groups);
-  if (first) {
-    return fieldLabel(first.fieldId);
   }
   return "請用幾句話補充還需要的條件，例如所在縣市或投保身分。";
 }
@@ -86,41 +89,57 @@ export function AttributeChatPanel({
   const [mode, setMode] = useState<"chat" | "choices">("chat");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [
-    {
-      id: "seed",
-      role: "assistant",
-      content: seedQuestion(collectorQuestion, groups),
-    },
-  ]);
-
   const currentQuestion = useMemo(
     () => firstMissingQuestion(groups),
     [groups],
   );
+  const currentFieldId = currentQuestion?.fieldId ?? null;
+
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+    {
+      id: "seed",
+      role: "assistant",
+      content: promptForField(
+        collectorQuestion,
+        firstMissingQuestion(groups)?.fieldId ?? null,
+      ),
+    },
+  ]);
+
   const showChoiceChips =
     currentQuestion !== null && isChoiceQuestion(currentQuestion);
   const choiceOptions = currentQuestion ? choiceOptionsFor(currentQuestion) : [];
 
   useEffect(() => {
-    if (!collectorQuestion?.trim() || busy) {
+    if (busy) {
+      return;
+    }
+    const prompt = promptForField(collectorQuestion, currentFieldId);
+    if (!prompt) {
       return;
     }
     setMessages((current) => {
       const last = current[current.length - 1];
-      if (last?.role === "assistant" && last.content === collectorQuestion.trim()) {
+      if (last?.role === "assistant" && last.content === prompt) {
         return current;
+      }
+      // 尚在等使用者回答時，改寫上一句助理問句（避免留下 purpose 說明）。
+      if (last?.role === "assistant") {
+        return [
+          ...current.slice(0, -1),
+          { id: last.id, role: "assistant", content: prompt },
+        ];
       }
       return [
         ...current,
         {
           id: `ask_${Date.now()}`,
           role: "assistant",
-          content: collectorQuestion.trim(),
+          content: prompt,
         },
       ];
     });
-  }, [collectorQuestion, busy]);
+  }, [collectorQuestion, currentFieldId, busy]);
 
   async function submitChatText(text: string) {
     if (!text || disabled || readOnly || busy) {

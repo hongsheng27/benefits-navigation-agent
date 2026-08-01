@@ -3,6 +3,8 @@ export const apiBaseUrl =
 
 export type BackendHealth = {
   status: string;
+  /** ISO time when this backend process started (spot zombie servers). */
+  startedAt?: string;
 };
 
 export async function getBackendHealth(signal?: AbortSignal): Promise<BackendHealth> {

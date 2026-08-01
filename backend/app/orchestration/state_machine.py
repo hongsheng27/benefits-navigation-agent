@@ -49,6 +49,11 @@ from app.llm.tasks.resolve_life_event import resolve_life_event
 from app.observability.logging import log_event
 from app.orchestration.determination import evaluate_ready_items, visible_items
 from app.orchestration.field_registry import FieldRegistry
+from app.orchestration.life_event_selection import (
+    MAX_CONFIRMED_LIFE_EVENTS,
+    normalize_life_event_ids,
+    pick_extra_candidate_life_events,
+)
 from app.orchestration.life_events import LifeEventRegistry, default_life_events
 from app.orchestration.missing_fields import compute_question_groups
 from app.orchestration.protocols import (
@@ -343,7 +348,7 @@ def _handle_input(
         case LifeEventTextInput():
             return _receive_life_event(state, user_input, seams)
         case EventConfirmationInput():
-            return _confirm_event(state, user_input)
+            return _confirm_event(state, user_input, seams)
         case AttributeAnswersInput():
             return _record_answers(state, user_input, seams)
         case AttributeChatTurnInput():
@@ -358,59 +363,95 @@ def _handle_input(
     raise InvalidTransitionError(state.workflow_state)
 
 
+def _apply_life_events(
+    state: SessionState,
+    event_ids: tuple[str, ...],
+    *,
+    extras: tuple[str, ...] | None = None,
+    registry: LifeEventRegistry | None = None,
+) -> SessionState:
+    """同步 life_events / life_event / 候補選項。"""
+    normalized = event_ids
+    if registry is not None:
+        normalized = normalize_life_event_ids(event_ids, registry)
+    extra = extras
+    if extra is None and registry is not None:
+        extra = pick_extra_candidate_life_events(normalized, registry)
+    if extra is None:
+        extra = ()
+    return state.model_copy(
+        update={
+            "life_events": normalized,
+            "life_event": normalized[0] if normalized else None,
+            "extra_candidate_life_events": extra,
+        }
+    )
+
+
 def _receive_life_event(
     state: SessionState, user_input: LifeEventTextInput, seams: _Seams
 ) -> SessionState:
-    """接收自由文字，交給模型對應成事件代號。
+    """接收自由文字，交給模型對應成一組事件代號（最多五個）。
 
-    **這段文字只存在於這個函式的呼叫範圍內。** `resolve_life_event` 只回傳代號，
-    所以原文沒有任何路徑可以進到 `SessionState`（那裡結構上也沒有欄位放它）、
-    紀錄檔或回應裡。這是 ADR-0007 要求的行為，也完成了 T13。
-
-    對應不出來時 `LifeEventNotRecognisedError` 會往上傳到端點，轉成
-    `event_not_recognized`，由前端請使用者換個說法。**刻意不猜一個代號** ——
-    事件決定後面七步展開什麼，猜錯會讓使用者被問一整串無關的問題。
-
-    直接覆寫 `life_event`，所以使用者否認後重新描述也會正確更新。
-
-    TODO(T21b): 一併抽取去識別化的資格屬性，讓使用者說過的事不必再問一次。
-    需要從欄位登記表動態生成 schema，是獨立的一批。
+    **這段文字只存在於這個函式的呼叫範圍內。** 回傳只有代號，原文不會進 state。
     """
-    event_id = resolve_life_event(
+    event_ids = resolve_life_event(
         user_input.text,
         model=seams.language_model,
         registry=seams.life_events,
     )
-    return state.model_copy(update={"life_event": event_id})
+    return _apply_life_events(state, event_ids, registry=seams.life_events)
 
 
 def _confirm_event(
-    state: SessionState, user_input: EventConfirmationInput
+    state: SessionState,
+    user_input: EventConfirmationInput,
+    seams: _Seams,
 ) -> SessionState:
-    """使用者確認或否認事件。"""
-    if state.life_event is None:
-        # 還沒有事件代號就送確認，不合法。
+    """使用者確認或否認事件（可多選，最多五個）。"""
+    if not state.life_events and state.life_event is None:
         raise InvalidTransitionError(state.workflow_state)
 
     if user_input.confirmed:
-        # 確認成功，往前推到 RESOLVE_ENTITLEMENTS。
-        # 自動推進會接手往後走。
-        return state.model_copy(
-            update={"workflow_state": WorkflowState.RESOLVE_ENTITLEMENTS}
+        allowed = set(state.life_events) | set(state.extra_candidate_life_events)
+        if state.life_event:
+            allowed.add(state.life_event)
+        if user_input.event_ids is not None:
+            chosen = normalize_life_event_ids(
+                user_input.event_ids, seams.life_events
+            )
+        elif state.life_events:
+            chosen = state.life_events
+        elif state.life_event:
+            chosen = (state.life_event,)
+        else:
+            chosen = ()
+        # 只能勾建議或候補裡的代號；過濾未知項。
+        chosen = tuple(
+            event_id for event_id in chosen if event_id in allowed
+        )[:MAX_CONFIRMED_LIFE_EVENTS]
+        if not chosen:
+            raise InvalidTransitionError(state.workflow_state)
+        updated = _apply_life_events(
+            state, chosen, extras=(), registry=seams.life_events
+        )
+        return updated.model_copy(
+            update={
+                "workflow_state": WorkflowState.RESOLVE_ENTITLEMENTS,
+                "extra_candidate_life_events": (),
+            }
         )
 
-    # 否認：清掉事件代號，累加重試計數。
     retries = state.event_retry_count + 1
+    cleared = _apply_life_events(state, (), extras=())
     if retries > MAX_EVENT_RETRIES:
-        return state.model_copy(
+        return cleared.model_copy(
             update={
-                "life_event": None,
                 "event_retry_count": retries,
                 "exit_reason": ExitReason.EVENT_RETRY_LIMIT_REACHED,
             }
         )
-
-    return state.model_copy(update={"life_event": None, "event_retry_count": retries})
+    return cleared.model_copy(update={"event_retry_count": retries})
 
 
 def _merge_local_entitlements(state: SessionState, seams: _Seams) -> SessionState:
@@ -425,7 +466,12 @@ def _merge_local_entitlements(state: SessionState, seams: _Seams) -> SessionStat
     )
 
     kept = tuple(item for item in state.items if item.item_id not in LOCAL_ITEM_IDS)
-    local = local_items_for_attributes(state.attributes)
+    life_event_ids = state.life_events or (
+        (state.life_event,) if state.life_event else ()
+    )
+    local = local_items_for_attributes(
+        state.attributes, life_event_ids=life_event_ids
+    )
     if not local:
         if len(kept) == len(state.items):
             return state
@@ -443,15 +489,29 @@ def _merge_local_entitlements(state: SessionState, seams: _Seams) -> SessionStat
     return state.model_copy(update={"items": merged})
 
 
+# 對話蒐集用正面問句（purpose 只說明「為什麼問」，不能當題目）。
+# 文案與 frontend `FIELD_LABELS` 對齊；查不到時退回簡短正面句，絕不貼 purpose。
+_COLLECTOR_FIELD_QUESTIONS: dict[str, str] = {
+    "applicant_jurisdiction": "你主要在哪個縣市辦理或居住？",
+    "care_relationship": "你和需要照顧的人是什麼關係？",
+    "disability_cause": "造成失能的原因是？",
+    "occupational_recognition_status": "是否已經取得職業災害認定？",
+    "involuntary_job_loss": "這次是否屬於非自願離職？",
+    "deceased_insurance_type": "過世者生前的投保身分是？",
+    "has_dependent_children": "家中是否有未成年子女？",
+    "applicant_age_band": "你目前的年齡大約在哪個範圍？",
+}
+
+
 def _default_collector_question(state: SessionState, seams: _Seams) -> str | None:
-    """依第一個缺漏欄位的 purpose 產生下一問。"""
+    """依第一個缺漏欄位產生下一句正面問句。"""
     groups = compute_question_groups(state, seams.registry)
     if not groups or not groups[0].questions:
         return None
-    field = seams.registry.get(groups[0].questions[0].field_id)
-    if field is None:
+    field_id = groups[0].questions[0].field_id
+    if seams.registry.get(field_id) is None:
         return None
-    return f"請補充：{field.purpose}"
+    return _COLLECTOR_FIELD_QUESTIONS.get(field_id, f"可以補充「{field_id}」嗎？")
 
 
 def _record_answers(
@@ -833,21 +893,37 @@ def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState
         # 已經有項目了（例如退回修改後再走一次），不重複展開。
         return state
 
-    if state.life_event is None:
-        # 還沒有事件代號就沒有東西可以展開。理論上到不了這裡（要先確認事件才會進
-        # RESOLVE_ENTITLEMENTS），但不猜一組項目比較安全。
+    event_ids = state.life_events or (
+        (state.life_event,) if state.life_event is not None else ()
+    )
+    if not event_ids:
         return state
 
-    candidates = seams.entitlement_repository.expand_from_event(
-        state.life_event, state.attributes
-    )
-    items = visible_items(
-        tuple(adapt_graph_candidate(candidate) for candidate in candidates)
-    )
+    # 複合情境：各事件展開後聯集去重；同一項目合併 source_life_events。
+    merged_by_id: dict[str, CandidateItem] = {}
+    for event_id in event_ids:
+        candidates = seams.entitlement_repository.expand_from_event(
+            event_id, state.attributes
+        )
+        for candidate in candidates:
+            adapted = adapt_graph_candidate(candidate).model_copy(
+                update={"source_life_events": (event_id,)}
+            )
+            existing = merged_by_id.get(adapted.item_id)
+            if existing is None:
+                merged_by_id[adapted.item_id] = adapted
+                continue
+            sources = tuple(
+                dict.fromkeys([*existing.source_life_events, event_id])
+            )
+            merged_by_id[adapted.item_id] = existing.model_copy(
+                update={"source_life_events": sources}
+            )
+    items = visible_items(tuple(merged_by_id.values()))
 
-    # coverage 目前只用來決定要不要排 refresh。把它露給前端需要新的對外欄位，
-    # 那屬於還沒開始的前端契約那一批。
-    refresh_after_response(seams.source_refresh_service, state.life_event)
+    # coverage 目前只用來決定要不要排 refresh。
+    for event_id in event_ids:
+        refresh_after_response(seams.source_refresh_service, event_id)
 
     if not items:
         return state

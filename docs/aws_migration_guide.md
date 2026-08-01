@@ -368,6 +368,19 @@ Do not read the current behaviour as Option B having been chosen.
 
 ---
 
+## Multi life-event confirmation
+
+| Concern | Local now | Target |
+|---|---|---|
+| Resolve step | `resolve_life_event` returns up to 5 `event_ids` | Same schema on Bedrock |
+| Extras | Deterministic co-occurrence (`life_event_selection.py`) adds 3 candidates | Optional graph-based relatedness |
+| Expand | Union of `expand_from_event` per confirmed event | Entitlement graph multi-root expand |
+| Cap | App enforces max 5 confirmed events (Bedrock schema has no `maxItems`) | Keep app-side cap |
+
+No new environment variables.
+
+---
+
 ## Conversational attribute collection (T21b-style)
 
 | Concern | Local now | Target |

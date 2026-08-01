@@ -31,7 +31,7 @@ INSTRUCTION = """你是「接住」的資料蒐集助理。使用者正在用自
 1. 從使用者這句話判斷能否填入「待填欄位」之一；value 必須是該欄位允許的代號，或 boolean 的 true/false。
 2. 若無法有把握填任何一欄，field_id 設為 none，value 設空字串，confident 設 false。
 3. 絕對不可判定是否符合補助資格。
-4. next_question 用繁體中文、一句話，引導下一個待填欄位；若資訊已夠可給空字串。
+4. next_question 用繁體中文、一句正面問句引導下一個待填欄位（例如「這次是否屬於非自願離職？」）；不要複述用途說明；若資訊已夠可給空字串。
 5. 只輸出工具參數。"""
 
 
@@ -115,7 +115,9 @@ def build_user_content(reply: str, fields: Sequence[FieldDefinition]) -> str:
                 if field.option_ids
                 else f"型別：{field.value_kind.value}"
             )
-            lines.append(f"- {field.field_id}：{field.purpose}（{options}）")
+            lines.append(
+                f"- {field.field_id}：用途說明（勿當問句）={field.purpose}（{options}）"
+            )
     return "\n".join(lines)
 
 

@@ -24,13 +24,20 @@ Backend 採用 Python **modular monolith**，負責 API、workflow state、Agent
 不需要另外安裝 Python 或手動建立虛擬環境。
 
 ```bash
+# 建議：從 repo 根目錄啟動（會先清掉佔埠的舊 uvicorn，再開 --reload）
+make backend                              # http://127.0.0.1:8000
+
+# 或直接：
 cd backend
 uv sync                                   # 建立 .venv 並依 uv.lock 安裝套件
-uv run uvicorn app.main:app --reload      # http://localhost:8000
+python ../scripts/dev_backend.py          # 等同 make backend
 ```
 
-啟動後 `GET /health` 會回傳 `{"status": "ok"}`，前端右上角的連線狀態會變成
-「後端已連線」。前端預設連線至 `http://localhost:8000`。
+不要並行開第二個 `uvicorn`：Windows 上 `--reload` 子行程常變成殭屍佔埠，
+瀏覽器會打到舊程式。換埠（8001、8002…）只是暫時躲過，不是解法。
+
+啟動後 `GET /health` 會回傳 `status` 與 `startedAt`（此行程開機時間）。
+前端右上角連線狀態會變成「後端已連線」。前端預設連線至 `http://localhost:8000`。
 
 互動式 API 文件在 `http://127.0.0.1:8000/docs`。目前可用的端點：
 
@@ -54,27 +61,18 @@ uv run uvicorn app.main:app --reload      # http://localhost:8000
 > 每個回應都帶 `implementation` 物件說明哪些能力還沒實作，前端可據此在畫面上標示。
 > 未實作的能力清單見 `app/api/implementation.py`。
 
-### 端點沒出現在 `/docs` 時先檢查這個
+### 端點沒出現在 `/docs`、或改了程式卻像沒生效時
 
-症狀是新端點沒有列出來，看起來像 router 沒掛上。實際原因通常是**有一個舊的 uvicorn
-行程還在跑並佔著 8000 埠**，載入的是還沒有那些端點的程式。父行程死掉後，子行程會
-繼承監聽權，所以查詢埠的擁有者會看到一個已經不存在的 PID。
+多半是**舊的 uvicorn 還佔著埠**。請用 `make backend`（或
+`python scripts/dev_backend.py`）重開：腳本會先清埠再開新行程。
 
-`--reload` 救不了，因為問題不是「檔案沒重載」而是「舊行程還活著」。
-
-```powershell
-Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
-  Select-Object ProcessId, CreationDate, CommandLine | Format-List
-```
-
-看 `CreationDate`。比本次工作開始時間更早的就是它，用
-`Stop-Process -Id <PID> -Force` 殺掉再重啟。
-
-先確認程式本身沒問題可以用這一行，它不經過伺服器：
+若仍懷疑程式本身，可跳過伺服器直接檢查 OpenAPI：
 
 ```bash
 uv run python -c "from app.main import app; print(sorted(app.openapi()['paths']))"
 ```
+
+也可對比 `GET /health` 的 `startedAt`：重開後時間應該變新。
 
 環境變數可複製根目錄的 `.env.example` 到根目錄 `.env`；backend 會依序讀取
 `../.env` 與 `backend/.env`，後者可覆寫前者。

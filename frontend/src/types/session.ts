@@ -126,6 +126,8 @@ export type LifeEventTextInput = {
 export type EventConfirmationInput = {
   kind: "event_confirmation";
   confirmed: boolean;
+  /** 確認時勾選的事件（1～5）；省略則沿用後端目前的 lifeEvents。 */
+  eventIds?: string[];
 };
 
 /** 畫面 4 送出一組答案；畫面 7 修正答案也用這個形狀。鍵是欄位代號。 */
@@ -219,6 +221,8 @@ export type ItemView = {
   amountCurrency: string | null;
 
   explanation: string | null;
+  /** 複合情境時，此項目來自哪些 life event。 */
+  sourceLifeEvents: string[];
 };
 
 /**
@@ -254,6 +258,10 @@ export type SessionSnapshot = {
   stepTotal: number;
 
   lifeEvent: string | null;
+  /** 複合情境：建議或已確認的事件（最多 5）。lifeEvent 為第一筆相容欄位。 */
+  lifeEvents: string[];
+  /** 確認頁額外候補（最多 3），預設未勾選。 */
+  extraCandidateLifeEvents: string[];
 
   /** 使用者答過的答案，畫面 7 複查時要顯示。 */
   attributes: Record<string, AttributeValue>;

@@ -5,6 +5,7 @@ import {
   itemAudience,
   itemKindLabel,
   itemName,
+  lifeEventName,
   optionLabel,
   type ResultAudience,
   resultAudienceDescription,
@@ -26,17 +27,21 @@ const AUDIENCE_ORDER: ResultAudience[] = ["care_recipient", "caregiver"];
 
 type ResultListProps = {
   snapshot: SessionSnapshot;
+  /** 示範用：依被照顧者／照顧者分組（不改 API）。 */
   groupByAudience?: boolean;
 };
 
 /**
- * 依 status 分區顯示候選項目；有 audience 映射時先拆成被照顧者與照顧者兩條線。
- *
- * audience 只是前端展示映射，不會寫回 API，也不會參與資格判定。每個項目的 status
- * 仍完全來自 snapshot；後端目前多半回 needs_human_review，這是刻意的安全預設。
+ * 結果清單分組優先序：
+ * 1. `groupByAudience`（示範雙軌照顧）
+ * 2. 多個 `lifeEvents`／`sourceLifeEvents`（正式多事件聯集）
+ * 3. 僅依 status
  */
-export function ResultList({ snapshot, groupByAudience = false }: ResultListProps) {
-  const { items, implementation } = snapshot;
+export function ResultList({
+  snapshot,
+  groupByAudience = false,
+}: ResultListProps) {
+  const { items, implementation, lifeEvents } = snapshot;
 
   const audienceGroups = groupByAudience
     ? AUDIENCE_ORDER.map((audience) => ({
@@ -48,6 +53,22 @@ export function ResultList({ snapshot, groupByAudience = false }: ResultListProp
     ? items.filter((item) => itemAudience(item.itemId) === null)
     : items;
   const hasAudienceGroups = audienceGroups.length > 0;
+
+  const eventOrder =
+    lifeEvents.length > 0
+      ? lifeEvents
+      : [...new Set(items.flatMap((item) => item.sourceLifeEvents ?? []))];
+  const splitByEvent = !hasAudienceGroups && eventOrder.length > 1;
+  const eventBuckets = splitByEvent
+    ? eventOrder
+        .map((eventId) => ({
+          eventId,
+          items: items.filter((item) =>
+            (item.sourceLifeEvents ?? []).includes(eventId),
+          ),
+        }))
+        .filter((bucket) => bucket.items.length > 0)
+    : [{ eventId: null as string | null, items }];
 
   return (
     <div>
@@ -89,7 +110,16 @@ export function ResultList({ snapshot, groupByAudience = false }: ResultListProp
           ) : null}
         </div>
       ) : (
-        <StatusGroups items={items} />
+        eventBuckets.map((bucket) => (
+          <div key={bucket.eventId ?? "all"} className="mt-6 first:mt-0">
+            {bucket.eventId ? (
+              <h2 className="text-[0.95rem] font-semibold tracking-[0.04em] text-[#2f4f45]">
+                與「{lifeEventName(bucket.eventId)}」相關
+              </h2>
+            ) : null}
+            <StatusGroups items={bucket.items} />
+          </div>
+        ))
       )}
     </div>
   );

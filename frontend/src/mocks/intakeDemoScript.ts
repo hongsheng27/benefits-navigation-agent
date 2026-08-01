@@ -45,6 +45,8 @@ function createDemoBase(
   return {
     sessionId,
     stepTotal: 8,
+    lifeEvents: [],
+    extraCandidateLifeEvents: [],
     exitReason: null,
     referralRequested: false,
     isProcessing: false,
@@ -133,6 +135,7 @@ const SPOUSE_RESULT_ITEMS: SessionSnapshot["items"] = [
     amountPeriod: null,
     amountCurrency: null,
     explanation: "戶政死亡登記通常要先辦，後面許多給付才接得上。",
+    sourceLifeEvents: ["spouse_death"],
   },
   {
     itemId: "funeral_benefit",
@@ -146,6 +149,7 @@ const SPOUSE_RESULT_ITEMS: SessionSnapshot["items"] = [
     amountPeriod: null,
     amountCurrency: null,
     explanation: "依過世者投保身分，可能可向對應機關申請喪葬給付。",
+    sourceLifeEvents: ["spouse_death"],
   },
   {
     itemId: "survivor_pension",
@@ -159,6 +163,7 @@ const SPOUSE_RESULT_ITEMS: SessionSnapshot["items"] = [
     amountPeriod: null,
     amountCurrency: null,
     explanation: "有未成年子女時，遺屬年金條件可能不同，送件前建議再確認。",
+    sourceLifeEvents: ["spouse_death"],
   },
 ];
 
@@ -190,6 +195,8 @@ const SPOUSE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       workflowState: "understand_event",
       stepIndex: 2,
       lifeEvent: "spouse_death",
+      lifeEvents: ["spouse_death"],
+      extraCandidateLifeEvents: ["job_loss", "low_income_hardship", "mental_health_crisis"],
       attributes: {},
       items: [],
       questionGroups: [],
@@ -205,6 +212,7 @@ const SPOUSE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       workflowState: "collect_missing_fields",
       stepIndex: 3,
       lifeEvent: "spouse_death",
+      lifeEvents: ["spouse_death"],
       attributes: DEMO_ANSWERS,
       items: [],
       questionGroups: SPOUSE_QUESTION_GROUPS,
@@ -218,6 +226,7 @@ const SPOUSE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       workflowState: "explain_result",
       stepIndex: 6,
       lifeEvent: "spouse_death",
+      lifeEvents: ["spouse_death"],
       attributes: DEMO_ANSWERS,
       items: SPOUSE_RESULT_ITEMS,
       questionGroups: [],
@@ -382,6 +391,7 @@ const CARE_RESULT_ITEMS: SessionSnapshot["items"] = [
     amountMax: null,
     amountPeriod: null,
     amountCurrency: null,
+    sourceLifeEvents: ["occupational_injury"],
     explanation:
       "職災認定仍在申請中，可先確認案件進度與後續需要補交的資料；app 不收公司或事故細節。",
   },
@@ -396,6 +406,7 @@ const CARE_RESULT_ITEMS: SessionSnapshot["items"] = [
     amountMax: null,
     amountPeriod: null,
     amountCurrency: null,
+    sourceLifeEvents: ["occupational_injury"],
     explanation:
       "父親有職災保險，但是否符合失能給付仍須依職災認定、診斷與失能程度由承辦機關確認。",
   },
@@ -410,6 +421,7 @@ const CARE_RESULT_ITEMS: SessionSnapshot["items"] = [
     amountMax: null,
     amountPeriod: null,
     amountCurrency: null,
+    sourceLifeEvents: ["occupational_injury"],
     explanation:
       "目前還沒申請身心障礙鑑定，可先向所在地公所或醫療院所確認辦理流程；app 只列文件，不收證件。",
   },
@@ -424,6 +436,7 @@ const CARE_RESULT_ITEMS: SessionSnapshot["items"] = [
     amountMax: null,
     amountPeriod: null,
     amountCurrency: null,
+    sourceLifeEvents: ["occupational_injury"],
     explanation:
       "可聯絡 1966 詢問長照需求評估；實際適用服務仍需由照管單位依最新政策與評估結果確認。",
   },
@@ -438,6 +451,7 @@ const CARE_RESULT_ITEMS: SessionSnapshot["items"] = [
     amountMax: null,
     amountPeriod: null,
     amountCurrency: null,
+    sourceLifeEvents: ["occupational_injury"],
     explanation:
       "你目前幾乎獨力照顧，可進一步詢問喘息服務與家庭照顧者支持；是否適用仍需依照顧安排評估。",
   },
@@ -452,6 +466,7 @@ const CARE_RESULT_ITEMS: SessionSnapshot["items"] = [
     amountMax: null,
     amountPeriod: null,
     amountCurrency: null,
+    sourceLifeEvents: ["occupational_injury"],
     explanation:
       "你已因照顧減少工時，可再確認工作安排、就業服務或其他照顧者就業支持方向。",
   },
@@ -466,6 +481,7 @@ const CARE_RESULT_ITEMS: SessionSnapshot["items"] = [
     amountMax: null,
     amountPeriod: null,
     amountCurrency: null,
+    sourceLifeEvents: ["occupational_injury"],
     explanation:
       "不必等所有資格確認完才求助；需要有人一起釐清時，可先聯絡 1966 或所在地家庭照顧者支持窗口。",
   },
@@ -507,6 +523,12 @@ const CARE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       workflowState: "understand_event",
       stepIndex: 2,
       lifeEvent: "occupational_injury",
+      lifeEvents: ["occupational_injury"],
+      extraCandidateLifeEvents: [
+        "serious_illness",
+        "job_loss",
+        "low_income_hardship",
+      ],
       attributes: {},
       items: [],
       questionGroups: [],
@@ -522,6 +544,7 @@ const CARE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       workflowState: "collect_missing_fields",
       stepIndex: 3,
       lifeEvent: "occupational_injury",
+      lifeEvents: ["occupational_injury"],
       attributes: CARE_DEMO_ANSWERS,
       items: [],
       questionGroups: CARE_QUESTION_GROUPS,
@@ -536,6 +559,7 @@ const CARE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       workflowState: "explain_result",
       stepIndex: 6,
       lifeEvent: "occupational_injury",
+      lifeEvents: ["occupational_injury"],
       attributes: CARE_DEMO_ANSWERS,
       items: CARE_RESULT_ITEMS,
       questionGroups: [],

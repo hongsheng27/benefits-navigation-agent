@@ -168,10 +168,12 @@ class EventConfirmationInput(_Input):
     """畫面 2：使用者確認或否認系統理解的事件。
 
     `confirmed` 為 False 表示「不是這樣，我重新描述」，會累加重試計數。
+    `event_ids` 為確認時勾選的事件（1～5）；省略時沿用目前 `life_events`。
     """
 
     kind: Literal["event_confirmation"] = "event_confirmation"
     confirmed: bool
+    event_ids: tuple[str, ...] | None = None
 
 
 class AttributeAnswersInput(_Input):
@@ -328,6 +330,7 @@ class ItemView(_View):
     amount_currency: str | None = None
 
     explanation: str | None = None
+    source_life_events: tuple[str, ...] = ()
 
 
 class QuestionView(_View):
@@ -392,6 +395,10 @@ class SessionSnapshot(_View):
     step_total: int
 
     life_event: str | None = None
+    # 複合情境：已建議或已確認的事件（最多 5）。`life_event` 為第一筆相容欄位。
+    life_events: tuple[str, ...] = ()
+    # 確認頁額外候補（最多 3），預設未勾選。
+    extra_candidate_life_events: tuple[str, ...] = ()
 
     # 使用者答過的答案，畫面 7 複查時要顯示。
     attributes: dict[str, AttributeValue] = Field(default_factory=dict)
@@ -438,6 +445,8 @@ class SessionSnapshot(_View):
             step_index=WORKFLOW_STEPS.index(state.workflow_state) + 1,
             step_total=len(WORKFLOW_STEPS),
             life_event=state.life_event,
+            life_events=state.life_events,
+            extra_candidate_life_events=state.extra_candidate_life_events,
             attributes=dict(state.attributes),
             items=tuple(
                 ItemView(
@@ -469,6 +478,7 @@ class SessionSnapshot(_View):
                     amount_period=item.amount_period,
                     amount_currency=item.amount_currency,
                     explanation=item.explanation,
+                    source_life_events=item.source_life_events,
                 )
                 for item in state.items
             ),
