@@ -87,6 +87,14 @@ type HomePageAltProps = {
   onGoToTracking?: (lifeEventId: string | null) => void;
   /** 外層已有 AppNav 時隱藏頁內品牌列，避免重複。 */
   hideBrandHeader?: boolean;
+  /** 瀏覽器上一頁／下一頁還原到的諮詢步驟（live）。 */
+  historyConsultStep?: IntakeUiStep | null;
+  /** 瀏覽器上一頁／下一頁還原到的示範場景索引。 */
+  historyDemoSceneIndex?: number | null;
+  /** live 步驟變更時通知外層寫入 history。 */
+  onConsultStepChange?: (step: IntakeUiStep) => void;
+  /** demo 場景索引變更時通知外層寫入 history。 */
+  onDemoSceneIndexChange?: (index: number) => void;
 };
 
 const STEP_META: Record<
@@ -613,6 +621,8 @@ function IntakeSteps({
               <ResultList
                 snapshot={snapshot}
                 groupByAudience={groupResultsByAudience}
+                enableItemTracking={!hideDemoResultActions}
+                onGoToTracking={onGoToTracking}
               />
             </div>
           )}
@@ -816,11 +826,15 @@ function HomePageDemo({
   onToggleMode,
   onGoToTracking,
   hideBrandHeader,
+  historyDemoSceneIndex = null,
+  onDemoSceneIndexChange,
 }: {
   onExitDemo?: () => void;
   onToggleMode?: () => void;
   onGoToTracking?: (lifeEventId: string | null) => void;
   hideBrandHeader?: boolean;
+  historyDemoSceneIndex?: number | null;
+  onDemoSceneIndexChange?: (index: number) => void;
 }) {
   const [selectedCaseId, setSelectedCaseId] = useState<IntakeDemoCaseId>(
     DEFAULT_INTAKE_DEMO_CASE_ID,
@@ -839,6 +853,21 @@ function HomePageDemo({
       stepHeadingRef.current?.focus();
     }
   }, [scene.step, sceneIndex, selectedCaseId]);
+
+  useEffect(() => {
+    onDemoSceneIndexChange?.(sceneIndex);
+  }, [sceneIndex, onDemoSceneIndexChange]);
+
+  useEffect(() => {
+    if (historyDemoSceneIndex == null) {
+      return;
+    }
+    const clamped = Math.min(
+      Math.max(historyDemoSceneIndex, 0),
+      scenes.length - 1,
+    );
+    setSceneIndex(clamped);
+  }, [historyDemoSceneIndex, scenes.length]);
 
   function selectCase(caseId: IntakeDemoCaseId) {
     setSelectedCaseId(caseId);
@@ -910,10 +939,14 @@ function HomePageLive({
   hideBrandHeader,
   onToggleMode,
   onGoToTracking,
+  historyConsultStep = null,
+  onConsultStepChange,
 }: {
   hideBrandHeader?: boolean;
   onToggleMode?: () => void;
   onGoToTracking?: (lifeEventId: string | null) => void;
+  historyConsultStep?: IntakeUiStep | null;
+  onConsultStepChange?: (step: IntakeUiStep) => void;
 }) {
   const [description, setDescription] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
@@ -926,6 +959,7 @@ function HomePageLive({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const naturalStepRef = useRef<IntakeUiStep>("landing");
+  const applyingHistoryRef = useRef(false);
 
   const {
     snapshot,
@@ -982,7 +1016,9 @@ function HomePageLive({
   useEffect(() => {
     if (naturalStep !== naturalStepRef.current) {
       naturalStepRef.current = naturalStep;
-      setReviewStep(null);
+      if (!applyingHistoryRef.current) {
+        setReviewStep(null);
+      }
     }
   }, [naturalStep]);
 
@@ -991,6 +1027,37 @@ function HomePageLive({
       stepHeadingRef.current?.focus();
     }
   }, [uiStep]);
+
+  useEffect(() => {
+    if (!applyingHistoryRef.current) {
+      onConsultStepChange?.(uiStep);
+    }
+    applyingHistoryRef.current = false;
+  }, [uiStep, onConsultStepChange]);
+
+  useEffect(() => {
+    if (historyConsultStep == null) {
+      return;
+    }
+    applyingHistoryRef.current = true;
+    const target = historyConsultStep;
+    const natural = deriveUiStep(snapshot, hasStarted || target !== "landing");
+    const targetIndex = STEP_ORDER.indexOf(target);
+    const naturalIndex = STEP_ORDER.indexOf(natural);
+
+    if (target === "landing") {
+      setHasStarted(false);
+      setReviewStep(null);
+      return;
+    }
+
+    setHasStarted(true);
+    if (target === natural || targetIndex >= naturalIndex) {
+      setReviewStep(null);
+      return;
+    }
+    setReviewStep(target);
+  }, [historyConsultStep, snapshot, hasStarted]);
 
   const busy = status === "working" || status === "restoring";
 
@@ -1114,6 +1181,10 @@ export function HomePageAlt({
   onToggleMode,
   onGoToTracking,
   hideBrandHeader = false,
+  historyConsultStep = null,
+  historyDemoSceneIndex = null,
+  onConsultStepChange,
+  onDemoSceneIndexChange,
 }: HomePageAltProps) {
   if (mode === "demo") {
     return (
@@ -1122,6 +1193,8 @@ export function HomePageAlt({
         onExitDemo={onExitDemo}
         onToggleMode={onToggleMode}
         onGoToTracking={onGoToTracking}
+        historyDemoSceneIndex={historyDemoSceneIndex}
+        onDemoSceneIndexChange={onDemoSceneIndexChange}
       />
     );
   }
@@ -1130,6 +1203,8 @@ export function HomePageAlt({
       hideBrandHeader={hideBrandHeader}
       onToggleMode={onToggleMode}
       onGoToTracking={onGoToTracking}
+      historyConsultStep={historyConsultStep}
+      onConsultStepChange={onConsultStepChange}
     />
   );
 }

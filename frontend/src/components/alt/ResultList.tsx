@@ -1,9 +1,18 @@
+import { useEffect, useState, type ReactNode } from "react";
+
+import {
+  addTrackedBenefitItem,
+  buildTrackedItemFromResult,
+  isBenefitItemTracked,
+  syncPendingBenefitItemsFromResults,
+} from "../../lib/trackingStore";
+import { getItemDetail } from "../../mocks/itemDetails";
 import type { ItemStatus, ItemView, SessionSnapshot } from "../../types/session";
 import styles from "./alt.module.css";
 import {
   fieldLabel,
   itemAudience,
-  itemKindLabel,
+  itemCategoryLabel,
   itemName,
   lifeEventName,
   optionLabel,
@@ -29,6 +38,9 @@ type ResultListProps = {
   snapshot: SessionSnapshot;
   /** 示範用：依被照顧者／照顧者分組（不改 API）。 */
   groupByAudience?: boolean;
+  /** 顯示「加入追蹤」並同步本輪待追蹤清單。 */
+  enableItemTracking?: boolean;
+  onGoToTracking?: (lifeEventId: string | null) => void;
 };
 
 /**
@@ -40,8 +52,19 @@ type ResultListProps = {
 export function ResultList({
   snapshot,
   groupByAudience = false,
+  enableItemTracking = true,
+  onGoToTracking,
 }: ResultListProps) {
-  const { items, implementation, lifeEvents } = snapshot;
+  const { items, implementation, lifeEvents, lifeEvent } = snapshot;
+  const primaryLifeEvent =
+    lifeEvent ?? (lifeEvents.length > 0 ? lifeEvents[0] : null);
+
+  useEffect(() => {
+    if (!enableItemTracking || items.length === 0) {
+      return;
+    }
+    syncPendingBenefitItemsFromResults(items, primaryLifeEvent);
+  }, [enableItemTracking, items, primaryLifeEvent]);
 
   const audienceGroups = groupByAudience
     ? AUDIENCE_ORDER.map((audience) => ({
@@ -94,7 +117,13 @@ export function ResultList({
               <p className="mt-1 text-[0.88rem] leading-[1.9] text-[#6b6459]">
                 {resultAudienceDescription(group.audience)}
               </p>
-              <StatusGroups items={group.items} nested />
+              <StatusGroups
+                items={group.items}
+                nested
+                lifeEventId={primaryLifeEvent}
+                enableItemTracking={enableItemTracking}
+                onGoToTracking={onGoToTracking}
+              />
             </section>
           ))}
 
@@ -105,7 +134,13 @@ export function ResultList({
               >
                 其他相關方向
               </h3>
-              <StatusGroups items={ungroupedItems} nested />
+              <StatusGroups
+                items={ungroupedItems}
+                nested
+                lifeEventId={primaryLifeEvent}
+                enableItemTracking={enableItemTracking}
+                onGoToTracking={onGoToTracking}
+              />
             </section>
           ) : null}
         </div>
@@ -117,7 +152,12 @@ export function ResultList({
                 與「{lifeEventName(bucket.eventId)}」相關
               </h2>
             ) : null}
-            <StatusGroups items={bucket.items} />
+            <StatusGroups
+              items={bucket.items}
+              lifeEventId={bucket.eventId ?? primaryLifeEvent}
+              enableItemTracking={enableItemTracking}
+              onGoToTracking={onGoToTracking}
+            />
           </div>
         ))
       )}
@@ -128,9 +168,15 @@ export function ResultList({
 function StatusGroups({
   items,
   nested = false,
+  lifeEventId,
+  enableItemTracking,
+  onGoToTracking,
 }: {
   items: ItemView[];
   nested?: boolean;
+  lifeEventId: string | null;
+  enableItemTracking: boolean;
+  onGoToTracking?: (lifeEventId: string | null) => void;
 }) {
   const grouped = STATUS_ORDER.map((status) => ({
     status,
@@ -150,14 +196,86 @@ function StatusGroups({
       </Heading>
       <ul className="mt-3 divide-y divide-[#eee7db] border border-[#e0d8ca] bg-[#fdfbf7]">
         {group.items.map((item) => (
-          <ResultRow item={item} key={item.itemId} />
+          <ResultRow
+            item={item}
+            key={item.itemId}
+            lifeEventId={lifeEventId}
+            enableItemTracking={enableItemTracking}
+            onGoToTracking={onGoToTracking}
+          />
         ))}
       </ul>
     </section>
   ));
 }
 
-function ResultRow({ item }: { item: ItemView }) {
+function formatAmountFromItem(item: ItemView): string | null {
+  if (item.amountMin == null && item.amountMax == null) {
+    return null;
+  }
+  const currency = item.amountCurrency?.trim() || "元";
+  const period =
+    item.amountPeriod === "monthly"
+      ? "／月"
+      : item.amountPeriod === "annual"
+        ? "／年"
+        : item.amountPeriod === "one_time"
+          ? "（一次）"
+          : "";
+  if (item.amountMin != null && item.amountMax != null) {
+    if (item.amountMin === item.amountMax) {
+      return `${item.amountMin.toLocaleString("zh-TW")} ${currency}${period}`;
+    }
+    return `${item.amountMin.toLocaleString("zh-TW")}–${item.amountMax.toLocaleString("zh-TW")} ${currency}${period}`;
+  }
+  if (item.amountMin != null) {
+    return `約 ${item.amountMin.toLocaleString("zh-TW")} ${currency}起${period}`;
+  }
+  return `最高約 ${item.amountMax!.toLocaleString("zh-TW")} ${currency}${period}`;
+}
+
+function DetailSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mt-3">
+      <h4 className="text-[0.82rem] font-semibold tracking-[0.04em] text-[#2f4f45]">
+        {title}
+      </h4>
+      <div className="mt-1 text-[0.85rem] leading-[1.95] text-[#4a453d]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ResultRow({
+  item,
+  lifeEventId,
+  enableItemTracking,
+  onGoToTracking,
+}: {
+  item: ItemView;
+  lifeEventId: string | null;
+  enableItemTracking: boolean;
+  onGoToTracking?: (lifeEventId: string | null) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [tracked, setTracked] = useState(() => isBenefitItemTracked(item.itemId));
+  const detail = getItemDetail(item.itemId);
+  const amountLabel = formatAmountFromItem(item) ?? detail?.amountLabel ?? null;
+  const officialUrl =
+    detail?.officialUrl ?? item.citations[0]?.url ?? null;
+
+  function handleAddTracking() {
+    addTrackedBenefitItem(buildTrackedItemFromResult(item, lifeEventId));
+    setTracked(true);
+  }
+
   return (
     <li className="px-4 py-4 sm:px-5">
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -165,7 +283,7 @@ function ResultRow({ item }: { item: ItemView }) {
           {itemName(item.itemId)}
         </span>
         <span className="rounded-xs border border-[#d8cfc0] px-2 py-0.5 text-[0.75rem] leading-[1.8] tracking-[0.06em] text-[#6b6459]">
-          {itemKindLabel(item.kind)}
+          項目類型：{itemCategoryLabel(item.itemId, item.kind)}
         </span>
       </p>
 
@@ -212,6 +330,96 @@ function ResultRow({ item }: { item: ItemView }) {
             </li>
           ))}
         </ul>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          className="text-[0.85rem] font-semibold tracking-[0.04em] text-[#2f4f45] underline decoration-[#a8bdb2] underline-offset-2 hover:decoration-[#2f4f45]"
+          aria-expanded={expanded}
+        >
+          {expanded ? "收合詳情" : "查看詳情"}
+        </button>
+        {enableItemTracking ? (
+          tracked ? (
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.85rem] text-[#6b6459]">
+              <span>已加入追蹤</span>
+              {onGoToTracking ? (
+                <button
+                  type="button"
+                  onClick={() => onGoToTracking(lifeEventId)}
+                  className="font-semibold text-[#2f4f45] underline decoration-[#a8bdb2] underline-offset-2 hover:decoration-[#2f4f45]"
+                >
+                  查看追蹤
+                </button>
+              ) : null}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleAddTracking}
+              className="rounded-sm border border-[#2f4f45] bg-transparent px-3 py-1.5 text-[0.82rem] font-semibold tracking-[0.04em] text-[#2f4f45] transition-colors hover:bg-[#2f4f45] hover:text-[#f7f4ee]"
+            >
+              加入追蹤
+            </button>
+          )
+        ) : null}
+      </div>
+
+      {expanded ? (
+        <div className="mt-3 border-t border-[#eee7db] pt-3">
+          {detail ? (
+            <>
+              <DetailSection title="完整說明">{detail.summary}</DetailSection>
+              <DetailSection title="主管機關">{detail.agency}</DetailSection>
+              <DetailSection title="申請地點">{detail.location}</DetailSection>
+              {amountLabel ? (
+                <DetailSection title="金額範圍">{amountLabel}</DetailSection>
+              ) : null}
+              <DetailSection title="資格條件">
+                <ul className="list-disc pl-5">
+                  {detail.eligibilityNotes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              </DetailSection>
+              <DetailSection title="申請步驟">
+                <ol className="list-decimal pl-5">
+                  {detail.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </DetailSection>
+              <DetailSection title="應備文件">
+                <ul className="list-disc pl-5">
+                  {detail.documents.map((doc) => (
+                    <li key={doc}>{doc}</li>
+                  ))}
+                </ul>
+              </DetailSection>
+            </>
+          ) : (
+            <p className="text-[0.85rem] leading-[1.95] text-[#6b6459]">
+              這筆項目的示範詳情尚未補齊；正式申請仍以承辦機關說明為準。
+            </p>
+          )}
+          {officialUrl ? (
+            <p className="mt-3">
+              <a
+                href={officialUrl}
+                rel="noreferrer noopener"
+                target="_blank"
+                className="text-[0.85rem] font-semibold text-[#2f4f45] underline decoration-[#a8bdb2] underline-offset-2 hover:decoration-[#2f4f45]"
+              >
+                前往機關／官方頁面
+              </a>
+            </p>
+          ) : null}
+          <p className="mt-3 text-[0.78rem] leading-[1.8] text-[#8b8377]">
+            以上為整理用示範說明，不代表資格已核定。
+          </p>
+        </div>
       ) : null}
     </li>
   );
