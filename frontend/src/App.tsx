@@ -15,6 +15,9 @@ export default function App() {
   const [agencyFocus, setAgencyFocus] = useState<AgencySituationFocus | null>(
     null,
   );
+  const [trackingHighlight, setTrackingHighlight] = useState<string | null>(
+    null,
+  );
 
   return (
     <div className="min-h-screen">
@@ -28,6 +31,9 @@ export default function App() {
           if (next !== "agencies") {
             setAgencyFocus(null);
           }
+          if (next !== "tracking") {
+            setTrackingHighlight(null);
+          }
         }}
       />
 
@@ -39,10 +45,20 @@ export default function App() {
             setIntakeMode((current) => (current === "live" ? "demo" : "live"))
           }
           onExitDemo={() => setIntakeMode("live")}
+          onGoToTracking={(lifeEventId) => {
+            setTrackingHighlight(lifeEventId);
+            setSection("tracking");
+          }}
         />
       ) : null}
       {section === "tracking" ? (
         <TrackedCasesPage
+          highlightLifeEventId={trackingHighlight}
+          onStartConsult={() => {
+            setTrackingHighlight(null);
+            setIntakeMode("live");
+            setSection("consult");
+          }}
           onViewAgencies={(trackedCase) => {
             setAgencyFocus(focusFromCase(trackedCase));
             setSection("agencies");

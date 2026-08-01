@@ -74,6 +74,8 @@ type HomePageAltProps = {
   onExitDemo?: () => void;
   /** 在諮詢頁內切換正式／示範。 */
   onToggleMode?: () => void;
+  /** 結果頁前往追蹤進度；參數為 lifeEventId（若有）。 */
+  onGoToTracking?: (lifeEventId: string | null) => void;
   /** 外層已有 AppNav 時隱藏頁內品牌列，避免重複。 */
   hideBrandHeader?: boolean;
 };
@@ -259,6 +261,7 @@ type IntakeStepsProps = {
   onRedescribe?: () => void;
   onAnswerFields?: (answers: Record<string, boolean | number | string>) => void;
   onReset?: () => void;
+  onGoToTracking?: (lifeEventId: string | null) => void;
   onBack?: () => void;
   onReturnToCurrent?: () => void;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
@@ -283,6 +286,7 @@ function IntakeSteps({
   onRedescribe,
   onAnswerFields,
   onReset,
+  onGoToTracking,
   onBack,
   onReturnToCurrent,
   inputRef,
@@ -534,15 +538,26 @@ function IntakeSteps({
             </div>
           )}
 
-          {!actionsLocked && onReset ? (
-            <div className="mt-10">
-              <button
-                type="button"
-                onClick={() => onReset()}
-                className="rounded-sm border border-[#c9c0b0] bg-transparent px-5 py-2.5 text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
-              >
-                重新開始
-              </button>
+          {onGoToTracking || (!actionsLocked && onReset) ? (
+            <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              {onGoToTracking && !isReviewing ? (
+                <button
+                  type="button"
+                  onClick={() => onGoToTracking(snapshot.lifeEvent)}
+                  className="rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                >
+                  去追蹤進度看這筆
+                </button>
+              ) : null}
+              {!actionsLocked && onReset ? (
+                <button
+                  type="button"
+                  onClick={() => onReset()}
+                  className="rounded-sm border border-[#c9c0b0] bg-transparent px-5 py-2.5 text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                >
+                  重新開始
+                </button>
+              ) : null}
             </div>
           ) : null}
         </section>
@@ -625,10 +640,12 @@ function DemoNavBar({
 function HomePageDemo({
   onExitDemo,
   onToggleMode,
+  onGoToTracking,
   hideBrandHeader,
 }: {
   onExitDemo?: () => void;
   onToggleMode?: () => void;
+  onGoToTracking?: (lifeEventId: string | null) => void;
   hideBrandHeader?: boolean;
 }) {
   const [sceneIndex, setSceneIndex] = useState(0);
@@ -672,6 +689,7 @@ function HomePageDemo({
         readOnly
         demoAnswers={scene.answers}
         stepHeadingRef={stepHeadingRef}
+        onGoToTracking={onGoToTracking}
         onBack={
           sceneIndex > 0
             ? () => setSceneIndex((i) => Math.max(0, i - 1))
@@ -696,9 +714,11 @@ function HomePageDemo({
 function HomePageLive({
   hideBrandHeader,
   onToggleMode,
+  onGoToTracking,
 }: {
   hideBrandHeader?: boolean;
   onToggleMode?: () => void;
+  onGoToTracking?: (lifeEventId: string | null) => void;
 }) {
   const [description, setDescription] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
@@ -884,6 +904,7 @@ function HomePageLive({
         onRedescribe={() => void handleRedescribe()}
         onAnswerFields={(answers) => void answerFields(answers)}
         onReset={() => void handleReset()}
+        onGoToTracking={onGoToTracking}
         onBack={uiStep === "landing" ? undefined : handleBack}
         onReturnToCurrent={() => setReviewStep(null)}
         inputRef={inputRef}
@@ -897,6 +918,7 @@ export function HomePageAlt({
   mode = "live",
   onExitDemo,
   onToggleMode,
+  onGoToTracking,
   hideBrandHeader = false,
 }: HomePageAltProps) {
   if (mode === "demo") {
@@ -905,10 +927,15 @@ export function HomePageAlt({
         hideBrandHeader={hideBrandHeader}
         onExitDemo={onExitDemo}
         onToggleMode={onToggleMode}
+        onGoToTracking={onGoToTracking}
       />
     );
   }
   return (
-    <HomePageLive hideBrandHeader={hideBrandHeader} onToggleMode={onToggleMode} />
+    <HomePageLive
+      hideBrandHeader={hideBrandHeader}
+      onToggleMode={onToggleMode}
+      onGoToTracking={onGoToTracking}
+    />
   );
 }

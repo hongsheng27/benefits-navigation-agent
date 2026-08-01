@@ -72,11 +72,13 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "看下一步" }));
     expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "結束示範，開始正式諮詢" }));
     expect(
-      await screen.findByRole("button", { name: "開始說明我的情況" }),
+      screen.getByRole("button", { name: "去追蹤進度看這筆" }),
     ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "去追蹤進度看這筆" }));
+    expect(await screen.findByText("你正在處理的事")).toBeInTheDocument();
+    expect(await screen.findByText("剛從諮詢過來的這筆")).toBeInTheDocument();
   });
 
   it("navigates to tracking and agency overview pages", async () => {

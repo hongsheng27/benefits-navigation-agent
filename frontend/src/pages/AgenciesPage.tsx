@@ -44,7 +44,7 @@ type AgencyCardProps = {
 function AgencyCard({ agency, reasons, emphasized = false }: AgencyCardProps) {
   return (
     <article
-      className={`flex h-full flex-col border bg-[#fdfbf7] px-5 py-5 ${
+      className={`flex h-full flex-col border bg-[#fdfbf7] px-4 py-4 sm:px-5 sm:py-5 ${
         emphasized ? "border-[#2f4f45] shadow-[inset_3px_0_0_0_#2f4f45]" : "border-[#e0d8ca]"
       }`}
     >
@@ -235,34 +235,34 @@ export function AgenciesPage({ focus = null, onClearFocus }: AgenciesPageProps) 
 
   return (
     <div className={`${styles.page} min-h-[calc(100vh-4rem)] text-[#171513]`}>
-      <main className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
+      <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8 sm:py-14">
         <p className="text-[0.8rem] tracking-[0.08em] text-[#8b8377]">
           補助機關總覽
         </p>
-        <h1 className="mt-2 text-[1.6rem] font-semibold leading-[1.4] text-[#171513]">
+        <h1 className="mt-2 text-[1.45rem] font-semibold leading-[1.4] text-[#171513] sm:text-[1.6rem]">
           相關機關與官方網站
         </h1>
-        <p className="mt-3 max-w-2xl text-[0.95rem] leading-[1.9] text-[#5c564e]">
+        <p className="mt-3 max-w-2xl text-[0.92rem] leading-[1.85] text-[#5c564e] sm:text-[0.95rem] sm:leading-[1.9]">
           會依你正在追蹤的情況，先整理可能用得到的機關；下面仍可瀏覽完整目錄。
         </p>
 
         {isMock ? (
-          <p className="mt-5 max-w-2xl border-l-2 border-[#8a5a1a] bg-[#f6f1e6] px-4 py-3 text-[0.85rem] leading-[1.85] text-[#4a453d]">
+          <p className="mt-4 max-w-2xl border-l-2 border-[#8a5a1a] bg-[#f6f1e6] px-3 py-2.5 text-[0.82rem] leading-[1.8] text-[#4a453d] sm:mt-5 sm:px-4 sm:py-3 sm:text-[0.85rem] sm:leading-[1.85]">
             目前機關與案件皆為示範資料。之後會改讀資料庫與你的真實諮詢紀錄。
           </p>
         ) : null}
 
         {!loading && relevant.length > 0 ? (
-          <section className="mt-10" aria-labelledby="relevant-agencies-heading">
-            <div className="flex flex-wrap items-end justify-between gap-3">
+          <section className="mt-8 sm:mt-10" aria-labelledby="relevant-agencies-heading">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-3">
               <div>
                 <h2
                   id="relevant-agencies-heading"
-                  className="text-[1.15rem] font-semibold text-[#2f4f45]"
+                  className="text-[1.05rem] font-semibold text-[#2f4f45] sm:text-[1.15rem]"
                 >
                   {focusHeading}
                 </h2>
-                <p className="mt-1 text-[0.85rem] leading-[1.8] text-[#6b6459]">
+                <p className="mt-1 text-[0.82rem] leading-[1.75] text-[#6b6459] sm:text-[0.85rem] sm:leading-[1.8]">
                   依你的追蹤案件中的機關與可辦項目對上的結果。
                 </p>
               </div>
@@ -270,13 +270,13 @@ export function AgenciesPage({ focus = null, onClearFocus }: AgenciesPageProps) 
                 <button
                   type="button"
                   onClick={onClearFocus}
-                  className="text-[0.82rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline"
+                  className="self-start text-[0.82rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline"
                 >
                   改看全部進行中案件
                 </button>
               ) : null}
             </div>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:mt-5 sm:grid-cols-2 sm:gap-4">
               {relevant.map(({ agency, reasons }) => (
                 <AgencyCard
                   key={agency.agencyId}
@@ -290,48 +290,54 @@ export function AgenciesPage({ focus = null, onClearFocus }: AgenciesPageProps) 
         ) : null}
 
         {!loading && activeFocus === null ? (
-          <p className="mt-8 border border-dashed border-[#d8cfc0] px-4 py-5 text-[0.9rem] leading-[1.9] text-[#6b6459]">
+          <p className="mt-6 border border-dashed border-[#d8cfc0] px-3 py-4 text-[0.88rem] leading-[1.85] text-[#6b6459] sm:mt-8 sm:px-4 sm:py-5 sm:text-[0.9rem] sm:leading-[1.9]">
             目前沒有進行中的追蹤案件，所以先顯示完整機關目錄。開始諮詢並留下進度後，這裡會優先列出相關機關。
           </p>
         ) : null}
 
-        <section className="mt-12" aria-labelledby="all-agencies-heading">
+        <section className="mt-10 sm:mt-12" aria-labelledby="all-agencies-heading">
           <h2
             id="all-agencies-heading"
-            className="text-[1.15rem] font-semibold text-[#171513]"
+            className="text-[1.05rem] font-semibold text-[#171513] sm:text-[1.15rem]"
           >
             完整機關目錄
           </h2>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="block min-w-0 flex-1">
-              <span className="text-[0.8rem] text-[#8b8377]">搜尋機關或福利</span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="例如：勞保、長照、臺北…"
-                className="mt-1.5 block w-full rounded-sm border border-[#cfc5b4] bg-[#fffdfa] px-3.5 py-2.5 text-[0.95rem] text-[#171513] placeholder:text-[#a89f90] focus-visible:border-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2f4f45]"
-              />
-            </label>
-            <label className="block sm:w-48">
-              <span className="text-[0.8rem] text-[#8b8377]">行政層級／地區</span>
-              <select
-                value={jurisdiction}
-                onChange={(event) => setJurisdiction(event.target.value)}
-                className="mt-1.5 block w-full rounded-sm border border-[#cfc5b4] bg-[#fffdfa] px-3.5 py-2.5 text-[0.95rem] text-[#171513] focus-visible:border-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2f4f45]"
-              >
-                <option value="all">全部</option>
-                {jurisdictions.map((label) => (
-                  <option key={label} value={label}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="sticky top-[3.4rem] z-10 -mx-4 mt-4 border-b border-[#e8e0d2]/80 bg-[#faf8f4]/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:mt-5 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:gap-3">
+              <label className="block min-w-0 flex-1">
+                <span className="text-[0.78rem] text-[#8b8377] sm:text-[0.8rem]">
+                  搜尋機關或福利
+                </span>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="例如：勞保、長照、臺北…"
+                  className="mt-1 block w-full rounded-sm border border-[#cfc5b4] bg-[#fffdfa] px-3 py-2.5 text-[0.92rem] text-[#171513] placeholder:text-[#a89f90] focus-visible:border-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2f4f45] sm:mt-1.5 sm:px-3.5 sm:text-[0.95rem]"
+                />
+              </label>
+              <label className="block sm:w-44">
+                <span className="text-[0.78rem] text-[#8b8377] sm:text-[0.8rem]">
+                  行政層級／地區
+                </span>
+                <select
+                  value={jurisdiction}
+                  onChange={(event) => setJurisdiction(event.target.value)}
+                  className="mt-1 block w-full rounded-sm border border-[#cfc5b4] bg-[#fffdfa] px-3 py-2.5 text-[0.92rem] text-[#171513] focus-visible:border-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2f4f45] sm:mt-1.5 sm:px-3.5 sm:text-[0.95rem]"
+                >
+                  <option value="all">全部</option>
+                  {jurisdictions.map((label) => (
+                    <option key={label} value={label}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
-          <p className="mt-4 text-[0.82rem] text-[#8b8377]" aria-live="polite">
+          <p className="mt-3 text-[0.8rem] text-[#8b8377] sm:mt-4 sm:text-[0.82rem]" aria-live="polite">
             {loading
               ? "正在載入……"
               : relevant.length > 0
@@ -341,11 +347,11 @@ export function AgenciesPage({ focus = null, onClearFocus }: AgenciesPageProps) 
 
           {!loading &&
           (relevant.length > 0 ? otherAgencies : filteredCatalog).length === 0 ? (
-            <p className="mt-8 border border-dashed border-[#d8cfc0] px-4 py-8 text-[0.92rem] text-[#6b6459]">
+            <p className="mt-6 border border-dashed border-[#d8cfc0] px-3 py-6 text-[0.9rem] text-[#6b6459] sm:mt-8 sm:px-4 sm:py-8 sm:text-[0.92rem]">
               沒有符合的機關，試試其他關鍵字。
             </p>
           ) : (
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:mt-6 sm:grid-cols-2 sm:gap-4">
               {(relevant.length > 0 ? otherAgencies : filteredCatalog).map(
                 (agency) => (
                   <AgencyCard key={agency.agencyId} agency={agency} />

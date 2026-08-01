@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { listTrackedCases } from "../api/trackingClient";
 import styles from "../components/alt/alt.module.css";
@@ -59,20 +59,41 @@ function OverallBadge({ status }: { status: CaseOverallStatus }) {
 
 function CaseCard({
   item,
+  highlighted,
   onViewAgencies,
 }: {
   item: TrackedCase;
+  highlighted?: boolean;
   onViewAgencies?: (trackedCase: TrackedCase) => void;
 }) {
+  const cardRef = useRef<HTMLElement>(null);
   const doneCount = item.flowSteps.filter((s) => s.status === "done").length;
   const readyDocs = item.documents.filter(
     (d) => d.status === "ready" || d.status === "submitted",
   ).length;
 
+  useEffect(() => {
+    if (highlighted && typeof cardRef.current?.scrollIntoView === "function") {
+      cardRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [highlighted]);
+
   return (
-    <article className="border border-[#e0d8ca] bg-[#fdfbf7] px-5 py-6 sm:px-6">
+    <article
+      ref={cardRef}
+      className={`border bg-[#fdfbf7] px-4 py-5 sm:px-6 sm:py-6 ${
+        highlighted
+          ? "border-[#2f4f45] shadow-[inset_3px_0_0_0_#2f4f45]"
+          : "border-[#e0d8ca]"
+      }`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
+          {highlighted ? (
+            <p className="mb-1 text-[0.78rem] font-semibold tracking-[0.04em] text-[#2f4f45]">
+              剛從諮詢過來的這筆
+            </p>
+          ) : null}
           <p className="text-[0.78rem] tracking-[0.06em] text-[#8b8377]">
             {item.lifeEventLabel}
           </p>
@@ -218,9 +239,16 @@ function CaseCard({
 
 type TrackedCasesPageProps = {
   onViewAgencies?: (trackedCase: TrackedCase) => void;
+  /** 從諮詢結果帶過來時，高亮對應 lifeEvent 的案件。 */
+  highlightLifeEventId?: string | null;
+  onStartConsult?: () => void;
 };
 
-export function TrackedCasesPage({ onViewAgencies }: TrackedCasesPageProps) {
+export function TrackedCasesPage({
+  onViewAgencies,
+  highlightLifeEventId = null,
+  onStartConsult,
+}: TrackedCasesPageProps) {
   const [cases, setCases] = useState<TrackedCase[]>([]);
   const [isMock, setIsMock] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -248,16 +276,16 @@ export function TrackedCasesPage({ onViewAgencies }: TrackedCasesPageProps) {
 
   return (
     <div className={`${styles.page} min-h-[calc(100vh-4rem)] text-[#171513]`}>
-      <main className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8 sm:py-14">
+      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8 sm:py-14">
         <p className="text-[0.8rem] tracking-[0.08em] text-[#8b8377]">追蹤進度</p>
-        <h1 className="mt-2 text-[1.6rem] font-semibold leading-[1.4] text-[#171513]">
+        <h1 className="mt-2 text-[1.45rem] font-semibold leading-[1.4] text-[#171513] sm:text-[1.6rem]">
           你正在處理的事
         </h1>
-        <p className="mt-3 max-w-xl text-[0.95rem] leading-[1.9] text-[#5c564e]">
+        <p className="mt-3 max-w-xl text-[0.92rem] leading-[1.9] text-[#5c564e] sm:text-[0.95rem]">
           這裡會留下每次諮詢對應的事件、流程走到哪、文件準備得如何，以及建議的下一步。
         </p>
 
-        {isMock ? (
+        {isMock && cases.length > 0 ? (
           <p className="mt-5 border-l-2 border-[#8a5a1a] bg-[#f6f1e6] px-4 py-3 text-[0.85rem] leading-[1.85] text-[#4a453d]">
             目前為示範資料。之後會改為讀取你真實的諮詢紀錄。
           </p>
@@ -266,15 +294,37 @@ export function TrackedCasesPage({ onViewAgencies }: TrackedCasesPageProps) {
         {loading ? (
           <p className="mt-10 text-[0.9rem] text-[#8b8377]">正在載入……</p>
         ) : cases.length === 0 ? (
-          <p className="mt-10 border border-dashed border-[#d8cfc0] px-4 py-8 text-[0.92rem] leading-[1.9] text-[#6b6459]">
-            還沒有可追蹤的案件。可先到「新諮詢」說明你的情況。
-          </p>
+          <div className="mt-8 border border-dashed border-[#d8cfc0] bg-[#fdfbf7] px-4 py-8 sm:px-6">
+            <h2 className="text-[1.05rem] font-semibold text-[#171513]">
+              還沒有可追蹤的案件
+            </h2>
+            <p className="mt-3 text-[0.92rem] leading-[1.9] text-[#5c564e]">
+              完成一次「新諮詢」後，這裡會留下事件、流程進度與文件準備狀況，方便你之後回來接著辦。
+            </p>
+            {onStartConsult ? (
+              <button
+                type="button"
+                onClick={onStartConsult}
+                className="mt-6 rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+              >
+                開始新諮詢
+              </button>
+            ) : (
+              <p className="mt-4 text-[0.88rem] text-[#6b6459]">
+                請先到上方的「新諮詢」說明你的情況。
+              </p>
+            )}
+          </div>
         ) : (
-          <div className="mt-8 space-y-6">
+          <div className="mt-8 space-y-5 sm:space-y-6">
             {cases.map((item) => (
               <CaseCard
                 key={item.caseId}
                 item={item}
+                highlighted={
+                  highlightLifeEventId !== null &&
+                  item.lifeEventId === highlightLifeEventId
+                }
                 onViewAgencies={onViewAgencies}
               />
             ))}
