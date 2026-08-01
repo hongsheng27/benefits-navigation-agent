@@ -207,11 +207,14 @@ def call_bedrock(bedrock_client, content: str, publisher_name: str, title: str, 
     if len(content) > MAX_HTML_CHARS:
         content = content[:MAX_HTML_CHARS] + "\n\n[... 內容已截斷 ...]"
 
-    prompt = ANALYSIS_PROMPT.format(
-        publisher_name=publisher_name,
-        title=title,
-        url=url,
-        content=content,
+    prompt = ANALYSIS_PROMPT.replace(
+        "{publisher_name}", publisher_name
+    ).replace(
+        "{title}", title
+    ).replace(
+        "{url}", url
+    ).replace(
+        "{content}", content
     )
 
     body = json.dumps({
