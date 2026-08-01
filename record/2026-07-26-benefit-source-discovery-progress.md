@@ -298,8 +298,8 @@ SELECT COUNT(*) FROM source_documents;
 | `data/benefit_discovery/death_benefit_keywords.v0.2.json` | 親人過世候選發現詞 |
 | `data/evaluations/death_benefit_discovery.v0.2.json` | 固定測試案例 |
 | `docs/benefit-discovery/death-benefit-discovery-v0.2.md` | 搜尋與人工審查規格 |
-| `docs/decisions/0008-use-generated-sqlite-for-government-oid.md` | SQLite OID 決策 |
-| `docs/decisions/0009-use-local-provenance-first-benefit-catalog.md` | 來源與證據 catalog 決策 |
+| `docs/decisions/0009-use-generated-sqlite-for-government-oid.md` | SQLite OID 決策 |
+| `docs/decisions/0010-use-local-provenance-first-benefit-catalog.md` | 來源與證據 catalog 決策 |
 
 ## 七、哪些資料不會上傳到 GitHub
 
@@ -331,4 +331,5 @@ SELECT COUNT(*) FROM source_documents;
 - 不要把 credentials、使用者個資、`.env`、本機 SQLite 或原始大型文件提交到 Git。
 - 提交前至少執行相關測試與 `git diff --check`。
 - 本分支建立時，遠端 `main` 已新增 ADR-0006 與 ADR-0007，所以本功能的兩份 ADR
-  使用 ADR-0008 與 ADR-0009，避免編號衝突。
+  原本編為 ADR-0008 與 ADR-0009。合併回 `main` 時發現 `main` 已另有一份
+  ADR-0008，因此本功能的兩份改編為 ADR-0009 與 ADR-0010。

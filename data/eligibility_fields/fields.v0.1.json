@@ -1,0 +1,47 @@
+{
+  "_comment": "欄位登記表種子資料。這幾筆是佔位用，正式欄位由政策資料負責人依法規決定。代號與選項沿用 MVP 情境（配偶過世），切點為暫定。",
+  "version": "0.1",
+  "fields": [
+    {
+      "field_id": "deceased_insurance_type",
+      "value_kind": "code",
+      "option_ids": [
+        "labor_insurance",
+        "national_pension",
+        "farmers_insurance",
+        "civil_service_insurance",
+        "none_or_unsure"
+      ],
+      "required": true,
+      "purpose": "投保身分決定由哪個機關受理，以及適用哪一套給付規則",
+      "used_by": ["funeral_benefit", "survivor_pension"],
+      "topic_id": "deceased_insurance",
+      "status": "draft"
+    },
+    {
+      "field_id": "has_dependent_children",
+      "value_kind": "boolean",
+      "option_ids": [],
+      "required": true,
+      "purpose": "遺屬年金有加給條件，依據是否有未成年子女",
+      "used_by": ["survivor_pension"],
+      "topic_id": "family_situation",
+      "status": "draft"
+    },
+    {
+      "field_id": "applicant_age_band",
+      "value_kind": "band",
+      "option_ids": [
+        "under_25",
+        "25_to_55",
+        "55_to_65",
+        "65_or_above"
+      ],
+      "required": true,
+      "purpose": "遺屬年金有年齡條件，不同年齡區間適用不同規定",
+      "used_by": ["survivor_pension"],
+      "topic_id": "applicant_situation",
+      "status": "draft"
+    }
+  ]
+}

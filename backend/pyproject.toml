@@ -5,6 +5,7 @@ description = "接住 benefits navigation backend"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115",
+    "httpx>=0.28",
     "pydantic-settings>=2.5",
     "uvicorn[standard]>=0.30",
 ]
@@ -24,5 +25,9 @@ line-length = 88
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+# "." lets the app's own tests import `app.*`. ".." is the repository root,
+# which the data layer tests need because they import `backend.app.*` and
+# `scripts.*`. Without it, collecting the whole suite fails and the tests have
+# to be listed by hand.
+pythonpath = [".", ".."]
 testpaths = ["tests"]

@@ -1,4 +1,4 @@
-# ADR-0008: Use Generated SQLite for the Local Government OID Registry
+# ADR-0009: Use Generated SQLite for the Local Government OID Registry
 
 - Status: Accepted for local development and demo
 - Date: 2026-07-25

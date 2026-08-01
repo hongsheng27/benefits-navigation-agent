@@ -1,0 +1,21 @@
+{
+  "_comment": "生命事件登記表種子資料。代號與範圍為暫定，正式清單由政策資料負責人依 entitlement graph 決定。這份檔案是模型唯一被允許回答的事件集合：不在這裡的代號會被拒絕，模型也拿不到那個選項。",
+  "version": "0.1",
+  "events": [
+    {
+      "event_id": "spouse_death",
+      "description": "配偶（先生或太太）過世",
+      "status": "draft"
+    },
+    {
+      "event_id": "parent_death",
+      "description": "父親或母親過世",
+      "status": "draft"
+    },
+    {
+      "event_id": "child_death",
+      "description": "子女過世",
+      "status": "draft"
+    }
+  ]
+}

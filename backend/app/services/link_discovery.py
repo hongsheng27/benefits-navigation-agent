@@ -254,9 +254,10 @@ def discover_links(
             matched_terms=matched_terms,
         )
         existing = candidates_by_url.get(url)
-        if existing is None or PRIORITY_ORDER[priority] < PRIORITY_ORDER[
-            existing.priority
-        ]:
+        if (
+            existing is None
+            or PRIORITY_ORDER[priority] < PRIORITY_ORDER[existing.priority]
+        ):
             candidates_by_url[url] = candidate
 
     return sorted(
@@ -275,9 +276,7 @@ def load_discovery_terms(dictionary_path: Path) -> dict[str, list[str]]:
         data = json.load(file)
     terms = data.get("discovery_terms")
     if not isinstance(terms, dict):
-        raise ValueError(
-            f"Missing discovery_terms object in {dictionary_path}."
-        )
+        raise ValueError(f"Missing discovery_terms object in {dictionary_path}.")
     return {
         str(group): [str(term) for term in values]
         for group, values in terms.items()
