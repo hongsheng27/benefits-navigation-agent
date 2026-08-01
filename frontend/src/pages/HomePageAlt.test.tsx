@@ -69,8 +69,10 @@ function stubBackend(advanceResponses: ReturnType<typeof jsonResponse>[]) {
 }
 
 async function startIntake() {
-  expect(await screen.findByRole("button", { name: "開始" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "開始" }));
+  expect(
+    await screen.findByRole("button", { name: "開始說明我的情況" }),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "開始說明我的情況" }));
   expect(await screen.findByLabelText("發生了什麼事？")).toBeInTheDocument();
 }
 
@@ -78,7 +80,7 @@ function describeSituation(text: string) {
   fireEvent.change(screen.getByLabelText("發生了什麼事？"), {
     target: { value: text },
   });
-  fireEvent.click(screen.getByRole("button", { name: "整理我的下一步" }));
+  fireEvent.click(screen.getByRole("button", { name: "下一步" }));
 }
 
 beforeEach(() => {
@@ -192,34 +194,34 @@ describe("HomePageAlt", () => {
     ]);
 
     render(<HomePageAlt />);
-    expect(await screen.findByText("後端已連線")).toBeInTheDocument();
+    expect(await screen.findByText("服務已就緒")).toBeInTheDocument();
 
     await startIntake();
     // Only the current step is on screen.
-    expect(screen.queryByText("回答幾個必要的條件")).not.toBeInTheDocument();
-    expect(screen.queryByText("你的下一步")).not.toBeInTheDocument();
+    expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
+    expect(screen.queryByText("目前整理出的方向")).not.toBeInTheDocument();
 
     describeSituation("我先生上個月過世了。");
 
     expect(
       await screen.findByRole("button", { name: "對，就是這件事" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("請確認我們的理解")).toBeInTheDocument();
+    expect(screen.getByText("我們這樣理解，對嗎？")).toBeInTheDocument();
     expect(screen.queryByLabelText("發生了什麼事？")).not.toBeInTheDocument();
     expect(screen.getByText("配偶過世")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "對，就是這件事" }));
 
-    expect(await screen.findByText("回答幾個必要的條件")).toBeInTheDocument();
-    expect(screen.queryByText("請確認我們的理解")).not.toBeInTheDocument();
+    expect(await screen.findByText("再請你回答幾個問題")).toBeInTheDocument();
+    expect(screen.queryByText("我們這樣理解，對嗎？")).not.toBeInTheDocument();
     expect(screen.getByText("家中是否有未成年子女？")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "是" }));
-    fireEvent.click(screen.getByRole("button", { name: "送出這組答案" }));
+    fireEvent.click(screen.getByRole("button", { name: "繼續" }));
 
-    expect(await screen.findByText("你的下一步")).toBeInTheDocument();
-    expect(screen.queryByText("回答幾個必要的條件")).not.toBeInTheDocument();
-    expect(screen.getByText("需要人工協助確認")).toBeInTheDocument();
+    expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
+    expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
+    expect(screen.getByText("建議再向承辦確認")).toBeInTheDocument();
     expect(screen.getByText("喪葬給付")).toBeInTheDocument();
-    expect(screen.getByText("（此為後端傳來的暫時資料）")).toBeInTheDocument();
+    expect(screen.getByText(/目前結果仍是示範資料/)).toBeInTheDocument();
 
     const advanceCalls = calls.filter((call) => call.url.endsWith("/sessions/advance"));
     expect(advanceCalls).toHaveLength(3);
@@ -245,12 +247,12 @@ describe("HomePageAlt", () => {
     ]);
 
     render(<HomePageAlt />);
-    await screen.findByText("後端已連線");
+    await screen.findByText("服務已就緒");
     await startIntake();
 
     describeSituation("今天天氣真好。");
 
-    expect(await screen.findByText(/我們沒有看懂剛才的描述/)).toBeInTheDocument();
+    expect(await screen.findByText(/我們沒有完全看懂/)).toBeInTheDocument();
     expect(screen.getByLabelText("發生了什麼事？")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -268,7 +270,7 @@ describe("HomePageAlt", () => {
     ]);
 
     render(<HomePageAlt />);
-    await screen.findByText("後端已連線");
+    await screen.findByText("服務已就緒");
     await startIntake();
 
     describeSituation("我先生上個月過世了。");
@@ -292,7 +294,7 @@ describe("HomePageAlt", () => {
     ]);
 
     render(<HomePageAlt />);
-    await screen.findByText("後端已連線");
+    await screen.findByText("服務已就緒");
     await startIntake();
 
     describeSituation("我生病了");
@@ -318,14 +320,14 @@ describe("HomePageAlt", () => {
     ]);
 
     render(<HomePageAlt />);
-    await screen.findByText("後端已連線");
+    await screen.findByText("服務已就緒");
     await startIntake();
     describeSituation("我失業了");
 
     fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
 
-    expect(await screen.findByText("你的下一步")).toBeInTheDocument();
-    expect(screen.queryByText("回答幾個必要的條件")).not.toBeInTheDocument();
-    expect(screen.getByText(/還沒有可追問的條件/)).toBeInTheDocument();
+    expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
+    expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();
+    expect(screen.getByText(/資料還在補齊中/)).toBeInTheDocument();
   });
 });

@@ -11,6 +11,10 @@ type QuestionGroupListProps = {
   groups: QuestionGroupView[];
   disabled: boolean;
   onSubmit: (answers: Record<string, AttributeValue>) => void;
+  /** 示範／復原時預填的答案。 */
+  initialAnswers?: Record<string, AttributeValue>;
+  /** 唯讀：顯示答案但不可更改、不可送出。 */
+  readOnly?: boolean;
 };
 
 /**
@@ -23,15 +27,23 @@ export function QuestionGroupList({
   groups,
   disabled,
   onSubmit,
+  initialAnswers = {},
+  readOnly = false,
 }: QuestionGroupListProps) {
-  const [answers, setAnswers] = useState<Record<string, AttributeValue>>({});
+  const [answers, setAnswers] =
+    useState<Record<string, AttributeValue>>(initialAnswers);
 
   const questions = groups.flatMap((group) => group.questions);
   const requiredIds = questions.filter((q) => q.required).map((q) => q.fieldId);
   const canSubmit =
-    !disabled && requiredIds.every((fieldId) => answers[fieldId] !== undefined);
+    !disabled &&
+    !readOnly &&
+    requiredIds.every((fieldId) => answers[fieldId] !== undefined);
 
   function setAnswer(fieldId: string, value: AttributeValue) {
+    if (readOnly || disabled) {
+      return;
+    }
     setAnswers((current) => ({ ...current, [fieldId]: value }));
   }
 
@@ -47,7 +59,7 @@ export function QuestionGroupList({
       noValidate
     >
       {groups.map((group) => (
-        <fieldset key={group.topicId} className="mt-6 first:mt-0">
+        <fieldset key={group.topicId} className="mt-6 first:mt-0" disabled={readOnly}>
           <legend className="text-[0.9rem] leading-[1.9] font-semibold tracking-[0.04em] text-[#2f4f45]">
             {topicTitle(group.topicId)}
             <span className="ml-2 text-[0.78rem] font-normal tracking-[0.08em] text-[#6b6459]">
@@ -58,6 +70,7 @@ export function QuestionGroupList({
           {group.questions.map((question) => (
             <QuestionField
               key={question.fieldId}
+              disabled={disabled || readOnly}
               onChange={(value) => setAnswer(question.fieldId, value)}
               question={question}
               value={answers[question.fieldId]}
@@ -72,10 +85,14 @@ export function QuestionGroupList({
           disabled={!canSubmit}
           className="rounded-sm bg-[#2f4f45] px-6 py-3 text-[0.95rem] leading-[1.8] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
         >
-          送出這組答案
+          繼續
         </button>
         <p className="text-[0.82rem] leading-[1.9] text-[#6b6459]">
-          {canSubmit ? "答案會送到後端重新評估。" : "請先回答必填的題目。"}
+          {readOnly
+            ? "示範中無法送出，正式使用時由你回答後繼續。"
+            : canSubmit
+              ? "送出後我們會依你的回答整理結果。"
+              : "請先回答上面的問題。"}
         </p>
       </div>
     </form>
@@ -85,10 +102,11 @@ export function QuestionGroupList({
 type QuestionFieldProps = {
   question: QuestionView;
   value: AttributeValue | undefined;
+  disabled: boolean;
   onChange: (value: AttributeValue) => void;
 };
 
-function QuestionField({ question, value, onChange }: QuestionFieldProps) {
+function QuestionField({ question, value, disabled, onChange }: QuestionFieldProps) {
   const purpose = purposeText(question.purposeId);
   const purposeElementId = `${question.fieldId}-purpose`;
 
@@ -105,7 +123,7 @@ function QuestionField({ question, value, onChange }: QuestionFieldProps) {
           id={purposeElementId}
           className="mt-1 text-[0.82rem] leading-[2] text-[#6b6459]"
         >
-          為什麼問這個：{purpose}
+          為什麼要問：{purpose}
         </p>
       ) : null}
 
@@ -113,11 +131,13 @@ function QuestionField({ question, value, onChange }: QuestionFieldProps) {
         {question.valueKind === "boolean" ? (
           <>
             <ChoiceButton
+              disabled={disabled}
               label="是"
               onSelect={() => onChange(true)}
               selected={value === true}
             />
             <ChoiceButton
+              disabled={disabled}
               label="否"
               onSelect={() => onChange(false)}
               selected={value === false}
@@ -127,6 +147,7 @@ function QuestionField({ question, value, onChange }: QuestionFieldProps) {
           question.optionIds.map((optionId) => (
             <ChoiceButton
               key={optionId}
+              disabled={disabled}
               label={optionLabel(optionId)}
               onSelect={() => onChange(optionId)}
               selected={value === optionId}
@@ -141,20 +162,22 @@ function QuestionField({ question, value, onChange }: QuestionFieldProps) {
 type ChoiceButtonProps = {
   label: string;
   selected: boolean;
+  disabled: boolean;
   onSelect: () => void;
 };
 
-function ChoiceButton({ label, selected, onSelect }: ChoiceButtonProps) {
+function ChoiceButton({ label, selected, disabled, onSelect }: ChoiceButtonProps) {
   return (
     <button
       type="button"
       aria-pressed={selected}
+      disabled={disabled}
       onClick={onSelect}
       className={[
-        "rounded-sm border px-4 py-2.5 text-[0.9rem] leading-[1.8] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]",
+        "rounded-sm border px-4 py-2.5 text-[0.9rem] leading-[1.8] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] disabled:cursor-not-allowed",
         selected
-          ? "border-[#2f4f45] bg-[#2f4f45] font-semibold text-[#f7f4ee]"
-          : "border-[#cfc5b4] bg-[#fffdfa] text-[#3a352e] hover:border-[#2f4f45] hover:text-[#2f4f45]",
+          ? "border-[#2f4f45] bg-[#2f4f45] font-semibold text-[#f7f4ee] disabled:opacity-90"
+          : "border-[#cfc5b4] bg-[#fffdfa] text-[#3a352e] hover:border-[#2f4f45] hover:text-[#2f4f45] disabled:hover:border-[#cfc5b4] disabled:hover:text-[#3a352e] disabled:opacity-70",
       ].join(" ")}
     >
       {label}

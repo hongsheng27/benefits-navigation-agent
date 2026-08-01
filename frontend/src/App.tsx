@@ -1,33 +1,29 @@
 import { useState } from "react";
 
-import { NavigatorFlow } from "./features/navigator/NavigatorFlow";
-import { HomePageAlt } from "./pages/HomePageAlt";
+import { HomePageAlt, type IntakeMode } from "./pages/HomePageAlt";
 
-type AppView = "navigator" | "backend";
-
-const VIEW_LABELS: Record<AppView, string> = {
-  navigator: "完整流程原型（假資料）",
-  backend: "後端串接版",
+const TOGGLE_LABEL: Record<IntakeMode, string> = {
+  live: "正式諮詢",
+  demo: "示範完整流程",
 };
 
 export default function App() {
-  // Temporary toggle: the navigator prototype covers all five screens on mock
-  // data, while the backend-connected page exercises the real session API but
-  // can only show what the backend currently returns. Both stay reachable
-  // until the team decides which one ships.
-  const [view, setView] = useState<AppView>("navigator");
-  const otherView: AppView = view === "navigator" ? "backend" : "navigator";
+  const [mode, setMode] = useState<IntakeMode>("live");
+  const otherMode: IntakeMode = mode === "live" ? "demo" : "live";
 
   return (
     <div className="relative">
       <button
-        className="fixed right-4 top-4 z-[60] rounded-full border border-slate-300 bg-white/90 px-4 py-2 text-xs font-bold text-slate-600 shadow-sm backdrop-blur transition hover:border-[#27756c] hover:text-[#27756c]"
-        onClick={() => setView(otherView)}
+        className="fixed right-4 top-4 z-[60] rounded-sm border border-[#c9c0b0] bg-[#f7f4ee]/95 px-3.5 py-2 text-[0.75rem] font-semibold tracking-[0.02em] text-[#4a453d] shadow-sm backdrop-blur transition hover:border-[#2f4f45] hover:text-[#2f4f45]"
+        onClick={() => setMode(otherMode)}
         type="button"
       >
-        切換到{VIEW_LABELS[otherView]}
+        {mode === "live" ? `切換到${TOGGLE_LABEL.demo}` : `回到${TOGGLE_LABEL.live}`}
       </button>
-      {view === "navigator" ? <NavigatorFlow /> : <HomePageAlt />}
+      <HomePageAlt
+        mode={mode}
+        onExitDemo={() => setMode("live")}
+      />
     </div>
   );
 }
