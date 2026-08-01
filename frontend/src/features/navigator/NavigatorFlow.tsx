@@ -10,7 +10,7 @@ import { ToastBanner } from "./ToastBanner";
 const MAIN_STEPS: { key: NavigatorStep; label: string }[] = [
   { key: "chat", label: "描述狀況" },
   { key: "interpret", label: "狀況解讀" },
-  { key: "match", label: "媒合與評估" },
+  { key: "match", label: "整理結果" },
   { key: "detail", label: "準備清單" },
 ];
 

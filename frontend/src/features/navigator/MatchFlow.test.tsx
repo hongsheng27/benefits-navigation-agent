@@ -16,8 +16,8 @@ async function reachMatchScreen() {
   sendViaTextarea("家人剛過世，不知道接下來要辦什麼");
   fireEvent.click(await screen.findByRole("button", { name: "有兩個小孩要養" }));
   fireEvent.click(await screen.findByRole("button", { name: "最近也失業了" }));
-  fireEvent.click(await screen.findByRole("button", { name: "對，這樣理解沒錯" }));
-  fireEvent.click(await screen.findByRole("button", { name: "正確，開始媒合評估 →" }));
+  fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
+  fireEvent.click(await screen.findByRole("button", { name: "對，繼續整理" }));
 
   expect(await screen.findByText("過世者生前的投保身分是？")).toBeInTheDocument();
 }

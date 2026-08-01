@@ -83,7 +83,7 @@ export function NotEligibleAndInfoPanel({
           onClick={onBackToMatch}
           type="button"
         >
-          ← 回媒合結果看全部項目
+          ← 回結果列表看全部項目
         </button>
       </div>
     </div>
