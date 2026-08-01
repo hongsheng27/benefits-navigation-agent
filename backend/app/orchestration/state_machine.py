@@ -484,15 +484,29 @@ def _merge_local_entitlements(state: SessionState, seams: _Seams) -> SessionStat
     return state.model_copy(update={"items": merged})
 
 
+# 對話蒐集用正面問句（purpose 只說明「為什麼問」，不能當題目）。
+# 文案與 frontend `FIELD_LABELS` 對齊；查不到時退回簡短正面句，絕不貼 purpose。
+_COLLECTOR_FIELD_QUESTIONS: dict[str, str] = {
+    "applicant_jurisdiction": "你主要在哪個縣市辦理或居住？",
+    "care_relationship": "你和需要照顧的人是什麼關係？",
+    "disability_cause": "造成失能的原因是？",
+    "occupational_recognition_status": "是否已經取得職業災害認定？",
+    "involuntary_job_loss": "這次是否屬於非自願離職？",
+    "deceased_insurance_type": "過世者生前的投保身分是？",
+    "has_dependent_children": "家中是否有未成年子女？",
+    "applicant_age_band": "你目前的年齡大約在哪個範圍？",
+}
+
+
 def _default_collector_question(state: SessionState, seams: _Seams) -> str | None:
-    """依第一個缺漏欄位的 purpose 產生下一問。"""
+    """依第一個缺漏欄位產生下一句正面問句。"""
     groups = compute_question_groups(state, seams.registry)
     if not groups or not groups[0].questions:
         return None
-    field = seams.registry.get(groups[0].questions[0].field_id)
-    if field is None:
+    field_id = groups[0].questions[0].field_id
+    if seams.registry.get(field_id) is None:
         return None
-    return f"請補充：{field.purpose}"
+    return _COLLECTOR_FIELD_QUESTIONS.get(field_id, f"可以補充「{field_id}」嗎？")
 
 
 def _record_answers(
