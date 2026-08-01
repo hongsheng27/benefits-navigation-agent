@@ -96,25 +96,25 @@ export function ResultList({
   return (
     <div>
       {implementation.isMock ? (
-        <p className="border-l-2 border-[#8a5a1a] bg-[#f6f1e6] px-4 py-3.5 text-[0.85rem] leading-[2] text-[#4a453d] sm:px-5">
-          目前結果仍是示範資料，請先當作參考；送件前仍以承辦單位說明為準。
+        <p className="border-l-2 border-[#8a5a1a] bg-[#f6f1e6] px-4 py-3.5 text-[0.88rem] leading-[2] text-[#4a453d] sm:px-5">
+          下面先用示範資料帶你看一輪流程；實際送件前，還是以承辦單位的說明為準。
         </p>
       ) : null}
 
       {items.length === 0 ? (
-        <p className="mt-4 border border-dashed border-[#d8cfc0] bg-[#f7f4ee] px-4 py-6 text-[0.88rem] leading-[2] text-[#6b6459]">
-          目前還沒有整理出可辦的項目。你可以重新開始，或改用其他說法再試一次。
+        <p className="mt-5 border border-dashed border-[#d8cfc0] bg-[#f7f4ee] px-4 py-6 text-[0.92rem] leading-[2] text-[#6b6459]">
+          這一輪還沒對上可辦的項目。若你願意，可以重新開始，或換個說法再說一次我們一起找。
         </p>
       ) : hasAudienceGroups ? (
         <div>
           {audienceGroups.map((group) => (
-            <section className="mt-8" key={group.audience}>
+            <section className="mt-10 first:mt-0" key={group.audience}>
               <h3
                 className={`${styles.serif} text-[1.18rem] leading-[1.7] text-[#2f4f45]`}
               >
                 {resultAudienceTitle(group.audience)}
               </h3>
-              <p className="mt-1 text-[0.88rem] leading-[1.9] text-[#6b6459]">
+              <p className="mt-2 text-[0.9rem] leading-[2] text-[#6b6459]">
                 {resultAudienceDescription(group.audience)}
               </p>
               <StatusGroups
@@ -128,11 +128,11 @@ export function ResultList({
           ))}
 
           {ungroupedItems.length > 0 ? (
-            <section className="mt-8">
+            <section className="mt-10">
               <h3
                 className={`${styles.serif} text-[1.18rem] leading-[1.7] text-[#2f4f45]`}
               >
-                其他相關方向
+                其他也值得看一眼的方向
               </h3>
               <StatusGroups
                 items={ungroupedItems}
@@ -146,10 +146,10 @@ export function ResultList({
         </div>
       ) : (
         eventBuckets.map((bucket) => (
-          <div key={bucket.eventId ?? "all"} className="mt-6 first:mt-0">
+          <div key={bucket.eventId ?? "all"} className="mt-8 first:mt-0">
             {bucket.eventId ? (
-              <h2 className="text-[0.95rem] font-semibold tracking-[0.04em] text-[#2f4f45]">
-                與「{lifeEventName(bucket.eventId)}」相關
+              <h2 className="text-[0.95rem] font-semibold leading-[1.8] tracking-[0.04em] text-[#2f4f45]">
+                與「{lifeEventName(bucket.eventId)}」有關的部分
               </h2>
             ) : null}
             <StatusGroups
@@ -185,9 +185,9 @@ function StatusGroups({
   const Heading = nested ? "h4" : "h3";
 
   return grouped.map((group) => (
-    <section key={group.status} className={nested ? "mt-5" : "mt-6"}>
+    <section key={group.status} className={nested ? "mt-6" : "mt-8"}>
       <Heading
-        className={`${styles.serif} text-[1.05rem] leading-[1.7] text-[#171513]`}
+        className={`${styles.serif} text-[1.05rem] leading-[1.8] text-[#171513]`}
       >
         {statusSectionTitle(group.status)}
         <span className="ml-2 text-[0.8rem] tracking-[0.08em] text-[#6b6459]">

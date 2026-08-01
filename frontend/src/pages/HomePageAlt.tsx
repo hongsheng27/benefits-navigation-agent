@@ -19,6 +19,7 @@ import { PrivacyNotice } from "../components/alt/PrivacyNotice";
 import { AttributeChatPanel } from "../components/alt/AttributeChatPanel";
 import { QuestionGroupList } from "../components/alt/QuestionGroupList";
 import { RelatedProvisionsPanel } from "../components/alt/RelatedProvisionsPanel";
+import { ResultGateBlock } from "../components/alt/ResultGateBlock";
 import { ResultList } from "../components/alt/ResultList";
 import { useBackendSession } from "../hooks/useBackendSession";
 import {
@@ -56,7 +57,13 @@ const BOUNDARIES = [
 ] as const;
 
 /** 後端串接版的畫面步驟（後端 session 仍是權威來源）。 */
-export type IntakeUiStep = "landing" | "describe" | "confirm" | "questions" | "result";
+export type IntakeUiStep =
+  | "landing"
+  | "describe"
+  | "confirm"
+  | "questions"
+  | "ready"
+  | "result";
 
 export type IntakeMode = "live" | "demo";
 
@@ -65,6 +72,7 @@ const STEP_ORDER: IntakeUiStep[] = [
   "describe",
   "confirm",
   "questions",
+  "ready",
   "result",
 ];
 
@@ -101,10 +109,11 @@ const STEP_META: Record<
   Exclude<IntakeUiStep, "landing">,
   { index: number; total: number; label: string }
 > = {
-  describe: { index: 1, total: 4, label: "說說發生的事" },
-  confirm: { index: 2, total: 4, label: "確認我們理解對不對" },
-  questions: { index: 3, total: 4, label: "回答幾個問題" },
-  result: { index: 4, total: 4, label: "查看可做的事" },
+  describe: { index: 1, total: 5, label: "說說發生的事" },
+  confirm: { index: 2, total: 5, label: "確認我們理解對不對" },
+  questions: { index: 3, total: 5, label: "回答幾個問題" },
+  ready: { index: 4, total: 5, label: "差不多了" },
+  result: { index: 5, total: 5, label: "查看可做的事" },
 };
 
 /**
@@ -270,6 +279,10 @@ type IntakeStepsProps = {
   onAnswerFields?: (answers: Record<string, boolean | number | string>) => void;
   onAnswerChatTurn?: (text: string) => void | Promise<void>;
   onReset?: () => void;
+  /** 通過結果前閘門，進入結果頁。 */
+  onViewResults?: () => void;
+  /** 在問題對話窗內顯示結果前確認（不另開一頁）。 */
+  showResultGate?: boolean;
   onGoToTracking?: (lifeEventId: string | null) => void;
   onBack?: () => void;
   onReturnToCurrent?: () => void;
@@ -299,6 +312,8 @@ function IntakeSteps({
   onAnswerFields,
   onAnswerChatTurn,
   onReset,
+  onViewResults,
+  showResultGate = false,
   onGoToTracking,
   onBack,
   onReturnToCurrent,
@@ -324,6 +339,17 @@ function IntakeSteps({
     uiStep === "result" &&
     (snapshot?.items.length ?? 0) === 0 &&
     questionGroups.length === 0;
+  const situationLabel = snapshot?.lifeEvent
+    ? lifeEventName(snapshot.lifeEvent)
+    : "你剛才說的情況";
+  const resultGate =
+    showResultGate && onViewResults && onReset
+      ? {
+          situationLabel,
+          onViewResults,
+          onConfirmRestart: onReset,
+        }
+      : null;
 
   const showBack = uiStep !== "landing" && onBack !== undefined;
 
@@ -539,32 +565,62 @@ function IntakeSteps({
 
       {uiStep === "questions" ? (
         <section>
-          <StepProgress step="questions" />
+          <StepProgress step={showResultGate ? "ready" : "questions"} />
           <h1
             ref={stepHeadingRef}
             tabIndex={-1}
             className="text-[1.35rem] leading-[1.55] font-semibold text-[#171513] outline-none sm:text-[1.5rem]"
           >
-            再請你回答幾個問題
+            {showResultGate ? "再確認一下就可以了" : "再請你回答幾個問題"}
           </h1>
           <p className="mt-2 text-[0.92rem] leading-[1.9] text-[#6b6459]">
-            與「
-            {snapshot?.lifeEvent ? lifeEventName(snapshot.lifeEvent) : "你的情況"}
-            」有關。答完這組就可以繼續。
+            {showResultGate
+              ? `關於「${situationLabel}」，我們先在對話裡問你要不要看整理結果。`
+              : `與「${
+                  snapshot?.lifeEvent
+                    ? lifeEventName(snapshot.lifeEvent)
+                    : "你的情況"
+                }」有關。答完這組就可以繼續。`}
           </p>
           <div className="mt-6">
             {readOnly || isReviewing || !onAnswerChatTurn ? (
-              <QuestionGroupList
-                key={`${uiStep}-${isReviewing ? "review" : "live"}`}
-                disabled={busy || actionsLocked}
-                groups={questionGroups}
-                initialAnswers={demoAnswers ?? snapshot?.attributes}
-                readOnly={readOnly || isReviewing}
-                onSubmit={(answers) => onAnswerFields?.(answers)}
-              />
+              <div>
+                {questionGroups.length > 0 ? (
+                  <QuestionGroupList
+                    key={`${uiStep}-${isReviewing ? "review" : "live"}`}
+                    disabled={busy || actionsLocked}
+                    groups={questionGroups}
+                    initialAnswers={demoAnswers ?? snapshot?.attributes}
+                    readOnly={readOnly || isReviewing}
+                    onSubmit={(answers) => onAnswerFields?.(answers)}
+                  />
+                ) : null}
+                {resultGate ? (
+                  <div
+                    className={
+                      questionGroups.length > 0
+                        ? "mt-6 rounded-sm border border-[#e0d8ca] bg-[#f4f0e8] px-4 py-4"
+                        : "rounded-sm border border-[#e0d8ca] bg-[#f4f0e8] px-4 py-4"
+                    }
+                  >
+                    <div className="max-w-[95%] rounded-sm bg-[#faf8f4] px-3 py-2.5 text-[0.88rem] leading-[1.75] text-[#3a352e] ring-1 ring-[#e0d8ca]">
+                      我們好像已經掌握夠多了。要先看看整理結果嗎？若你還有別的情況想說，也可以從頭再說明一次。
+                    </div>
+                    <div className="mt-3">
+                      <ResultGateBlock
+                        embeddedInChat
+                        situationLabel={resultGate.situationLabel}
+                        disabled={busy || isReviewing}
+                        onViewResults={resultGate.onViewResults}
+                        onConfirmRestart={resultGate.onConfirmRestart}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             ) : (
               <AttributeChatPanel
-                key={`${uiStep}-chat`}
+                key="questions-chat"
                 groups={questionGroups}
                 collectorQuestion={snapshot?.collectorQuestion ?? null}
                 disabled={busy || actionsLocked}
@@ -572,6 +628,7 @@ function IntakeSteps({
                 initialChoiceAnswers={snapshot?.attributes}
                 onChatTurn={(text) => onAnswerChatTurn(text)}
                 onSubmitChoices={(answers) => onAnswerFields?.(answers)}
+                resultGate={resultGate}
               />
             )}
           </div>
@@ -598,15 +655,14 @@ function IntakeSteps({
             tabIndex={-1}
             className="text-[1.35rem] leading-[1.55] font-semibold text-[#171513] outline-none sm:text-[1.5rem]"
           >
-            目前整理出的方向
+            我們先幫你整理到這裡
           </h1>
-          <p className="mt-2 text-[0.92rem] leading-[1.9] text-[#6b6459]">
-            關於「
-            {snapshot.lifeEvent ? lifeEventName(snapshot.lifeEvent) : "你的情況"}」
+          <p className="mt-3 max-w-[36rem] text-[0.95rem] leading-[2] text-[#4a453d]">
+            關於「{situationLabel}」。下面是依你目前提供的資訊整理出的方向，可以慢慢看；這不是最後裁定，不確定的地方再向承辦單位確認就好。
           </p>
 
           {hasNoQuestionsYet ? (
-            <div className="mt-6 rounded-sm border border-[#e0d8ca] bg-[#fdfbf7] px-4 py-6 text-[0.95rem] leading-[1.95] text-[#4a453d]">
+            <div className="mt-8 rounded-sm border border-[#e0d8ca] bg-[#fdfbf7] px-4 py-6 text-[0.95rem] leading-[2] text-[#4a453d]">
               <p>
                 我們已記下這是「
                 {snapshot.lifeEvent ? lifeEventName(snapshot.lifeEvent) : "相關情況"}
@@ -617,7 +673,10 @@ function IntakeSteps({
               </p>
             </div>
           ) : (
-            <div className="mt-6">
+            <div className="mt-8">
+              <p className="mb-5 text-[0.92rem] leading-[2] text-[#6b6459]">
+                我們依你說的內容，先把可能相關的補助與手續排在下面。覺得有幫助的，可以加入追蹤，之後再慢慢辦理。
+              </p>
               <ResultList
                 snapshot={snapshot}
                 groupByAudience={groupResultsByAudience}
@@ -627,43 +686,48 @@ function IntakeSteps({
             </div>
           )}
 
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            {!isReviewing && !hideDemoResultActions ? (
-              <>
+          <div className="mt-12">
+            <p className="text-[0.88rem] leading-[1.9] text-[#6b6459]">
+              若想再多了解依據或怎麼申請，可以從這裡繼續：
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              {!isReviewing && !hideDemoResultActions ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setOpenPanel("related_provisions")}
+                    className="w-full rounded-sm bg-[#2f4f45] px-4 py-2.5 text-center text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                  >
+                    一起看相關法條
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpenPanel("application_guide")}
+                    className="w-full rounded-sm bg-[#2f4f45] px-4 py-2.5 text-center text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                  >
+                    一起看申請解說
+                  </button>
+                </>
+              ) : null}
+              {onGoToTracking && !isReviewing && !hideDemoResultActions ? (
                 <button
                   type="button"
-                  onClick={() => setOpenPanel("related_provisions")}
-                  className="rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                  onClick={() => onGoToTracking(snapshot.lifeEvent)}
+                  className="w-full rounded-sm border border-[#c9c0b0] bg-transparent px-4 py-2.5 text-center text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
                 >
-                  相關法條
+                  去追蹤進度看這筆
                 </button>
+              ) : null}
+              {!actionsLocked && onReset ? (
                 <button
                   type="button"
-                  onClick={() => setOpenPanel("application_guide")}
-                  className="rounded-sm bg-[#2f4f45] px-5 py-2.5 text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                  onClick={() => onReset()}
+                  className="w-full rounded-sm border border-[#c9c0b0] bg-transparent px-4 py-2.5 text-center text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
                 >
-                  申請解說
+                  重新開始
                 </button>
-              </>
-            ) : null}
-            {onGoToTracking && !isReviewing && !hideDemoResultActions ? (
-              <button
-                type="button"
-                onClick={() => onGoToTracking(snapshot.lifeEvent)}
-                className="rounded-sm border border-[#c9c0b0] bg-transparent px-5 py-2.5 text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
-              >
-                去追蹤進度看這筆
-              </button>
-            ) : null}
-            {!actionsLocked && onReset ? (
-              <button
-                type="button"
-                onClick={() => onReset()}
-                className="rounded-sm border border-[#c9c0b0] bg-transparent px-5 py-2.5 text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
-              >
-                重新開始
-              </button>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         </section>
       ) : null}
@@ -908,7 +972,7 @@ function HomePageDemo({
       ) : null}
       <IntakeSteps
         key={selectedCase.id}
-        uiStep={scene.step}
+        uiStep={scene.step === "ready" ? "questions" : scene.step}
         snapshot={scene.snapshot ?? null}
         description={scene.description ?? ""}
         readOnly
@@ -916,6 +980,19 @@ function HomePageDemo({
         groupResultsByAudience={selectedCaseId === "occupational_injury_care"}
         stepHeadingRef={stepHeadingRef}
         onGoToTracking={onGoToTracking}
+        showResultGate={scene.step === "ready"}
+        onViewResults={
+          scene.step === "ready"
+            ? () => setSceneIndex((i) => Math.min(i + 1, scenes.length - 1))
+            : undefined
+        }
+        onReset={
+          scene.step === "ready"
+            ? () => {
+                setSceneIndex(0);
+              }
+            : undefined
+        }
         onBack={
           sceneIndex > 0 ? () => setSceneIndex((i) => Math.max(0, i - 1)) : undefined
         }
@@ -952,6 +1029,7 @@ function HomePageLive({
   const [hasStarted, setHasStarted] = useState(false);
   const [connection, setConnection] = useState<BackendConnectionState>("checking");
   const [reviewStep, setReviewStep] = useState<IntakeUiStep | null>(null);
+  const [resultGatePassed, setResultGatePassed] = useState(false);
   const [cachedQuestionGroups, setCachedQuestionGroups] = useState<
     SessionSnapshot["questionGroups"]
   >([]);
@@ -1010,8 +1088,25 @@ function HomePageLive({
   }, [snapshot]);
 
   const naturalStep = deriveUiStep(snapshot, hasStarted);
-  const uiStep = reviewStep ?? naturalStep;
-  const isReviewing = reviewStep !== null && reviewStep !== naturalStep;
+  const awaitingResultConfirm =
+    naturalStep === "result" && !resultGatePassed;
+  // 進度上的「目前步驟」（history／回看用）；畫面上閘門仍留在 questions。
+  const progressStep: IntakeUiStep = awaitingResultConfirm
+    ? "ready"
+    : naturalStep;
+  const displayStep: IntakeUiStep = awaitingResultConfirm
+    ? "questions"
+    : naturalStep;
+  const uiStep = reviewStep ?? displayStep;
+  const isReviewing = reviewStep !== null && reviewStep !== progressStep;
+  const showResultGate = awaitingResultConfirm && !isReviewing;
+  const historyStep: IntakeUiStep = isReviewing ? uiStep : progressStep;
+
+  useEffect(() => {
+    if (naturalStep !== "result") {
+      setResultGatePassed(false);
+    }
+  }, [naturalStep]);
 
   useEffect(() => {
     if (naturalStep !== naturalStepRef.current) {
@@ -1023,17 +1118,17 @@ function HomePageLive({
   }, [naturalStep]);
 
   useEffect(() => {
-    if (uiStep !== "landing") {
+    if (uiStep !== "landing" && !showResultGate) {
       stepHeadingRef.current?.focus();
     }
-  }, [uiStep]);
+  }, [uiStep, showResultGate]);
 
   useEffect(() => {
     if (!applyingHistoryRef.current) {
-      onConsultStepChange?.(uiStep);
+      onConsultStepChange?.(historyStep);
     }
     applyingHistoryRef.current = false;
-  }, [uiStep, onConsultStepChange]);
+  }, [historyStep, onConsultStepChange]);
 
   useEffect(() => {
     if (historyConsultStep == null) {
@@ -1042,22 +1137,45 @@ function HomePageLive({
     applyingHistoryRef.current = true;
     const target = historyConsultStep;
     const natural = deriveUiStep(snapshot, hasStarted || target !== "landing");
+    const gatedNatural: IntakeUiStep =
+      natural === "result" && !resultGatePassed ? "ready" : natural;
     const targetIndex = STEP_ORDER.indexOf(target);
-    const naturalIndex = STEP_ORDER.indexOf(natural);
+    const naturalIndex = STEP_ORDER.indexOf(gatedNatural);
 
     if (target === "landing") {
       setHasStarted(false);
       setReviewStep(null);
+      setResultGatePassed(false);
       return;
     }
 
     setHasStarted(true);
-    if (target === natural || targetIndex >= naturalIndex) {
+
+    if (natural === "result" && target === "ready") {
+      setResultGatePassed(false);
+      setReviewStep(null);
+      return;
+    }
+
+    if (natural === "result" && target === "result") {
+      setResultGatePassed(true);
+      setReviewStep(null);
+      return;
+    }
+
+    // history 的 ready 對應畫面上的 questions＋閘門
+    if (target === "questions" && gatedNatural === "ready") {
+      setResultGatePassed(false);
+      setReviewStep("questions");
+      return;
+    }
+
+    if (target === gatedNatural || targetIndex >= naturalIndex) {
       setReviewStep(null);
       return;
     }
     setReviewStep(target);
-  }, [historyConsultStep, snapshot, hasStarted]);
+  }, [historyConsultStep, snapshot, hasStarted, resultGatePassed]);
 
   const busy = status === "working" || status === "restoring";
 
@@ -1074,6 +1192,7 @@ function HomePageLive({
     setDescription("");
     setHasStarted(false);
     setReviewStep(null);
+    setResultGatePassed(false);
     setCachedQuestionGroups([]);
     await resetSession();
   }
@@ -1103,10 +1222,29 @@ function HomePageLive({
       return;
     }
 
-    // 結果頁若沒有可回看的問題，直接回到確認
+    // 結果頁回到對話閘門：收回「已通過」狀態
+    if (uiStep === "result") {
+      setResultGatePassed(false);
+      setReviewStep(null);
+      return;
+    }
+
+    // 對話閘門中按上一頁 → 回看問題（或沒有問題時回確認）
+    if (showResultGate) {
+      if (
+        (snapshot?.questionGroups.length ?? 0) === 0 &&
+        cachedQuestionGroups.length === 0
+      ) {
+        setReviewStep("confirm");
+        return;
+      }
+      setReviewStep("questions");
+      return;
+    }
+
+    // 結果若沒有可回看的問題，直接回到確認
     if (
       uiStep === "result" &&
-      prev === "questions" &&
       (snapshot?.questionGroups.length ?? 0) === 0 &&
       cachedQuestionGroups.length === 0
     ) {
@@ -1164,6 +1302,11 @@ function HomePageLive({
         onAnswerFields={(answers) => void answerFields(answers)}
         onAnswerChatTurn={(text) => answerChatTurn(text)}
         onReset={() => void handleReset()}
+        showResultGate={showResultGate}
+        onViewResults={() => {
+          setReviewStep(null);
+          setResultGatePassed(true);
+        }}
         onGoToTracking={onGoToTracking}
         onBack={uiStep === "landing" ? undefined : handleBack}
         onReturnToCurrent={() => setReviewStep(null)}

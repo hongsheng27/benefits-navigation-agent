@@ -8,6 +8,7 @@ import type {
 } from "../../types/session";
 import { fieldLabel, optionLabel } from "./copy";
 import { QuestionGroupList } from "./QuestionGroupList";
+import { ResultGateBlock } from "./ResultGateBlock";
 
 type ChatMessage = {
   id: string;
@@ -20,6 +21,12 @@ type ChoiceOption = {
   value: AttributeValue;
 };
 
+export type AttributeChatResultGate = {
+  situationLabel: string;
+  onViewResults: () => void;
+  onConfirmRestart: () => void;
+};
+
 type AttributeChatPanelProps = {
   groups: QuestionGroupView[];
   collectorQuestion: string | null;
@@ -29,7 +36,13 @@ type AttributeChatPanelProps = {
   onChatTurn: (text: string) => void | Promise<void>;
   onSubmitChoices: (answers: Record<string, AttributeValue>) => void;
   initialChoiceAnswers?: Record<string, AttributeValue>;
+  /** 資訊已齊時，在同一對話窗詢問是否查看結果。 */
+  resultGate?: AttributeChatResultGate | null;
 };
+
+const RESULT_GATE_MESSAGE_ID = "result_gate";
+const RESULT_GATE_PROMPT =
+  "我們好像已經掌握夠多了。要先看看整理結果嗎？若你還有別的情況想說，也可以從頭再說明一次。";
 
 function firstMissingQuestion(groups: QuestionGroupView[]): QuestionView | null {
   return groups[0]?.questions[0] ?? null;
@@ -85,6 +98,7 @@ export function AttributeChatPanel({
   onChatTurn,
   onSubmitChoices,
   initialChoiceAnswers = {},
+  resultGate = null,
 }: AttributeChatPanelProps) {
   const [mode, setMode] = useState<"chat" | "choices">("chat");
   const [draft, setDraft] = useState("");
@@ -94,6 +108,7 @@ export function AttributeChatPanel({
     [groups],
   );
   const currentFieldId = currentQuestion?.fieldId ?? null;
+  const gateActive = resultGate !== null;
 
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
@@ -107,11 +122,16 @@ export function AttributeChatPanel({
   ]);
 
   const showChoiceChips =
-    currentQuestion !== null && isChoiceQuestion(currentQuestion);
+    !gateActive &&
+    currentQuestion !== null &&
+    isChoiceQuestion(currentQuestion);
   const choiceOptions = currentQuestion ? choiceOptionsFor(currentQuestion) : [];
 
   useEffect(() => {
-    if (busy) {
+    if (busy || gateActive) {
+      return;
+    }
+    if (currentQuestion === null) {
       return;
     }
     const prompt = promptForField(collectorQuestion, currentFieldId);
@@ -139,7 +159,38 @@ export function AttributeChatPanel({
         },
       ];
     });
-  }, [collectorQuestion, currentFieldId, busy]);
+  }, [collectorQuestion, currentFieldId, currentQuestion, busy, gateActive]);
+
+  useEffect(() => {
+    if (!gateActive) {
+      return;
+    }
+    setMode("chat");
+    setMessages((current) => {
+      if (current.some((message) => message.id === RESULT_GATE_MESSAGE_ID)) {
+        return current;
+      }
+      const withoutTrailingEmptyAsk = (() => {
+        const last = current[current.length - 1];
+        if (
+          last?.role === "assistant" &&
+          last.id !== RESULT_GATE_MESSAGE_ID &&
+          currentQuestion === null
+        ) {
+          return current.slice(0, -1);
+        }
+        return current;
+      })();
+      return [
+        ...withoutTrailingEmptyAsk,
+        {
+          id: RESULT_GATE_MESSAGE_ID,
+          role: "assistant",
+          content: RESULT_GATE_PROMPT,
+        },
+      ];
+    });
+  }, [gateActive, currentQuestion]);
 
   async function submitChatText(text: string) {
     if (!text || disabled || readOnly || busy) {
@@ -180,7 +231,7 @@ export function AttributeChatPanel({
     }
   }
 
-  if (mode === "choices") {
+  if (mode === "choices" && !gateActive) {
     return (
       <div>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -211,19 +262,23 @@ export function AttributeChatPanel({
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-[0.88rem] leading-[1.7] text-[#5c564e]">
-          {showChoiceChips
-            ? "可直接點選下方選項，或用自己的話打字。選項會寫成條件代號，不會用對話判定資格。"
-            : "這題沒有固定選項，請用自己的話回答。我們會轉成條件代號，不會用對話判定資格。"}{" "}
+          {gateActive
+            ? "問得差不多了。你可以先看整理結果，或從頭再說一次其他情況。"
+            : showChoiceChips
+              ? "可直接點選下方選項，或用自己的話打字。選項會寫成條件代號，不會用對話判定資格。"
+              : "這題沒有固定選項，請用自己的話回答。我們會轉成條件代號，不會用對話判定資格。"}{" "}
           已記錄 {answeredCount} 項。
         </p>
-        <button
-          type="button"
-          disabled={disabled || readOnly}
-          onClick={() => setMode("choices")}
-          className="shrink-0 text-[0.88rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline"
-        >
-          一次回答多題
-        </button>
+        {!gateActive ? (
+          <button
+            type="button"
+            disabled={disabled || readOnly}
+            onClick={() => setMode("choices")}
+            className="shrink-0 text-[0.88rem] font-semibold text-[#2f4f45] underline-offset-4 hover:underline"
+          >
+            一次回答多題
+          </button>
+        ) : null}
       </div>
 
       <div className="flex min-h-[14rem] flex-col gap-3 rounded-sm border border-[#e0d8ca] bg-[#f4f0e8] px-4 py-4">
@@ -260,38 +315,50 @@ export function AttributeChatPanel({
           </div>
         ) : null}
 
+        {gateActive && resultGate && !busy ? (
+          <ResultGateBlock
+            embeddedInChat
+            situationLabel={resultGate.situationLabel}
+            disabled={disabled}
+            onViewResults={resultGate.onViewResults}
+            onConfirmRestart={resultGate.onConfirmRestart}
+          />
+        ) : null}
+
         {busy ? (
           <p className="text-[0.82rem] text-[#8b8377]">正在整理你的回答…</p>
         ) : null}
       </div>
 
-      <form onSubmit={(event) => void handleSubmit(event)} className="mt-4">
-        <label className="sr-only" htmlFor="attribute-chat-input">
-          {showChoiceChips ? "用文字回答，或上方點選選項" : "用文字回答目前問題"}
-        </label>
-        <div className="flex gap-2">
-          <input
-            id="attribute-chat-input"
-            type="text"
-            value={draft}
-            disabled={disabled || readOnly || busy}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={
-              showChoiceChips
-                ? "或打字回答，例如：臺北市／有勞保"
-                : "請用幾句話說明"
-            }
-            className="min-w-0 flex-1 rounded-sm border border-[#c9c0b0] bg-[#faf8f4] px-3 py-2.5 text-[0.92rem] outline-none focus:border-[#2f4f45] disabled:opacity-60"
-          />
-          <button
-            type="submit"
-            disabled={disabled || readOnly || busy || !draft.trim()}
-            className="shrink-0 rounded-sm bg-[#2f4f45] px-4 py-2.5 text-[0.9rem] font-semibold text-[#f7f4ee] transition-colors hover:bg-[#254038] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
-          >
-            送出
-          </button>
-        </div>
-      </form>
+      {!gateActive ? (
+        <form onSubmit={(event) => void handleSubmit(event)} className="mt-4">
+          <label className="sr-only" htmlFor="attribute-chat-input">
+            {showChoiceChips ? "用文字回答，或上方點選選項" : "用文字回答目前問題"}
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="attribute-chat-input"
+              type="text"
+              value={draft}
+              disabled={disabled || readOnly || busy}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={
+                showChoiceChips
+                  ? "或打字回答，例如：臺北市／有勞保"
+                  : "請用幾句話說明"
+              }
+              className="min-w-0 flex-1 rounded-sm border border-[#c9c0b0] bg-[#faf8f4] px-3 py-2.5 text-[0.92rem] outline-none focus:border-[#2f4f45] disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={disabled || readOnly || busy || !draft.trim()}
+              className="shrink-0 rounded-sm bg-[#2f4f45] px-4 py-2.5 text-[0.9rem] font-semibold text-[#f7f4ee] transition-colors hover:bg-[#254038] disabled:cursor-not-allowed disabled:bg-[#ddd5c7] disabled:text-[#6b6459]"
+            >
+              送出
+            </button>
+          </div>
+        </form>
+      ) : null}
     </div>
   );
 }

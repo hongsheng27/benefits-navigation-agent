@@ -1,7 +1,7 @@
 /**
  * 正式諮詢 UI 的唯讀示範腳本。
  *
- * 每個案例都走完 landing → 描述 → 確認 → 問題 → 結果，
+ * 每個案例都走完 landing → 描述 → 確認 → 問題 → 準備查看 → 結果，
  * 不呼叫後端，也不讓使用者改答案。這些結果只是前端示範資料，
  * 不代表 deterministic eligibility rules 已完成判定。
  */
@@ -10,7 +10,12 @@ import type { AttributeValue, SessionSnapshot } from "../types/session";
 
 /** 與正式諮詢 HomePageAlt 的步驟一致。 */
 export type IntakeDemoStep =
-  "landing" | "describe" | "confirm" | "questions" | "result";
+  | "landing"
+  | "describe"
+  | "confirm"
+  | "questions"
+  | "ready"
+  | "result";
 
 export type IntakeDemoScene = {
   step: IntakeDemoStep;
@@ -215,6 +220,22 @@ const SPOUSE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       lifeEvents: ["spouse_death"],
       attributes: DEMO_ANSWERS,
       items: [],
+      questionGroups: SPOUSE_QUESTION_GROUPS,
+    },
+  },
+  {
+    step: "ready",
+    narration:
+      "問得差不多時，會在同一對話裡問你要不要看整理結果，也可以選擇從頭再說一次。",
+    answers: DEMO_ANSWERS,
+    snapshot: {
+      ...SPOUSE_DEMO_BASE,
+      workflowState: "collect_missing_fields",
+      stepIndex: 5,
+      lifeEvent: "spouse_death",
+      lifeEvents: ["spouse_death"],
+      attributes: DEMO_ANSWERS,
+      items: SPOUSE_RESULT_ITEMS,
       questionGroups: SPOUSE_QUESTION_GROUPS,
     },
   },
@@ -547,6 +568,22 @@ const CARE_DEMO_SCENES: readonly IntakeDemoScene[] = [
       lifeEvents: ["occupational_injury"],
       attributes: CARE_DEMO_ANSWERS,
       items: [],
+      questionGroups: CARE_QUESTION_GROUPS,
+    },
+  },
+  {
+    step: "ready",
+    narration:
+      "問得差不多時，會在同一對話裡問你要不要看整理結果，也可以選擇從頭再說一次。",
+    answers: CARE_DEMO_ANSWERS,
+    snapshot: {
+      ...CARE_DEMO_BASE,
+      workflowState: "collect_missing_fields",
+      stepIndex: 5,
+      lifeEvent: "occupational_injury",
+      lifeEvents: ["occupational_injury"],
+      attributes: CARE_DEMO_ANSWERS,
+      items: CARE_RESULT_ITEMS,
       questionGroups: CARE_QUESTION_GROUPS,
     },
   },
