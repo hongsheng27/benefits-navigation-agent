@@ -500,8 +500,8 @@ Reuse `BEDROCK_MODEL_ID` / AWS credentials above. No new frontend env required.
 
 | Concern               | Local mock now                                                                                              | Target                                                                 |
 | --------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Related provisions UI | `frontend/src/mocks/relatedProvisions.ts` (from `data/benefit_discovery/extracted_candidates.v0.1.json`)    | Session / item `citations` with real excerpts via `official_citations` |
-| Application guide UI  | `frontend/src/mocks/applicationGuides.ts`                                                                   | Backend `action_plan` (or equivalent) per life event / item            |
+| Related provisions UI | `frontend/src/mocks/relatedProvisions.ts` filtered by result `itemId` + life event (no cross-event funeral fallback) | Session / item `citations` with real excerpts via `official_citations` |
+| Application guide UI  | `frontend/src/mocks/applicationGuides.ts` per life event (`null` when unknown; never fall back to spouse-death) | Backend `action_plan` (or equivalent) per life event / item            |
 | Copilot chat          | `POST /sessions/current/explain` via `frontend/src/api/explainClient.ts` + stub fallback (`copilotStub.ts`) | Same endpoint; Bedrock when `BEDROCK_MODEL_ID` is set                  |
 
 ### What to change
@@ -511,6 +511,8 @@ Reuse `BEDROCK_MODEL_ID` / AWS credentials above. No new frontend env required.
      `PendingCapability.official_citations` is implemented.
    - Prefer `ItemView.citations` / evidence repository text; keep the panel UI
      (`RelatedProvisionsPanel`, `PostConsultPanel`) and only swap the data loader.
+   - Keep the frontend filter contract: match by `itemId` / life event; **no hit =
+     empty list**; never fall back to another event’s funeral package.
    - Do not let the model invent article numbers; ground on retrieved excerpts.
    - The explain request already sends `references[]` (title / body / sourceUrl).
 
@@ -519,6 +521,7 @@ Reuse `BEDROCK_MODEL_ID` / AWS credentials above. No new frontend env required.
      when `action_plan` leaves the pending list.
    - Keep step → documents → agency shape close to
      `frontend/src/types/postConsult.ts` so the panel can stay thin.
+   - Unknown life events must stay empty / `null`, not reuse spouse-death steps.
 
 3. **Copilot (already wired)**
    - Live path: `answer_with_references` task → Bedrock Converse when

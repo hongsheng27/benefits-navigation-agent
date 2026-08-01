@@ -1,8 +1,8 @@
 /**
  * 申請解說 fixture。
  *
- * 步驟內容整理自 discovery candidates 與諮詢結果常見項目
- * （死亡登記、喪葬相關補助）。僅供說明示範，不代為送件。
+ * 依生活事件提供示範步驟；未知事件回 null，禁止退回喪葬指南。
+ * 僅供說明示範，不代為送件、不做資格判定。
  */
 
 import type { ApplicationGuide } from "../types/postConsult";
@@ -89,6 +89,142 @@ const SPOUSE_DEATH_GUIDE: ApplicationGuide = {
   ],
 };
 
+const JOB_LOSS_GUIDE: ApplicationGuide = {
+  guideId: "guide_job_loss_v1",
+  lifeEventId: "job_loss",
+  title: "失業／被資遣後常見申請與辦理順序",
+  overview:
+    "多數情況會先確認是否屬於非自願離職，再到公立就業服務機構辦理求職登記，接著依就業保險規定確認失業給付，並視需要使用就業諮詢或職業訓練。以下是示範用整理，實際以各機關當下規定為準。",
+  disclaimer:
+    "接住不代為送件，也不保證核定結果。下列步驟為示範候選說明，送件前請再向就業服務機構或勞保局確認。",
+  steps: [
+    {
+      stepId: "confirm_involuntary_separation",
+      title: "確認離職原因與證明文件",
+      description:
+        "先整理資遣通知、離職證明或相關文件，確認是否可能符合非自願離職等請領前提。這裡只協助準備，不代替機關認定。",
+      requiredDocuments: [
+        "離職證明或資遣相關文件",
+        "身分證明",
+        "投保／薪資相關資料（若已持有）",
+      ],
+      agencyName: null,
+      deadlineNote: "請領時效依就業保險規定，請以勞保局公告為準。",
+      tips: [
+        "若不清楚離職類型，可先向原投保單位或就業服務站詢問如何開立證明。",
+        "不要把「有沒有工作意願」等條件自行解讀成最終資格。",
+      ],
+    },
+    {
+      stepId: "register_at_employment_service",
+      title: "向公立就業服務機構辦理求職登記",
+      description:
+        "多數失業給付流程會要求先到公立就業服務機構完成求職登記，並配合就業諮詢或推介就業／職訓安排。",
+      requiredDocuments: [
+        "身分證明",
+        "離職相關證明",
+        "印章或依現場要求之文件",
+      ],
+      agencyName: "公立就業服務機構（就業服務站）",
+      deadlineNote: "請儘早辦理，以免影響後續請領時程。",
+      tips: [
+        "可同時詢問職業訓練與就業促進措施。",
+        "各地站所預約／臨櫃方式可能不同，建議先電話或官網確認。",
+      ],
+    },
+    {
+      stepId: "apply_unemployment_benefit",
+      title: "依就業保險確認失業給付請領",
+      description:
+        "完成求職登記等前置步驟後，再依就業保險規定向勞保局或指定管道確認失業給付請領方式與應備文件。",
+      requiredDocuments: [
+        "求職登記／就業服務相關證明",
+        "身分與帳戶資料",
+        "其他勞保局公告之請領文件",
+      ],
+      agencyName: "勞動部勞工保險局",
+      deadlineNote: "等待期、給付期間與續領規定以勞保局最新說明為準。",
+      tips: [
+        "諮詢結果若仍顯示需再確認，代表條件尚不足以自動判定。",
+        "地方就業服務與中央給付窗口不同，文件不要混用清單。",
+      ],
+    },
+  ],
+};
+
+const OCCUPATIONAL_INJURY_GUIDE: ApplicationGuide = {
+  guideId: "guide_occupational_injury_v1",
+  lifeEventId: "occupational_injury",
+  title: "職災與照顧安排常見辦理順序",
+  overview:
+    "若家人因工作事故失能並需要照顧，常見會先追蹤職災認定與職災保險相關給付，再依需要辦理身心障礙鑑定、長照需求評估，並為照顧者尋求支持或就業協助。以下是示範用整理，實際以各機關當下規定為準。",
+  disclaimer:
+    "接住不代為送件，也不保證核定結果。下列步驟為示範候選說明，不做資格判定；送件前請再向勞保局、公所、1966 或家庭照顧者支持窗口確認。",
+  steps: [
+    {
+      stepId: "track_occupational_recognition",
+      title: "追蹤職業災害認定進度",
+      description:
+        "若職災認定還在申請中，先向受理窗口確認案件進度與是否需補件。認定結果常會影響後續職災保險給付方向。",
+      requiredDocuments: [
+        "申請案件編號或受理證明（若已有）",
+        "診斷相關資料（依窗口要求）",
+      ],
+      agencyName: "勞動部勞工保險局／相關受理單位",
+      deadlineNote: "補件期限以案件通知為準。",
+      tips: [
+        "不必在 app 內提供公司細節或事故細節。",
+        "認定結果未出前，仍可先整理後續可能需要的證明。",
+      ],
+    },
+    {
+      stepId: "check_occupational_benefits",
+      title: "確認職災保險相關給付方向",
+      description:
+        "在有職災保險或認定進度的前提下，再向勞保局確認傷病、失能等給付的說明與應備文件。是否符合仍由承辦機關判斷。",
+      requiredDocuments: [
+        "職災認定相關文件（若已取得）",
+        "診斷／失能相關證明（依公告）",
+        "申請人身分與帳戶資料",
+      ],
+      agencyName: "勞動部勞工保險局",
+      deadlineNote: "各給付請領時效不同，請以勞保局公告為準。",
+      tips: [
+        "職災給付與一般勞保項目可能是不同管道，文件清單不要互套。",
+      ],
+    },
+    {
+      stepId: "disability_and_long_term_care",
+      title: "視需要辦理身障鑑定與長照評估",
+      description:
+        "若照顧需求持續，可向戶籍地公所了解身心障礙鑑定，並撥打 1966 詢問長照需求評估與服務方向。",
+      requiredDocuments: [
+        "身分與戶籍相關證明",
+        "醫療院所／公所要求之申請表件",
+      ],
+      agencyName: "戶籍地公所／指定醫療機構／1966 長照專線",
+      deadlineNote: null,
+      tips: [
+        "長照服務是否適用，須經照管單位評估。",
+        "鑑定與長照可與職災流程並行了解，但窗口各自獨立。",
+      ],
+    },
+    {
+      stepId: "caregiver_support",
+      title: "為照顧者尋求支持與就業協助",
+      description:
+        "照顧者可洽詢喘息服務、家庭照顧者支持據點，或就業服務相關資源；需要有人一起釐清時，也可先打 1966 或地方支持窗口。",
+      requiredDocuments: ["依各窗口公告之申請資料"],
+      agencyName: "家庭照顧者支持據點／就業服務機構／1966",
+      deadlineNote: null,
+      tips: [
+        "不必等所有資格確認完才求助。",
+        "就業支持與喘息服務的受理單位可能不同，可分開詢問。",
+      ],
+    },
+  ],
+};
+
 const GUIDES_BY_EVENT: Record<string, ApplicationGuide> = {
   spouse_death: SPOUSE_DEATH_GUIDE,
   parent_death: {
@@ -103,14 +239,27 @@ const GUIDES_BY_EVENT: Record<string, ApplicationGuide> = {
     lifeEventId: "child_death",
     title: "親人過世後常見申請與辦理順序",
   },
+  job_loss: JOB_LOSS_GUIDE,
+  occupational_injury: OCCUPATIONAL_INJURY_GUIDE,
 };
 
-/** 取得申請解說；未知事件時回傳配偶過世示範指南。 */
+/**
+ * 取得申請解說。
+ *
+ * 未知事件回 `null`，禁止退回喪葬指南。
+ * 若傳入多個 lifeEventIds，回傳第一個有指南的事件。
+ */
 export function getApplicationGuide(
   lifeEventId: string | null,
-): ApplicationGuide {
+  lifeEventIds: string[] = [],
+): ApplicationGuide | null {
   if (lifeEventId && GUIDES_BY_EVENT[lifeEventId]) {
     return GUIDES_BY_EVENT[lifeEventId];
   }
-  return SPOUSE_DEATH_GUIDE;
+  for (const eventId of lifeEventIds) {
+    if (GUIDES_BY_EVENT[eventId]) {
+      return GUIDES_BY_EVENT[eventId];
+    }
+  }
+  return null;
 }

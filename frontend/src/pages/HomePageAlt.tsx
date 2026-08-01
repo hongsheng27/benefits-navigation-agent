@@ -755,6 +755,8 @@ function IntakeSteps({
       {openPanel === "related_provisions" ? (
         <RelatedProvisionsPanel
           lifeEventId={snapshot?.lifeEvent ?? null}
+          lifeEventIds={snapshotLifeEvents(snapshot)}
+          itemIds={(snapshot?.items ?? []).map((item) => item.itemId)}
           jurisdiction={
             typeof snapshot?.attributes.applicant_jurisdiction === "string"
               ? snapshot.attributes.applicant_jurisdiction
@@ -767,6 +769,7 @@ function IntakeSteps({
       {openPanel === "application_guide" ? (
         <ApplicationGuidePanel
           lifeEventId={snapshot?.lifeEvent ?? null}
+          lifeEventIds={snapshotLifeEvents(snapshot)}
           sessionId={sessionId ?? snapshot?.sessionId ?? null}
           onClose={() => setOpenPanel(null)}
         />
