@@ -200,6 +200,7 @@ describe("HomePageAlt", () => {
               amountPeriod: null,
               amountCurrency: null,
               explanation: null,
+              sourceLifeEvents: ["spouse_death"],
             },
           ],
         }),
@@ -217,12 +218,12 @@ describe("HomePageAlt", () => {
     describeSituation("我先生上個月過世了。");
 
     expect(
-      await screen.findByRole("button", { name: "對，就是這件事" }),
+      await screen.findByRole("button", { name: "對，就是這些" }),
     ).toBeInTheDocument();
     expect(screen.getByText("我們這樣理解，對嗎？")).toBeInTheDocument();
     expect(screen.queryByLabelText("發生了什麼事？")).not.toBeInTheDocument();
     expect(screen.getByText("配偶過世")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "對，就是這件事" }));
+    fireEvent.click(screen.getByRole("button", { name: "對，就是這些" }));
 
     expect(await screen.findByText("再請你回答幾個問題")).toBeInTheDocument();
     expect(screen.queryByText("我們這樣理解，對嗎？")).not.toBeInTheDocument();
@@ -297,6 +298,7 @@ describe("HomePageAlt", () => {
               amountPeriod: null,
               amountCurrency: null,
               explanation: null,
+              sourceLifeEvents: ["spouse_death"],
             },
           ],
         }),
@@ -307,7 +309,7 @@ describe("HomePageAlt", () => {
     await screen.findByText("服務已就緒");
     await startIntake();
     describeSituation("我先生上個月過世了。");
-    fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這些" }));
 
     expect(await screen.findByText("再請你回答幾個問題")).toBeInTheDocument();
     expect(screen.getByText("你主要在哪個縣市辦理或居住？")).toBeInTheDocument();
@@ -390,7 +392,7 @@ describe("HomePageAlt", () => {
     describeSituation("我生病了");
 
     expect(
-      await screen.findByRole("button", { name: "對，就是這件事" }),
+      await screen.findByRole("button", { name: "對，就是這些" }),
     ).toBeInTheDocument();
     expect(screen.getByText("重大傷病")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -414,7 +416,7 @@ describe("HomePageAlt", () => {
     await startIntake();
     describeSituation("我失業了");
 
-    fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
+    fireEvent.click(await screen.findByRole("button", { name: "對，就是這些" }));
 
     expect(await screen.findByText("目前整理出的方向")).toBeInTheDocument();
     expect(screen.queryByText("再請你回答幾個問題")).not.toBeInTheDocument();

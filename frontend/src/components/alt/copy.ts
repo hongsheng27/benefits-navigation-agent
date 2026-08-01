@@ -248,6 +248,11 @@ const ITEM_NAMES: Record<string, string> = {
   funeral_benefit: "喪葬給付",
   survivor_pension: "遺屬年金",
   health_insurance_change: "全民健保身分變更",
+  occupational_injury_recognition: "職業災害認定申請",
+  occupational_disability_benefit: "職災失能／傷病給付（示意）",
+  disability_assessment: "身心障礙鑑定",
+  unemployment_benefit: "失業給付",
+  employment_service: "就業服務／職訓諮詢",
   taipei_green_funeral_incentive: "臺北市多元環保葬鼓勵金",
   taipei_joint_funeral_service: "臺北市聯合奠祭",
   new_taipei_green_funeral_incentive: "新北市環保葬鼓勵金",
@@ -258,6 +263,10 @@ const ITEM_NAMES: Record<string, string> = {
 /** 資格欄位的題目文字。 */
 const FIELD_LABELS: Record<string, string> = {
   applicant_jurisdiction: "你主要在哪個縣市辦理或居住？",
+  care_relationship: "你和需要照顧的人是什麼關係？",
+  disability_cause: "造成失能的原因是？",
+  occupational_recognition_status: "是否已經取得職業災害認定？",
+  involuntary_job_loss: "這次是否屬於非自願離職？",
   deceased_insurance_type: "過世者生前的投保身分是？",
   has_dependent_children: "家中是否有未成年子女？",
   applicant_age_band: "你目前的年齡大約在哪個範圍？",
@@ -267,6 +276,11 @@ const FIELD_LABELS: Record<string, string> = {
 const PURPOSE_TEXTS: Record<string, string> = {
   "applicant_jurisdiction.purpose":
     "所在縣市決定有哪些地方型補助與受理窗口可以對照。",
+  "care_relationship.purpose": "代辦與請領資格依親屬關係認定。",
+  "disability_cause.purpose": "職災與一般傷病走不同給付路徑。",
+  "occupational_recognition_status.purpose":
+    "職災給付以認定為前提；還沒認定的話，第一步就是先申請認定。",
+  "involuntary_job_loss.purpose": "非自願離職才是失業給付常見門檻之一。",
   "deceased_insurance_type.purpose":
     "不同投保身分，受理機關與可申請的給付不一樣。",
   "has_dependent_children.purpose": "有沒有未成年子女，會影響遺屬年金是否加給。",
@@ -281,6 +295,16 @@ const OPTION_LABELS: Record<string, string> = {
   PEN: "澎湖縣",
   OTHER_TW: "其他縣市",
   unsure: "不確定",
+  spouse: "配偶",
+  child: "子女",
+  parent: "父母",
+  other_relative: "其他親屬",
+  occupational_injury: "職業災害（工作中發生）",
+  accident: "一般意外",
+  illness: "疾病（如中風）",
+  recognized: "已認定",
+  applying: "申請中",
+  not_started: "還沒申請",
   labor_insurance: "勞工保險",
   national_pension: "國民年金",
   farmers_insurance: "農民保險",
@@ -295,6 +319,9 @@ const OPTION_LABELS: Record<string, string> = {
 /** 問題分組的標題。 */
 const TOPIC_TITLES: Record<string, string> = {
   location: "所在地",
+  care_relationship: "關係",
+  injury_context: "失能與職災",
+  employment_status: "就業狀況",
   deceased_insurance: "過世者的投保狀況",
   family_situation: "家庭狀況",
   applicant_situation: "你的狀況",

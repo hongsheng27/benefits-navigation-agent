@@ -62,7 +62,7 @@ export type BackendSession = {
    */
   eventNotRecognized: boolean;
   describeEvent: (text: string) => Promise<void>;
-  confirmEvent: (confirmed: boolean) => Promise<void>;
+  confirmEvent: (confirmed: boolean, eventIds?: string[]) => Promise<void>;
   answerFields: (answers: Record<string, AttributeValue>) => Promise<void>;
   answerChatTurn: (text: string) => Promise<void>;
   resetSession: () => Promise<void>;
@@ -231,13 +231,19 @@ export function useBackendSession(): BackendSession {
   );
 
   const confirmEvent = useCallback(
-    async (confirmed: boolean) => {
+    async (confirmed: boolean, eventIds?: string[]) => {
       const sessionId = sessionIdRef.current;
       if (!sessionId) {
         return;
       }
       await run(() =>
-        advanceSession(sessionId, { kind: "event_confirmation", confirmed }),
+        advanceSession(sessionId, {
+          kind: "event_confirmation",
+          confirmed,
+          ...(confirmed && eventIds && eventIds.length > 0
+            ? { eventIds }
+            : {}),
+        }),
       );
     },
     [run],

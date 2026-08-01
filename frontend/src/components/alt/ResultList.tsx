@@ -4,6 +4,7 @@ import {
   fieldLabel,
   itemKindLabel,
   itemName,
+  lifeEventName,
   optionLabel,
   statusSectionTitle,
 } from "./copy";
@@ -30,12 +31,27 @@ type ResultListProps = {
  * 不是前端的問題。
  */
 export function ResultList({ snapshot }: ResultListProps) {
-  const { items, implementation } = snapshot;
+  const { items, implementation, lifeEvents } = snapshot;
+  const eventOrder =
+    lifeEvents.length > 0
+      ? lifeEvents
+      : [
+          ...new Set(
+            items.flatMap((item) => item.sourceLifeEvents ?? []),
+          ),
+        ];
+  const splitByEvent = eventOrder.length > 1;
 
-  const grouped = STATUS_ORDER.map((status) => ({
-    status,
-    items: items.filter((item) => item.status === status),
-  })).filter((group) => group.items.length > 0);
+  const eventBuckets = splitByEvent
+    ? eventOrder
+        .map((eventId) => ({
+          eventId,
+          items: items.filter((item) =>
+            (item.sourceLifeEvents ?? []).includes(eventId),
+          ),
+        }))
+        .filter((bucket) => bucket.items.length > 0)
+    : [{ eventId: null as string | null, items }];
 
   return (
     <div>
@@ -45,30 +61,52 @@ export function ResultList({ snapshot }: ResultListProps) {
         </p>
       ) : null}
 
-      {grouped.length === 0 ? (
+      {items.length === 0 ? (
         <p className="mt-4 border border-dashed border-[#d8cfc0] bg-[#f7f4ee] px-4 py-6 text-[0.88rem] leading-[2] text-[#6b6459]">
           目前還沒有整理出可辦的項目。你可以重新開始，或改用其他說法再試一次。
         </p>
       ) : (
-        grouped.map((group) => (
-          <section key={group.status} className="mt-6">
-            <h3
-              className={`${styles.serif} text-[1.05rem] leading-[1.7] text-[#171513]`}
-            >
-              {statusSectionTitle(group.status)}
-              <span className="ml-2 text-[0.8rem] tracking-[0.08em] text-[#6b6459]">
-                {group.items.length} 項
-              </span>
-            </h3>
-            <ul className="mt-3 divide-y divide-[#eee7db] border border-[#e0d8ca] bg-[#fdfbf7]">
-              {group.items.map((item) => (
-                <ResultRow item={item} key={item.itemId} />
-              ))}
-            </ul>
-          </section>
+        eventBuckets.map((bucket) => (
+          <div key={bucket.eventId ?? "all"} className="mt-6 first:mt-0">
+            {bucket.eventId ? (
+              <h2 className="text-[0.95rem] font-semibold tracking-[0.04em] text-[#2f4f45]">
+                與「{lifeEventName(bucket.eventId)}」相關
+              </h2>
+            ) : null}
+            <StatusGroups items={bucket.items} />
+          </div>
         ))
       )}
     </div>
+  );
+}
+
+function StatusGroups({ items }: { items: ItemView[] }) {
+  const grouped = STATUS_ORDER.map((status) => ({
+    status,
+    items: items.filter((item) => item.status === status),
+  })).filter((group) => group.items.length > 0);
+
+  return (
+    <>
+      {grouped.map((group) => (
+        <section key={group.status} className="mt-4">
+          <h3
+            className={`${styles.serif} text-[1.05rem] leading-[1.7] text-[#171513]`}
+          >
+            {statusSectionTitle(group.status)}
+            <span className="ml-2 text-[0.8rem] tracking-[0.08em] text-[#6b6459]">
+              {group.items.length} 項
+            </span>
+          </h3>
+          <ul className="mt-3 divide-y divide-[#eee7db] border border-[#e0d8ca] bg-[#fdfbf7]">
+            {group.items.map((item) => (
+              <ResultRow item={item} key={item.itemId} />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </>
   );
 }
 

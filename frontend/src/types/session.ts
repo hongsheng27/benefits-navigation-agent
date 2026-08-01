@@ -221,6 +221,8 @@ export type ItemView = {
   amountCurrency: string | null;
 
   explanation: string | null;
+  /** 複合情境時，此項目來自哪些 life event。 */
+  sourceLifeEvents: string[];
 };
 
 /**

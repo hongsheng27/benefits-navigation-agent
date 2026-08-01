@@ -118,6 +118,7 @@ const RESULT_ITEMS: SessionSnapshot["items"] = [
     amountPeriod: null,
     amountCurrency: null,
     explanation: "戶政死亡登記通常要先辦，後面許多給付才接得上。",
+    sourceLifeEvents: ["spouse_death"],
   },
   {
     itemId: "funeral_benefit",
@@ -131,6 +132,7 @@ const RESULT_ITEMS: SessionSnapshot["items"] = [
     amountPeriod: null,
     amountCurrency: null,
     explanation: "依過世者投保身分，可能可向對應機關申請喪葬給付。",
+    sourceLifeEvents: ["spouse_death"],
   },
   {
     itemId: "survivor_pension",
@@ -144,6 +146,7 @@ const RESULT_ITEMS: SessionSnapshot["items"] = [
     amountPeriod: null,
     amountCurrency: null,
     explanation: "有未成年子女時，遺屬年金條件可能不同，送件前建議再確認。",
+    sourceLifeEvents: ["spouse_death"],
   },
 ];
 
