@@ -23,14 +23,14 @@
 
 ## 這個版本還沒有的
 
-- 官方依據檢索：`RETRIEVE_RULES` 仍是空操作，資料層還沒交出 `EvidenceRepository`
-- 白話說明：`EXPLAIN_RESULT` 仍是空操作，還沒接模型
+- 官方依據檢索：`RETRIEVE_RULES` 仍是空操作，`EvidenceRepository` 的接縫備好了但沒接上
+- 白話說明：`EXPLAIN_RESULT` 仍是空操作，還沒接模型（T22，要等依據先有內容）
 
-## 流程規則是真的，資料來源還不是
+## 流程規則是真的，資料來源還不全是
 
-轉換規則、守門條件、自動推進與護欄都已經是最終行為。但**事件辨識仍是寫死的**
-（等 LLM），**項目展開仍來自離線 fixture**（等資料層的 SQLite repository）。每一處
-都有註解說明。
+轉換規則、守門條件、自動推進與護欄都已經是最終行為。**事件辨識已經接上真實模型**
+（`_receive_life_event` → `llm/tasks/resolve_life_event.py`），但**項目展開仍來自離線
+fixture**（等資料層的 SQLite repository）。每一處都有註解說明。
 
 資料來源不由這個模組自己去拿，而是透過 `protocols.py` 的接縫注入（見 `advance()`
 的具名參數）。目前注入的是不需要 SQLite 的離線實作，換成真實來源時這個模組不用改。
@@ -39,9 +39,13 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from app.llm.fake import FakeLanguageModel
+from app.llm.port import LanguageModelPort
+from app.llm.tasks.resolve_life_event import resolve_life_event
 from app.observability.logging import log_event
 from app.orchestration.determination import evaluate_ready_items, visible_items
 from app.orchestration.field_registry import FieldRegistry
+from app.orchestration.life_events import LifeEventRegistry, default_life_events
 from app.orchestration.protocols import (
     EligibilityService,
     EntitlementGraphRepository,
@@ -224,6 +228,8 @@ class _Seams:
     privacy_gate: PrivacyGate
     eligibility_service: EligibilityService
     source_refresh_service: SourceRefreshService
+    language_model: LanguageModelPort
+    life_events: LifeEventRegistry
     # 官方依據的檢索還沒接上（`RETRIEVE_RULES` 仍是空操作）。保留欄位是為了讓資料層
     # 交出 repository 時只需改 `_do_retrieve_rules`，不必再動 `advance()` 的簽章。
     evidence_repository: EvidenceRepository | None = None
@@ -238,6 +244,8 @@ def advance(
     privacy_gate: PrivacyGate | None = None,
     eligibility_service: EligibilityService | None = None,
     source_refresh_service: SourceRefreshService | None = None,
+    language_model: LanguageModelPort | None = None,
+    life_events: LifeEventRegistry | None = None,
     evidence_repository: EvidenceRepository | None = None,
 ) -> SessionState:
     """依輸入推進狀態，並自動走完不需要使用者的中間步驟。
@@ -271,6 +279,13 @@ def advance(
             if source_refresh_service is not None
             else LocalSourceRefreshService()
         ),
+        # 預設是不連網路的實作，而且它**沒有登記任何答案**，所以預設情況下事件辨識會
+        # 失敗並回 `event_not_recognized`。那是誠實的預設值：沒有注入真實模型時，
+        # 系統確實看不懂使用者在說什麼，不該假裝看懂（ADR-0015）。
+        language_model=(
+            language_model if language_model is not None else FakeLanguageModel()
+        ),
+        life_events=(life_events if life_events is not None else default_life_events()),
         evidence_repository=evidence_repository,
     )
 
@@ -319,7 +334,7 @@ def _handle_input(
     """依輸入種類產生新狀態。這裡只處理「使用者做了什麼」，不處理自動推進。"""
     match user_input:
         case LifeEventTextInput():
-            return _receive_life_event(state, user_input)
+            return _receive_life_event(state, user_input, seams)
         case EventConfirmationInput():
             return _confirm_event(state, user_input)
         case AttributeAnswersInput():
@@ -335,20 +350,29 @@ def _handle_input(
 
 
 def _receive_life_event(
-    state: SessionState, user_input: LifeEventTextInput
+    state: SessionState, user_input: LifeEventTextInput, seams: _Seams
 ) -> SessionState:
-    """接收自由文字。
+    """接收自由文字，交給模型對應成事件代號。
 
-    真正的實作會呼叫 LLM 抽取事件代號與屬性（T21）。目前暫時用寫死的代號，
-    讓流程可以走通。
+    **這段文字只存在於這個函式的呼叫範圍內。** `resolve_life_event` 只回傳代號，
+    所以原文沒有任何路徑可以進到 `SessionState`（那裡結構上也沒有欄位放它）、
+    紀錄檔或回應裡。這是 ADR-0007 要求的行為，也完成了 T13。
 
-    自由文字本身沒有被保存 —— SessionState 沒有欄位放它（ADR-0007）。
+    對應不出來時 `LifeEventNotRecognisedError` 會往上傳到端點，轉成
+    `event_not_recognized`，由前端請使用者換個說法。**刻意不猜一個代號** ——
+    事件決定後面七步展開什麼，猜錯會讓使用者被問一整串無關的問題。
+
+    直接覆寫 `life_event`，所以使用者否認後重新描述也會正確更新。
+
+    TODO(T21b): 一併抽取去識別化的資格屬性，讓使用者說過的事不必再問一次。
+    需要從欄位登記表動態生成 schema，是獨立的一批。
     """
-    # TODO(T21): 呼叫 LLM 抽取事件代號。目前寫死，不管輸入什麼都回同一個值。
-    # 直接覆寫 life_event，所以使用者否認後重新描述也會正確更新。
-    extracted_event = "spouse_death"
-
-    return state.model_copy(update={"life_event": extracted_event})
+    event_id = resolve_life_event(
+        user_input.text,
+        model=seams.language_model,
+        registry=seams.life_events,
+    )
+    return state.model_copy(update={"life_event": event_id})
 
 
 def _confirm_event(
@@ -400,8 +424,9 @@ def _record_answers(
     if unknown:
         raise UnknownFieldError(unknown)
 
-    # 代號合格之後，值本身再交給隱私閘門。Phase 2 的閘門原樣回傳；型別與選項的
-    # 驗證屬於 Req 16.3（T11），換掉閘門的實作就能加上，狀態機不用改。
+    # 代號合格之後，值本身再交給隱私閘門。預設的 `RegistryBackedPrivacyGate` 會依登記表
+    # 驗證型別與選項，不合法就拒絕整筆（T11 已完成）。這裡的呼叫方式當初就設計成
+    # 可替換，所以加上驗證時狀態機一行都沒改。
     accepted = seams.privacy_gate.validate_attributes(
         dict(user_input.answers), seams.registry
     )

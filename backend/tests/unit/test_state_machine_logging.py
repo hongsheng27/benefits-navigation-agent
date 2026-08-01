@@ -12,6 +12,7 @@ import logging
 import pytest
 
 from app.observability.logging import configure_logging
+from app.orchestration.demo_fixtures import demo_language_model
 from app.orchestration.state_machine import advance
 from app.schemas.session import EventConfirmationInput, LifeEventTextInput
 from tests.unit.test_loop_guardrails import _state_at_collect
@@ -20,6 +21,16 @@ from tests.unit.test_loop_guardrails import _state_at_collect
 @pytest.fixture(autouse=True)
 def _json_logging() -> None:
     configure_logging()
+
+
+def _advance(state, user_input):
+    """推進一步，並注入一個會成功辨識事件的模型。
+
+    `advance()` 的預設模型沒有登記任何答案，事件辨識會失敗 —— 那個預設值是對的，
+    但這一組測試要驗證的是「轉換有沒有被記錄」，不是「辨識失敗時會怎樣」。
+    注入等於把那個假設寫在測試裡。
+    """
+    return advance(state, user_input, language_model=demo_language_model())
 
 
 def _events(caplog: pytest.LogCaptureFixture) -> list[dict]:
@@ -42,8 +53,8 @@ def test_auto_advance_records_each_transition(
     )
 
     with caplog.at_level(logging.INFO):
-        advanced = advance(understanding, LifeEventTextInput(text="測試"))
-        advance(advanced, EventConfirmationInput(confirmed=True))
+        advanced = _advance(understanding, LifeEventTextInput(text="測試"))
+        _advance(advanced, EventConfirmationInput(confirmed=True))
 
     transitions = [e for e in _events(caplog) if e["event"] == "state_transitioned"]
 
@@ -66,8 +77,8 @@ def test_a_skipped_state_is_recorded_with_its_guard(
     )
 
     with caplog.at_level(logging.INFO):
-        advanced = advance(understanding, LifeEventTextInput(text="測試"))
-        advance(advanced, EventConfirmationInput(confirmed=True))
+        advanced = _advance(understanding, LifeEventTextInput(text="測試"))
+        _advance(advanced, EventConfirmationInput(confirmed=True))
 
     skipped = [e for e in _events(caplog) if e["event"] == "state_skipped"]
 
@@ -86,7 +97,7 @@ def test_no_log_entry_contains_the_submitted_text(
     )
 
     with caplog.at_level(logging.INFO):
-        advance(understanding, LifeEventTextInput(text=secret))
+        _advance(understanding, LifeEventTextInput(text=secret))
 
     rendered = json.dumps(_events(caplog), ensure_ascii=False)
     assert secret not in rendered

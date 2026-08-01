@@ -17,6 +17,7 @@
 - [ADR-0011: Use Frozen Pydantic Models for Session Workflow State](0011-frozen-pydantic-session-workflow-state.md)
 - [ADR-0012: Deterministic State Machine with Loop Guardrails](0012-deterministic-state-machine-with-guardrails.md)
 - [ADR-0014: Keep Fixture Data Out of the Verified Governance Status](0014-keep-fixture-data-out-of-verified-status.md)
+- [ADR-0015: Use a Narrow LLM Port Instead of an Agent Loop](0015-narrow-llm-port-instead-of-agent-loop.md)
 
 新 ADR 至少記錄背景、決定、理由與後果。候選方案不必逐一列出，除非那個比較本身是
 決策的重點。

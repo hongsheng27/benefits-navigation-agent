@@ -21,6 +21,8 @@ from fastapi import APIRouter, Depends, Header, Request, Response, status
 
 from app.api.errors import ApiError
 from app.api.implementation import implementation_notice
+from app.llm.port import LanguageModelPort
+from app.llm.tasks.resolve_life_event import LifeEventNotRecognisedError
 from app.observability.logging import log_event
 from app.orchestration import state_machine
 from app.orchestration.missing_fields import compute_question_groups
@@ -49,6 +51,16 @@ def get_store(request: Request) -> InMemorySessionStore:
     測試之間不會互相污染。
     """
     return request.app.state.session_store
+
+
+def get_language_model(request: Request) -> LanguageModelPort:
+    """從應用程式取出語言模型。
+
+    在 `create_app()` 選一次，理由跟 store 一樣是隔離；另外也因為「有沒有金鑰」
+    在行程執行期間不會變，每次請求重新決定只會多出「這個請求用真模型、下個請求
+    悄悄用示範資料」的可能性。
+    """
+    return request.app.state.language_model
 
 
 def require_session_state(
@@ -122,11 +134,25 @@ def advance_session(
     payload: AdvanceRequest,
     store: Annotated[InMemorySessionStore, Depends(get_store)],
     state: Annotated[SessionState, Depends(require_session_state)],
+    language_model: Annotated[LanguageModelPort, Depends(get_language_model)],
 ) -> SessionSnapshot:
     """送一筆輸入，推進一步。"""
     try:
         advanced = state_machine.advance(
-            state, payload.input, registry=state_machine.default_registry()
+            state,
+            payload.input,
+            registry=state_machine.default_registry(),
+            # 有 `GEMINI_API_KEY` 就是真模型，沒有就是示範實作（一律回配偶過世）。
+            # 選擇在 `create_app()` 做一次，見 `llm/factory.py`。
+            #
+            # 為什麼沒有金鑰時要落回一個「會成功」的示範實作，而判定的示範資料卻不注入
+            # （ADR-0014 讓判定維持誠實的「需人工協助」）：兩者後果不對等。
+            # 「需人工協助」是使用者可以據此行動的結局；事件辨識失敗會讓產品在第一步就
+            # 停住，什麼都做不了。
+            #
+            # 這件事不是默默發生的 —— 回應裡的 `implementation.pending` 帶著
+            # `life_event_extraction`，而啟動時也會記一筆 `language_model_selected`。
+            language_model=language_model,
         )
     except state_machine.InvalidTransitionError as error:
         raise ApiError(
@@ -154,6 +180,16 @@ def advance_session(
         raise ApiError(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             ErrorCode.UNKNOWN_ITEM,
+            current_state=state.workflow_state,
+        ) from error
+    except LifeEventNotRecognisedError as error:
+        # 沒有把描述對應到已登記的事件。**這不是程式錯誤**，前端應該請使用者換個說法。
+        #
+        # 不帶 `field_ids`，因為問題不在某個欄位上；也不帶任何訊息文字，因為那可能
+        # 引用使用者寫的內容。狀態維持在 `understand_event`，使用者可以直接再送一次。
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.EVENT_NOT_RECOGNIZED,
             current_state=state.workflow_state,
         ) from error
 

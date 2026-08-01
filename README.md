@@ -108,11 +108,11 @@ UNDERSTAND_EVENT
 | Backend                   | Python、Pydantic、boto3                                                 | 暫定；API、結構化資料與 AWS 整合                        |
 | Backend topology          | Modular monolith                                                        | **已決定**；模組分離，單一 deployment unit              |
 | API framework             | FastAPI                                                                 | **已決定**；核心 application logic 不依賴 framework     |
-| LLM                       | Amazon Bedrock 上的模型                                                 | **規則要求**；比賽限用 AWS 基礎模型，model 待實測       |
-| Agent orchestration       | Policy-governed hybrid                                                  | **已決定**；state machine 控制，Agent 僅限指定節點      |
-| Agent SDK                 | Strands Agents + Amazon Bedrock                                         | **Trial / 可逆**；包在自有 `AgentRunner` interface 後方 |
+| LLM                       | 目前 Gemini（`gemma-4-31b-it`），目標 Amazon Bedrock                    | **已實作**；隔離在自有 LLM port 後方，換廠商只動一個檔案 |
+| Agent orchestration       | Policy-governed hybrid                                                  | **已決定**；state machine 控制，模型僅限兩個指定節點     |
+| Agent SDK                 | 無 —— 不做 agent 迴圈                                                   | **已決定**；改用窄的 LLM port，見 ADR-0015              |
 | Agent hosting             | Amazon Bedrock AgentCore Runtime                                        | **後續決定**；先確認比賽帳號權限與現場可用性            |
-| Agent tools               | `resolve_life_event`、`retrieve_official_rules`、`evaluate_eligibility` | MVP 暫定三個核心工具                                    |
+| Agent tools               | 無 —— 模型沒有工具可呼叫                                                | **已決定**；模型只做「聽懂事件」與「翻成白話」兩件事     |
 | Document storage          | Amazon S3                                                               | 暫定；存放官方文件與處理後資料                          |
 | RAG                       | Amazon Bedrock Knowledge Bases 或自製 retrieval                         | **後續決定**；先固定 `Retriever` interface              |
 | Relevance scoring         | 結構化欄位匹配評分（本機 deterministic）                                | **已實作**；依使用者屬性對方案評分排序，見下方說明      |
@@ -134,8 +134,8 @@ UNDERSTAND_EVENT
 
 | 項目 | 白話說明 |
 | --- | --- |
-| **LLM (Bedrock)** | 讓系統能「聽懂」使用者的話、產生白話回答的 AI 模型。比賽規定用 AWS Bedrock 上的模型。8/1 後才能連線測試。 |
-| **Agent SDK (Strands)** | Agent 的執行框架 — 控制 AI 怎麼選工具、怎麼停下來。包在自己的 interface 後面，換框架不影響其他模組。 |
+| **LLM** | 讓系統能「聽懂」使用者的話、產生白話回答的 AI 模型。目前接自己的 Gemini 金鑰（已實測可用），目標是換成 AWS Bedrock。呼叫方式關在一個介面後面，換模型只動一個檔案。 |
+| **Agent SDK** | **不用了。** 原本打算用 Strands 做一個「會自己決定下一步」的 agent。後來判定不做 — 我們只有兩個問一次答一次的任務，而讓模型能自己呼叫功能會開出一條它可以影響資格判定的路。見 ADR-0015。 |
 | **Agent hosting (AgentCore)** | 讓 Agent 跑在 AWS 上面（不是跑在你的電腦）。是否用要看比賽帳號有沒有開放權限。 |
 | **Document storage (S3)** | 雲端檔案儲存。目前用本機資料夾放 HTML；8/1 後改放 S3，讓所有人都讀得到。 |
 | **RAG (Knowledge Bases)** | 語意搜尋 — 讓系統用「意思相近」來找資料，不只靠關鍵字。資料量少時用 SQL + 評分就夠，量大時才需要。 |
@@ -336,14 +336,20 @@ Catalog 與原本 OID 專用的 `sync_runs` 分開，使用 `source_sync_runs` �
 - **Agent / LLM** 只負責人生事件理解、去識別化欄位提取、建議下一個必要問題與 grounded explanation。
 - **Deterministic rule engine** 擁有 `eligible`、`ineligible`、`needs_information` 與 `needs_human_review` 的資格判斷權。
 
-Agent 不能直接決定福利資格，也不能繞過狀態檢查、PII 邊界或人工確認。
-Bounded agentic steps 暫定以 **Strands Agents + Amazon Bedrock** 實作，但只能透過
-自有 `AgentRunner` interface 接入；state machine、schemas、tools、rules 與 session state
-不得依賴 Strands-specific types。若 spike 無法穩定限制 tools、產生結構化輸出或清楚
-除錯，則改用 direct Bedrock implementation。詳見
+Agent 不能直接決定福利資格，也不能繞過狀態檢查、PII 邊界或人工確認。詳見
 [ADR-0003](docs/decisions/0003-policy-governed-hybrid-orchestration.md)。
-實作選型與退出條件詳見
-[ADR-0004](docs/decisions/0004-trial-strands-agent-runner.md)。
+
+**沒有 agent 迴圈，模型也沒有工具可以呼叫。** 原本規劃用 Strands 做一個受限制的
+agent 迴圈（[ADR-0004](docs/decisions/0004-trial-strands-agent-runner.md)），
+2026-07-30 改為一個窄的 LLM port
+（[ADR-0015](docs/decisions/0015-narrow-llm-port-instead-of-agent-loop.md)）。理由是
+系統裡只有兩個模型任務、兩個都是單次問答；而給模型工具就是開出一條它可以影響資格判定
+的路，**不存在的能力不需要用 prompt 或護欄去防守**。
+
+模型呼叫關在 `backend/app/llm/` 底下：`port.py` 定形狀、`gemini.py` 是目前的實作
+（唯一 import `httpx`、唯一知道 Gemini 存在的模組）、`fake.py` 讓測試不需要網路。
+換成 Bedrock 只需要新增一個 adapter 並改 `factory.py` 一行，遷移步驟寫在
+[AWS 遷移指南](docs/aws_migration_guide.md)。
 
 ## 四人初步分工
 

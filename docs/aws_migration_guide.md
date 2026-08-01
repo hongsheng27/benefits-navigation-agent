@@ -3,8 +3,10 @@
 This is the **single source of truth** for transitioning from local mock
 implementations to live AWS services on August 1st.
 
-> **Status**: All features currently run on local mocks (SQLite, local files).
-> No AWS connections are active or required until the hackathon starts.
+> **Status**: All features currently run on local mocks (SQLite, local files,
+> `FakeLanguageModel`). The LLM layer will use Gemini over plain HTTP as an
+> interim real-model path until Bedrock account access is confirmed; see
+> [ADR-0015](decisions/0015-narrow-llm-port-instead-of-agent-loop.md).
 
 ## How to Use This Guide
 
@@ -33,6 +35,14 @@ AWS_ACCOUNT_ID=
 
 # Bedrock (LLM)
 # BEDROCK_MODEL_ID=
+
+# Gemini (interim LLM before Bedrock access is confirmed).
+# Not an AWS variable, listed here so the LLM setup lives in one place.
+# Get a key from Google AI Studio: https://aistudio.google.com/apikey
+# Leave GEMINI_API_KEY empty and the backend falls back to an offline demo
+# implementation instead of failing to start.
+GEMINI_API_KEY=
+GEMINI_MODEL_ID=
 
 # AgentCore (if used)
 # AGENTCORE_AGENT_ID=
@@ -75,14 +85,99 @@ AWS_ACCOUNT_ID=
 
 | Item | Current (Local) | AWS Target |
 |------|----------------|------------|
-| LLM | Not yet implemented | Amazon Bedrock |
-| Files affected | TBD (agent runner, orchestration) | — |
+| LLM | Gemini over plain HTTP when `GEMINI_API_KEY` is set, offline demo otherwise | Amazon Bedrock Converse API |
+| Files affected | `backend/app/llm/port.py`, `fake.py`, `gemini.py`, `factory.py` | add `backend/app/llm/bedrock.py`, edit `factory.py` |
+| Endpoint in use | `POST /v1beta/interactions` (Gemini) | `Converse` (Bedrock) |
+
+**There is no `AgentRunner`.** ADR-0015 replaced it with a narrow port that has
+no tool loop, because both model tasks are single request/response and giving a
+model tool access would open a path for it to influence eligibility.
+An earlier version of this section referred to an `AgentRunner` in
+`backend/app/orchestration/`; that interface was never built and will not be.
+
+### What the swap has to preserve
+
+`LanguageModelPort` is the contract. It has one method:
+
+```python
+def generate_structured(self, request: LlmRequest) -> LlmResult: ...
+```
+
+A Bedrock-backed replacement must keep the same signature and the same failure
+modes, so nothing above it changes:
+
+| Behaviour | Must not change |
+|-----------|-----------------|
+| Failure type | `LanguageModelUnavailableError` for transport, auth, timeout, or missing credentials; `LanguageModelOutputError` when the reply is not a parseable JSON object |
+| Error content | Messages must never contain `user_content` or the model's raw reply. Those reach logs and error responses, which ADR-0007 forbids |
+| Return value | `LlmResult.payload` only, never the raw text |
+| Schema check | Call `validate_portable_schema()` before sending |
+| Sync | Stay synchronous. The endpoints and `state_machine.advance()` are sync; an async port would force the whole chain to change |
 
 ### Migration Steps
 
-1. TBD — model selection not yet decided.
-2. The `AgentRunner` interface in `backend/app/orchestration/` will wrap
-   Bedrock calls. Local development may use stubs or a local model.
+1. Add `boto3` to `backend/pyproject.toml` dependencies (currently not
+   installed).
+2. Create `backend/app/llm/bedrock.py` with a `BedrockLanguageModel` class
+   implementing `LanguageModelPort`. **Do not modify `port.py`.**
+3. Map `LlmRequest` onto the Converse API request:
+
+   | `LlmRequest` field | Converse API location |
+   |--------------------|-----------------------|
+   | `instruction`, `user_content` | `messages[].content[].text` (separate text blocks) |
+   | `output_schema` | `outputConfig.textFormat.structure.jsonSchema.schema` — **must be `json.dumps()`-ed into a string**, unlike Gemini which takes an object |
+   | `schema_name` | `outputConfig.textFormat.structure.jsonSchema.name` |
+   | `max_output_tokens`, `temperature` | `inferenceConfig` |
+
+4. Map the vendor stop reason onto `FinishReason`. Unknown values go to
+   `OTHER` — do not guess a meaning.
+5. Set `BEDROCK_MODEL_ID` and `AWS_REGION` in `.env`.
+6. Change the selection in `backend/app/llm/factory.py`. That function is the
+   only place that decides which implementation runs; `create_app()` calls it
+   once at startup and stores the result on `app.state.language_model`. Neither
+   the state machine nor the route handler changes.
+7. Keep `FakeLanguageModel` as the default for tests. Tests must not require
+   network access or credentials after the migration.
+
+### One request-shape difference that is easy to get wrong
+
+Gemini's Interactions API takes `input` as a **single string**, so
+`gemini.py` concatenates `instruction` and `user_content` with an explicit
+marker telling the model to treat the user's words as data, not instructions.
+
+Bedrock's Converse API takes a **list of content blocks**, so the Bedrock
+adapter should send them as two separate `text` blocks rather than
+concatenating. Keep the same "treat this as data" wording either way — it is a
+prompt-injection guard, not formatting.
+
+### Do not remove the Gemini adapter on migration day
+
+Keep `gemini.py` until Bedrock is confirmed working end to end. It is the only
+proven real-model path, and losing it would leave no fallback if the account,
+model access, or region turns out to be a problem mid-demo.
+
+### The JSON Schema subset is a hard constraint, already enforced
+
+Bedrock supports only a subset of JSON Schema Draft 2020-12. `port.py` enforces
+this at runtime with `validate_portable_schema()`, and the offline fake enforces
+it too, so violations surface during local development rather than on migration
+day.
+
+Not available: `minimum`, `maximum`, `multipleOf`, `minLength`, `maxLength`,
+recursive schemas, external `$ref`, and `additionalProperties` set to anything
+other than `false`. `enum` is available and is what this project actually needs.
+
+If a schema needs to change, keep it inside the allowlist in
+`port.ALLOWED_SCHEMA_KEYWORDS` rather than widening the allowlist.
+
+### Privacy note that survives the migration
+
+Sending user text to Gemini is an egress change recorded in ADR-0015. Moving to
+Bedrock changes who receives the text, not whether it is sent. The three
+structural rules stay the same either way: model-returned attributes go through
+the same privacy gate as user-submitted answers, the raw text is never stored or
+logged, and the explanation task's return type has no status field so it cannot
+alter a determination.
 
 ---
 

@@ -339,18 +339,19 @@
 - [ ] 14. 最終檢查點
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 15. （選擇性/加分）假的 AgentRunner（T20 提前）
-  - [ ] 15.1 建立 `backend/app/orchestration/agent_runner.py`
-    - 定義 `AgentRunner` Protocol（extract_life_event, explain_results）
-    - 實作 `FakeAgentRunner`：extract_life_event 回傳寫死的 `"spouse_death"`，explain_results 回傳空字串
-    - 在 state_machine.py 中的 UNDERSTAND_EVENT handler 預留呼叫 AgentRunner 的 seam
-    - _Requirements: 19.1（擴展）_
-
-  - [ ]* 15.2 撰寫 FakeAgentRunner 單元測試
-    - 測試 extract_life_event 回傳正確值
-    - 測試 explain_results 回傳空 dict
-    - 確保無 LLM 呼叫
-    - _Requirements: 17.2_
+- [x] 15. ~~（選擇性/加分）假的 AgentRunner（T20 提前）~~ **已作廢，改用 LLM port**
+  - **不要實作這一項。** 2026-07-30 的
+    [ADR-0015](../../../docs/decisions/0015-narrow-llm-port-instead-of-agent-loop.md)
+    決定不做 `AgentRunner`，因為那意味著給模型一個可以呼叫工具的迴圈 ——
+    而那是一條它可以影響資格判定的路（ADR-0003 明文禁止）。
+  - 實際做出來的東西在 `backend/app/llm/`：`port.py`（形狀與契約）、
+    `fake.py`（離線實作，`advance()` 的預設值）、`gemini.py`（真實 adapter）、
+    `factory.py`（有金鑰用真的、沒金鑰用示範）、
+    `tasks/resolve_life_event.py`（事件辨識）。
+  - 差別不只是改名：**`FakeLanguageModel` 刻意不回寫死的 `spouse_death`**。
+    沒登記答案就拋錯 —— 一個會「大概猜一下」的假實作會讓測試在真實模型接上之前
+    就通過，於是缺口被藏起來。寫死答案的版本在
+    `orchestration/demo_fixtures.demo_language_model()`，而且必須明確注入。
 
 - [ ] 16. 拆開 `schemas` ↔ `orchestration` 的循環依賴
   - **獨立 PR，不與本批混合**（擁有者明確要求）

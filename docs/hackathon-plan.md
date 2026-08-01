@@ -96,7 +96,7 @@ Demo 只需要**一個**「不符合」的時刻。四項都寫規則會吃掉�
 
 | 成員 | 進場前交付 | 現場角色 |
 |---|---|---|
-| **A(Will)** | Bedrock 權限驗證、`AgentRunner` 介面與 fallback stub、Strands 去留決定、demo 腳本 | 整合與除錯,不寫功能 |
+| **A(Will)** | Bedrock 權限驗證、Bedrock adapter（T28）、demo 腳本 | 整合與除錯,不寫功能 |
 | **B** | 問題卡、結果、引用、checklist 的畫面 | 前端與 demo 呈現 |
 | **C** | schema、狀態機、tools、API contract | 後端串接 |
 | **D** | `entitlement_graph/`、`benefits/`、`provisions/`、選定項目的 `rules/` 與 golden cases | 資料補漏 |
@@ -114,17 +114,26 @@ Demo 只需要**一個**「不符合」的時刻。四項都寫規則會吃掉�
 
 ### 2. 現場網路 / 服務失效
 
-準備 `AgentRunner` 的 stub 實作,使用預錄的萃取結果。
+**這一項已經備好了,不需要現場做。** 把 `GEMINI_API_KEY` 留空,後端就會自動落回
+不連網路的示範實作(`app/llm/factory.py`),事件辨識回一個寫死的代號。
 
 因為資格判定在規則引擎、資料在本機 JSON,**沒有模型也能跑完整條流程**——
 [positioning.md](positioning.md) 的「移除 LLM 系統仍可運作」正好就是 demo 保險。
-真的用上時應誠實說明。
+真的用上時應誠實說明:回應裡的 `implementation.pending` 會帶著
+`life_event_extraction`,啟動紀錄也會記 `model_id: demo_fixture`。
 
-### 3. Strands 增加一層不確定性
+### 3. 模型供應商的不確定性
 
-[ADR-0004](decisions/0004-trial-strands-agent-runner.md) 已定退出條件。
-**給 spike 一個截止日**;逾期未能穩定限制工具與產生結構化輸出,即改用
-Bedrock API 直呼。現場才發現是最糟的情況。
+**已經不是 Strands 的問題了。** 2026-07-30 改用窄的 LLM port
+([ADR-0015](decisions/0015-narrow-llm-port-instead-of-agent-loop.md)),
+沒有 agent 迴圈也沒有第三方 agent 框架,所以那一層不確定性消失了。
+
+現在的不確定性只有一個:**Bedrock 帳號權限**。目前跑的是自己的 Gemini 金鑰
+(`gemma-4-31b-it`,已實測)。Bedrock adapter(T28)還沒寫,遷移步驟寫在
+[AWS 遷移指南](aws_migration_guide.md)。
+
+**遷移那天不要刪掉 Gemini adapter** —— 它是唯一驗證過的真實模型路徑,
+如果現場帳號或模型出問題,那是唯一的退路。
 
 ### 4. 現場整合爆炸
 

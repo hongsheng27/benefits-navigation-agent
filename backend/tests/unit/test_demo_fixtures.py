@@ -13,6 +13,7 @@ from app.orchestration.demo_fixtures import (
     DEMO_ITEM_ID,
     DemoEntitlementGraphRepository,
     demo_eligibility_service,
+    demo_language_model,
 )
 from app.orchestration.session_store import InMemorySessionStore
 from app.orchestration.state import AmountPeriod, ItemStatus, SessionState
@@ -27,17 +28,17 @@ from app.schemas.session import (
 def _run_to_determination(*, with_demo: bool) -> SessionState:
     """跑完整條流程直到判定完成，回傳最後的狀態。
 
-    `with_demo=False` 時完全不傳接縫，走的就是正式預設值 —— 這樣第三個測試才真的在
-    測預設行為，而不是測一組我們自己組出來的參數。
+    `with_demo=False` 時只注入語言模型，其餘接縫全部走正式預設值 —— 這樣第三個測試
+    才真的在測預設的判定行為，而不是測一組我們自己組出來的參數。
+
+    語言模型**兩種情況都要注入**，因為 `advance()` 的預設模型沒有登記任何答案，
+    事件辨識會失敗，流程根本走不到判定那一步。這裡注入等於明講一個假設：
+    「假設模型把這段描述辨識成配偶過世」。那個假設本身不是這個測試要驗證的東西。
     """
-    seams = (
-        {
-            "entitlement_repository": DemoEntitlementGraphRepository(),
-            "eligibility_service": demo_eligibility_service(),
-        }
-        if with_demo
-        else {}
-    )
+    seams: dict = {"language_model": demo_language_model()}
+    if with_demo:
+        seams["entitlement_repository"] = DemoEntitlementGraphRepository()
+        seams["eligibility_service"] = demo_eligibility_service()
 
     state = InMemorySessionStore().create()
     state = advance(state, LifeEventTextInput(text="配偶過世"), **seams)
