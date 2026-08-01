@@ -1,19 +1,16 @@
 /**
  * 正式諮詢 UI 的唯讀示範腳本。
  *
- * 用「配偶過世」走完 landing → 描述 → 確認 → 問題 → 結果，
- * 不呼叫後端，也不讓使用者改答案。
+ * 每個案例都走完 landing → 描述 → 確認 → 問題 → 結果，
+ * 不呼叫後端，也不讓使用者改答案。這些結果只是前端示範資料，
+ * 不代表 deterministic eligibility rules 已完成判定。
  */
 
 import type { AttributeValue, SessionSnapshot } from "../types/session";
 
 /** 與正式諮詢 HomePageAlt 的步驟一致。 */
 export type IntakeDemoStep =
-  | "landing"
-  | "describe"
-  | "confirm"
-  | "questions"
-  | "result";
+  "landing" | "describe" | "confirm" | "questions" | "result";
 
 export type IntakeDemoScene = {
   step: IntakeDemoStep;
@@ -25,26 +22,46 @@ export type IntakeDemoScene = {
   answers?: Record<string, AttributeValue>;
 };
 
-const DEMO_BASE: Omit<
-  SessionSnapshot,
-  "workflowState" | "lifeEvent" | "attributes" | "items" | "questionGroups" | "stepIndex"
-> = {
-  sessionId: "sess_demo_walkthrough",
-  stepTotal: 8,
-  exitReason: null,
-  referralRequested: false,
-  isProcessing: false,
-  collectorQuestion: null,
-  createdAt: "2026-08-01T00:00:00Z",
-  expiresAt: "2026-08-01T02:00:00Z",
-  implementation: {
-    isMock: true,
-    pending: ["rule_evaluation"],
-    placeholderNotice: "示範資料",
-  },
+export type IntakeDemoCaseId = "spouse_death" | "occupational_injury_care";
+
+export type IntakeDemoCase = {
+  id: IntakeDemoCaseId;
+  title: string;
+  summary: string;
+  scenes: readonly IntakeDemoScene[];
 };
 
-const QUESTION_GROUPS: SessionSnapshot["questionGroups"] = [
+function createDemoBase(
+  sessionId: string,
+): Omit<
+  SessionSnapshot,
+  | "workflowState"
+  | "lifeEvent"
+  | "attributes"
+  | "items"
+  | "questionGroups"
+  | "stepIndex"
+> {
+  return {
+    sessionId,
+    stepTotal: 8,
+    exitReason: null,
+    referralRequested: false,
+    isProcessing: false,
+    collectorQuestion: null,
+    createdAt: "2026-08-01T00:00:00Z",
+    expiresAt: "2026-08-01T02:00:00Z",
+    implementation: {
+      isMock: true,
+      pending: ["rule_evaluation"],
+      placeholderNotice: "示範資料",
+    },
+  };
+}
+
+const SPOUSE_DEMO_BASE = createDemoBase("sess_demo_spouse_death");
+
+const SPOUSE_QUESTION_GROUPS: SessionSnapshot["questionGroups"] = [
   {
     topicId: "location",
     groupIndex: 1,
@@ -103,7 +120,7 @@ const QUESTION_GROUPS: SessionSnapshot["questionGroups"] = [
   },
 ];
 
-const RESULT_ITEMS: SessionSnapshot["items"] = [
+const SPOUSE_RESULT_ITEMS: SessionSnapshot["items"] = [
   {
     itemId: "death_registration",
     kind: "administrative",
@@ -145,8 +162,7 @@ const RESULT_ITEMS: SessionSnapshot["items"] = [
   },
 ];
 
-export const DEMO_DESCRIPTION =
-  "配偶過世一個月了，想確認還有哪些給付來得及申請。";
+export const DEMO_DESCRIPTION = "配偶過世一個月了，想確認還有哪些給付來得及申請。";
 
 export const DEMO_ANSWERS: Record<string, AttributeValue> = {
   applicant_jurisdiction: "TPE",
@@ -154,7 +170,7 @@ export const DEMO_ANSWERS: Record<string, AttributeValue> = {
   has_dependent_children: true,
 };
 
-export const INTAKE_DEMO_SCENES: readonly IntakeDemoScene[] = [
+const SPOUSE_DEMO_SCENES: readonly IntakeDemoScene[] = [
   {
     step: "landing",
     narration: "接下來用「配偶過世」這個例子，帶你看正式諮詢會經過哪些畫面。",
@@ -170,7 +186,7 @@ export const INTAKE_DEMO_SCENES: readonly IntakeDemoScene[] = [
     step: "confirm",
     narration: "系統會先說出它理解的情況，請你確認對不對，避免後面問到不相干的問題。",
     snapshot: {
-      ...DEMO_BASE,
+      ...SPOUSE_DEMO_BASE,
       workflowState: "understand_event",
       stepIndex: 2,
       lifeEvent: "spouse_death",
@@ -181,29 +197,368 @@ export const INTAKE_DEMO_SCENES: readonly IntakeDemoScene[] = [
   },
   {
     step: "questions",
-    narration: "確認後只會問判斷資格真正需要的問題。示範已選好答案，正式時由你自己回答。",
+    narration:
+      "確認後只會問判斷資格真正需要的問題。示範已選好答案，正式時由你自己回答。",
     answers: DEMO_ANSWERS,
     snapshot: {
-      ...DEMO_BASE,
+      ...SPOUSE_DEMO_BASE,
       workflowState: "collect_missing_fields",
       stepIndex: 3,
       lifeEvent: "spouse_death",
       attributes: DEMO_ANSWERS,
       items: [],
-      questionGroups: QUESTION_GROUPS,
+      questionGroups: SPOUSE_QUESTION_GROUPS,
     },
   },
   {
     step: "result",
     narration: "最後會整理可能相關的補助與手續。正式結果仍需向承辦單位確認。",
     snapshot: {
-      ...DEMO_BASE,
+      ...SPOUSE_DEMO_BASE,
       workflowState: "explain_result",
       stepIndex: 6,
       lifeEvent: "spouse_death",
       attributes: DEMO_ANSWERS,
-      items: RESULT_ITEMS,
+      items: SPOUSE_RESULT_ITEMS,
       questionGroups: [],
     },
   },
 ] as const;
+
+const CARE_DEMO_BASE: Omit<
+  SessionSnapshot,
+  | "workflowState"
+  | "lifeEvent"
+  | "attributes"
+  | "items"
+  | "questionGroups"
+  | "stepIndex"
+> = {
+  ...createDemoBase("sess_demo_occupational_injury_care"),
+  implementation: {
+    isMock: true,
+    pending: ["rule_evaluation", "official_citations", "action_plan"],
+    placeholderNotice: "示範資料",
+  },
+};
+
+const CARE_QUESTION_GROUPS: SessionSnapshot["questionGroups"] = [
+  {
+    topicId: "care_relationship",
+    groupIndex: 1,
+    groupTotal: 4,
+    questions: [
+      {
+        fieldId: "caregiver_relationship",
+        valueKind: "code",
+        optionIds: [
+          "relationship_spouse",
+          "relationship_child",
+          "relationship_parent",
+          "relationship_other_relative",
+        ],
+        required: true,
+        purposeId: "caregiver_relationship.purpose",
+        unlocksItemIds: ["caregiver_support_services"],
+      },
+    ],
+  },
+  {
+    topicId: "occupational_injury_and_insurance",
+    groupIndex: 2,
+    groupTotal: 4,
+    questions: [
+      {
+        fieldId: "disability_cause",
+        valueKind: "code",
+        optionIds: [
+          "cause_occupational_injury",
+          "cause_general_accident",
+          "cause_illness",
+          "unsure",
+        ],
+        required: true,
+        purposeId: "disability_cause.purpose",
+        unlocksItemIds: [
+          "occupational_injury_recognition_follow_up",
+          "occupational_accident_disability_benefit",
+        ],
+      },
+      {
+        fieldId: "occupational_injury_recognition",
+        valueKind: "code",
+        optionIds: [
+          "injury_recognized",
+          "recognition_processing",
+          "recognition_not_applied",
+          "unsure",
+        ],
+        required: true,
+        purposeId: "occupational_injury_recognition.purpose",
+        unlocksItemIds: [
+          "occupational_injury_recognition_follow_up",
+          "occupational_accident_disability_benefit",
+        ],
+      },
+      {
+        fieldId: "care_recipient_insurance_type",
+        valueKind: "code",
+        optionIds: [
+          "labor_insurance",
+          "occupational_accident_insurance",
+          "no_insurance",
+          "unsure",
+        ],
+        required: true,
+        purposeId: "care_recipient_insurance_type.purpose",
+        unlocksItemIds: ["occupational_accident_disability_benefit"],
+      },
+    ],
+  },
+  {
+    topicId: "disability_and_long_term_care",
+    groupIndex: 3,
+    groupTotal: 4,
+    questions: [
+      {
+        fieldId: "disability_assessment_status",
+        valueKind: "code",
+        optionIds: [
+          "disability_certificate_obtained",
+          "disability_assessment_in_progress",
+          "disability_assessment_not_applied",
+          "unsure",
+        ],
+        required: true,
+        purposeId: "disability_assessment_status.purpose",
+        unlocksItemIds: ["disability_assessment", "long_term_care_assessment"],
+      },
+    ],
+  },
+  {
+    topicId: "caregiver_situation",
+    groupIndex: 4,
+    groupTotal: 4,
+    questions: [
+      {
+        fieldId: "current_care_arrangement",
+        valueKind: "code",
+        optionIds: [
+          "care_mostly_solo",
+          "care_shared_by_family",
+          "hired_caregiver",
+          "care_not_arranged",
+        ],
+        required: true,
+        purposeId: "current_care_arrangement.purpose",
+        unlocksItemIds: ["caregiver_support_services", "caregiver_support_contact"],
+      },
+      {
+        fieldId: "caregiver_employment_impact",
+        valueKind: "code",
+        optionIds: [
+          "left_job",
+          "reduced_hours",
+          "no_employment_change",
+          "considering_employment_change",
+        ],
+        required: true,
+        purposeId: "caregiver_employment_impact.purpose",
+        unlocksItemIds: ["caregiver_employment_support"],
+      },
+    ],
+  },
+];
+
+const CARE_RESULT_ITEMS: SessionSnapshot["items"] = [
+  {
+    itemId: "occupational_injury_recognition_follow_up",
+    kind: "administrative",
+    status: "needs_human_review",
+    missingFieldIds: [],
+    decisiveConditions: [],
+    citations: [],
+    amountMin: null,
+    amountMax: null,
+    amountPeriod: null,
+    amountCurrency: null,
+    explanation:
+      "職災認定仍在申請中，可先確認案件進度與後續需要補交的資料；app 不收公司或事故細節。",
+  },
+  {
+    itemId: "occupational_accident_disability_benefit",
+    kind: "benefit",
+    status: "needs_human_review",
+    missingFieldIds: [],
+    decisiveConditions: [],
+    citations: [],
+    amountMin: null,
+    amountMax: null,
+    amountPeriod: null,
+    amountCurrency: null,
+    explanation:
+      "父親有職災保險，但是否符合失能給付仍須依職災認定、診斷與失能程度由承辦機關確認。",
+  },
+  {
+    itemId: "disability_assessment",
+    kind: "administrative",
+    status: "needs_human_review",
+    missingFieldIds: [],
+    decisiveConditions: [],
+    citations: [],
+    amountMin: null,
+    amountMax: null,
+    amountPeriod: null,
+    amountCurrency: null,
+    explanation:
+      "目前還沒申請身心障礙鑑定，可先向所在地公所或醫療院所確認辦理流程；app 只列文件，不收證件。",
+  },
+  {
+    itemId: "long_term_care_assessment",
+    kind: "administrative",
+    status: "needs_human_review",
+    missingFieldIds: [],
+    decisiveConditions: [],
+    citations: [],
+    amountMin: null,
+    amountMax: null,
+    amountPeriod: null,
+    amountCurrency: null,
+    explanation:
+      "可聯絡 1966 詢問長照需求評估；實際適用服務仍需由照管單位依最新政策與評估結果確認。",
+  },
+  {
+    itemId: "caregiver_support_services",
+    kind: "benefit",
+    status: "needs_human_review",
+    missingFieldIds: [],
+    decisiveConditions: [],
+    citations: [],
+    amountMin: null,
+    amountMax: null,
+    amountPeriod: null,
+    amountCurrency: null,
+    explanation:
+      "你目前幾乎獨力照顧，可進一步詢問喘息服務與家庭照顧者支持；是否適用仍需依照顧安排評估。",
+  },
+  {
+    itemId: "caregiver_employment_support",
+    kind: "benefit",
+    status: "needs_human_review",
+    missingFieldIds: [],
+    decisiveConditions: [],
+    citations: [],
+    amountMin: null,
+    amountMax: null,
+    amountPeriod: null,
+    amountCurrency: null,
+    explanation:
+      "你已因照顧減少工時，可再確認工作安排、就業服務或其他照顧者就業支持方向。",
+  },
+  {
+    itemId: "caregiver_support_contact",
+    kind: "administrative",
+    status: "needs_human_review",
+    missingFieldIds: [],
+    decisiveConditions: [],
+    citations: [],
+    amountMin: null,
+    amountMax: null,
+    amountPeriod: null,
+    amountCurrency: null,
+    explanation:
+      "不必等所有資格確認完才求助；需要有人一起釐清時，可先聯絡 1966 或所在地家庭照顧者支持窗口。",
+  },
+];
+
+export const CARE_DEMO_DESCRIPTION =
+  "爸爸在工作中發生重大事故後失能，現在需要長期照顧。我一邊工作、一邊照顧兩歲的小孩，最近也因為照顧爸爸減少工時，不知道職災、身障和長照該先辦哪一個。";
+
+export const CARE_DEMO_ANSWERS: Record<string, AttributeValue> = {
+  caregiver_relationship: "relationship_child",
+  disability_cause: "cause_occupational_injury",
+  occupational_injury_recognition: "recognition_processing",
+  care_recipient_insurance_type: "occupational_accident_insurance",
+  disability_assessment_status: "disability_assessment_not_applied",
+  current_care_arrangement: "care_mostly_solo",
+  caregiver_employment_impact: "reduced_hours",
+};
+
+const CARE_DEMO_SCENES: readonly IntakeDemoScene[] = [
+  {
+    step: "landing",
+    narration:
+      "接下來用「父親職災失能」這個例子，看系統如何同時整理被照顧者與照顧者的方向。",
+    snapshot: null,
+  },
+  {
+    step: "describe",
+    narration:
+      "正式使用時，只要描述照顧處境；不需要填公司、確切日期或事故經過。示範已預先填好。",
+    description: CARE_DEMO_DESCRIPTION,
+    snapshot: null,
+  },
+  {
+    step: "confirm",
+    narration:
+      "系統先確認主要事件是職業災害；確認後，後續問題會同時涵蓋父親與照顧者本人。",
+    snapshot: {
+      ...CARE_DEMO_BASE,
+      workflowState: "understand_event",
+      stepIndex: 2,
+      lifeEvent: "occupational_injury",
+      attributes: {},
+      items: [],
+      questionGroups: [],
+    },
+  },
+  {
+    step: "questions",
+    narration:
+      "只追問資格與服務方向真正需要的七個去識別化欄位，不詢問公司、姓名或受傷細節。",
+    answers: CARE_DEMO_ANSWERS,
+    snapshot: {
+      ...CARE_DEMO_BASE,
+      workflowState: "collect_missing_fields",
+      stepIndex: 3,
+      lifeEvent: "occupational_injury",
+      attributes: CARE_DEMO_ANSWERS,
+      items: [],
+      questionGroups: CARE_QUESTION_GROUPS,
+    },
+  },
+  {
+    step: "result",
+    narration:
+      "最後分成父親與照顧者兩條線整理方向；這仍是示範，不代表資格規則已完成判定。",
+    snapshot: {
+      ...CARE_DEMO_BASE,
+      workflowState: "explain_result",
+      stepIndex: 6,
+      lifeEvent: "occupational_injury",
+      attributes: CARE_DEMO_ANSWERS,
+      items: CARE_RESULT_ITEMS,
+      questionGroups: [],
+    },
+  },
+] as const;
+
+export const DEFAULT_INTAKE_DEMO_CASE_ID: IntakeDemoCaseId = "spouse_death";
+
+export const INTAKE_DEMO_CASES: readonly IntakeDemoCase[] = [
+  {
+    id: "spouse_death",
+    title: "配偶過世",
+    summary: "查看喪親後可能要辦的手續與給付。",
+    scenes: SPOUSE_DEMO_SCENES,
+  },
+  {
+    id: "occupational_injury_care",
+    title: "父親職災失能",
+    summary: "同時整理父親的申請方向與照顧者本人的支持。",
+    scenes: CARE_DEMO_SCENES,
+  },
+] as const;
+
+/** 保留既有 export，讓原本只使用第一案例的程式與測試繼續運作。 */
+export const INTAKE_DEMO_SCENES = SPOUSE_DEMO_SCENES;
