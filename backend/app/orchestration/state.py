@@ -213,6 +213,9 @@ class CandidateItem(BaseModel):
     kind: ItemKind  # 福利或行政事項
     status: ItemStatus = ItemStatus.PENDING  # 這個項目自己的狀態，與其他項目無關
 
+    # 複合情境展開時，此項目來自哪些 life_event（用於結果分區）。
+    source_life_events: tuple[str, ...] = ()
+
     # 資料層對這筆方案資料的治理狀態，決定 runtime 敢對它做到什麼程度
     # （閘門實作見 `determination.py`）。這不是使用者的判定結果 —— `status` 才是。
     #

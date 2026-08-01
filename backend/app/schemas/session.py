@@ -330,6 +330,7 @@ class ItemView(_View):
     amount_currency: str | None = None
 
     explanation: str | None = None
+    source_life_events: tuple[str, ...] = ()
 
 
 class QuestionView(_View):
@@ -477,6 +478,7 @@ class SessionSnapshot(_View):
                     amount_period=item.amount_period,
                     amount_currency=item.amount_currency,
                     explanation=item.explanation,
+                    source_life_events=item.source_life_events,
                 )
                 for item in state.items
             ),

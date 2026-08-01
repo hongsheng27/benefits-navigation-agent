@@ -17,9 +17,77 @@
       "purpose": "所在縣市決定有哪些地方型補助與受理窗口可對照",
       "used_by": [
         "funeral_benefit",
-        "survivor_pension"
+        "survivor_pension",
+        "occupational_injury_recognition",
+        "unemployment_benefit"
       ],
       "topic_id": "location",
+      "status": "draft"
+    },
+    {
+      "field_id": "care_relationship",
+      "value_kind": "code",
+      "option_ids": [
+        "spouse",
+        "child",
+        "parent",
+        "other_relative",
+        "unsure"
+      ],
+      "required": true,
+      "purpose": "代辦與請領資格依親屬關係認定",
+      "used_by": [
+        "occupational_injury_recognition",
+        "occupational_disability_benefit",
+        "disability_assessment"
+      ],
+      "topic_id": "care_relationship",
+      "status": "draft"
+    },
+    {
+      "field_id": "disability_cause",
+      "value_kind": "code",
+      "option_ids": [
+        "occupational_injury",
+        "accident",
+        "illness",
+        "unsure"
+      ],
+      "required": true,
+      "purpose": "職災與一般傷病走不同給付路徑",
+      "used_by": [
+        "occupational_injury_recognition",
+        "occupational_disability_benefit"
+      ],
+      "topic_id": "injury_context",
+      "status": "draft"
+    },
+    {
+      "field_id": "occupational_recognition_status",
+      "value_kind": "code",
+      "option_ids": [
+        "recognized",
+        "applying",
+        "not_started",
+        "unsure"
+      ],
+      "required": true,
+      "purpose": "職災給付以認定為前提；尚未認定時第一步是申請認定",
+      "used_by": [
+        "occupational_injury_recognition",
+        "occupational_disability_benefit"
+      ],
+      "topic_id": "injury_context",
+      "status": "draft"
+    },
+    {
+      "field_id": "involuntary_job_loss",
+      "value_kind": "boolean",
+      "option_ids": [],
+      "required": true,
+      "purpose": "非自願離職才是失業給付常見門檻之一",
+      "used_by": ["unemployment_benefit"],
+      "topic_id": "employment_status",
       "status": "draft"
     },
     {

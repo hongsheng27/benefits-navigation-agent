@@ -282,6 +282,55 @@ _FIXTURE_ITEMS_BY_EVENT: dict[str, tuple[CandidateItem, ...]] = {
             produces=(),
         ),
     ),
+    "occupational_injury": (
+        CandidateItem(
+            item_id="occupational_injury_recognition",
+            display_name="職業災害認定申請",
+            program_status="candidate",
+            relevance_score=None,
+            missing_field_ids=(),
+            prerequisites=(),
+            produces=(),
+        ),
+        CandidateItem(
+            item_id="occupational_disability_benefit",
+            display_name="職災失能／傷病給付（示意）",
+            program_status="candidate",
+            relevance_score=None,
+            missing_field_ids=(),
+            prerequisites=(),
+            produces=(),
+        ),
+        CandidateItem(
+            item_id="disability_assessment",
+            display_name="身心障礙鑑定",
+            program_status="candidate",
+            relevance_score=None,
+            missing_field_ids=(),
+            prerequisites=(),
+            produces=(),
+        ),
+    ),
+    "job_loss": (
+        CandidateItem(
+            item_id="unemployment_benefit",
+            display_name="失業給付",
+            program_status="candidate",
+            relevance_score=None,
+            missing_field_ids=(),
+            prerequisites=(),
+            produces=(),
+        ),
+        CandidateItem(
+            item_id="employment_service",
+            display_name="就業服務／職訓諮詢",
+            program_status="candidate",
+            relevance_score=None,
+            missing_field_ids=(),
+            prerequisites=(),
+            produces=(),
+        ),
+    ),
 }
 
 # 制度 → 方案代號。制度分類屬於資料層，這裡只是離線示範。
