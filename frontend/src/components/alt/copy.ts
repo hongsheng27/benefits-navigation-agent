@@ -175,8 +175,7 @@ export const LIFE_EVENT_CATALOG: readonly LifeEventCopy[] = [
     eventId: "special_family_circumstances",
     label: "特殊境遇家庭",
     category: "生育與家庭",
-    examplePrompt:
-      "家庭遇到喪偶、離婚或配偶入獄等特殊情況，想確認特殊境遇家庭扶助。",
+    examplePrompt: "家庭遇到喪偶、離婚或配偶入獄等特殊情況，想確認特殊境遇家庭扶助。",
   },
 
   // —— 居住與災害 ——
@@ -242,7 +241,7 @@ const LIFE_EVENT_NAMES: Record<string, string> = Object.fromEntries(
   LIFE_EVENT_CATALOG.map((entry) => [entry.eventId, entry.label]),
 );
 
-/** 候選項目。目前是離線示範資料的四筆。 */
+/** 候選項目的前端顯示名稱。 */
 const ITEM_NAMES: Record<string, string> = {
   death_registration: "死亡登記",
   funeral_benefit: "喪葬給付",
@@ -253,6 +252,13 @@ const ITEM_NAMES: Record<string, string> = {
   new_taipei_green_funeral_incentive: "新北市環保葬鼓勵金",
   taoyuan_green_funeral_incentive: "桃園市環保葬鼓勵金",
   penghu_green_funeral_subsidy: "澎湖縣多元環保葬補助",
+  occupational_injury_recognition_follow_up: "追蹤職業災害認定",
+  occupational_accident_disability_benefit: "職災保險失能給付",
+  disability_assessment: "身心障礙鑑定",
+  long_term_care_assessment: "長照需求評估",
+  caregiver_support_services: "家庭照顧者支持與喘息服務",
+  caregiver_employment_support: "照顧者就業支持",
+  caregiver_support_contact: "支持專線與人工協助",
 };
 
 /** 資格欄位的題目文字。 */
@@ -261,16 +267,34 @@ const FIELD_LABELS: Record<string, string> = {
   deceased_insurance_type: "過世者生前的投保身分是？",
   has_dependent_children: "家中是否有未成年子女？",
   applicant_age_band: "你目前的年齡大約在哪個範圍？",
+  caregiver_relationship: "你和需要照顧的人是什麼關係？",
+  disability_cause: "造成失能的原因是？",
+  occupational_injury_recognition: "是否已經取得職業災害認定？",
+  care_recipient_insurance_type: "父親受傷前的投保身分是？",
+  disability_assessment_status: "是否已經完成身心障礙鑑定？",
+  current_care_arrangement: "目前主要由誰照顧？",
+  caregiver_employment_impact: "你是否因照顧而請假、減少工時或離職？",
 };
 
 /** 「為什麼問這個？」的說明。後端的 purposeId 形狀是 `<fieldId>.purpose`。 */
 const PURPOSE_TEXTS: Record<string, string> = {
-  "applicant_jurisdiction.purpose":
-    "所在縣市決定有哪些地方型補助與受理窗口可以對照。",
-  "deceased_insurance_type.purpose":
-    "不同投保身分，受理機關與可申請的給付不一樣。",
+  "applicant_jurisdiction.purpose": "所在縣市決定有哪些地方型補助與受理窗口可以對照。",
+  "deceased_insurance_type.purpose": "不同投保身分，受理機關與可申請的給付不一樣。",
   "has_dependent_children.purpose": "有沒有未成年子女，會影響遺屬年金是否加給。",
-  "applicant_age_band.purpose": "遺屬年金依年齡有不同規定，我們需要大致了解你的年齡區間。",
+  "applicant_age_band.purpose":
+    "遺屬年金依年齡有不同規定，我們需要大致了解你的年齡區間。",
+  "caregiver_relationship.purpose": "代辦與部分請領資格會依親屬關係認定。",
+  "disability_cause.purpose":
+    "職業災害與一般意外或疾病的受理機關、申請路徑及給付不同。",
+  "occupational_injury_recognition.purpose":
+    "職災相關給付通常需要確認認定狀態；這裡不詢問公司或事故經過。",
+  "care_recipient_insurance_type.purpose": "投保身分會影響可能的給付與受理機關。",
+  "disability_assessment_status.purpose":
+    "鑑定進度會影響身障服務與部分照顧資源接續時的辦理順序。",
+  "current_care_arrangement.purpose":
+    "目前的分工會影響喘息服務與家庭照顧者支持的評估方向。",
+  "caregiver_employment_impact.purpose":
+    "工作是否已受影響，會決定是否同時整理照顧者就業支持方向。",
 };
 
 /** 選項文字。boolean 欄位沒有 optionIds，由畫面自己給「是／否」。 */
@@ -290,6 +314,29 @@ const OPTION_LABELS: Record<string, string> = {
   "25_to_55": "25 至 55 歲",
   "55_to_65": "55 至 65 歲",
   "65_or_above": "65 歲以上",
+  relationship_spouse: "配偶",
+  relationship_child: "子女",
+  relationship_parent: "父母",
+  relationship_other_relative: "其他親屬",
+  cause_occupational_injury: "職業災害（工作中發生）",
+  cause_general_accident: "一般意外",
+  cause_illness: "疾病（如中風）",
+  injury_recognized: "已認定",
+  recognition_processing: "申請中",
+  recognition_not_applied: "還沒申請",
+  occupational_accident_insurance: "職災保險",
+  no_insurance: "無",
+  disability_certificate_obtained: "已取得身障證明",
+  disability_assessment_in_progress: "鑑定中",
+  disability_assessment_not_applied: "還沒申請",
+  care_mostly_solo: "我幾乎全天獨力照顧",
+  care_shared_by_family: "家人輪流分擔",
+  hired_caregiver: "已聘僱看護",
+  care_not_arranged: "還沒安排",
+  left_job: "已離職",
+  reduced_hours: "減少工時",
+  no_employment_change: "沒有",
+  considering_employment_change: "還在考慮",
 };
 
 /** 問題分組的標題。 */
@@ -298,7 +345,38 @@ const TOPIC_TITLES: Record<string, string> = {
   deceased_insurance: "過世者的投保狀況",
   family_situation: "家庭狀況",
   applicant_situation: "你的狀況",
+  care_relationship: "你與被照顧者",
+  occupational_injury_and_insurance: "職災與投保狀況",
+  disability_and_long_term_care: "失能與長照銜接",
+  caregiver_situation: "照顧者本人的狀況",
 };
+
+/** 第二個 demo 用前端映射呈現雙線，不改動後端 ItemView contract。 */
+export type ResultAudience = "care_recipient" | "caregiver";
+
+const ITEM_AUDIENCES: Partial<Record<string, ResultAudience>> = {
+  occupational_injury_recognition_follow_up: "care_recipient",
+  occupational_accident_disability_benefit: "care_recipient",
+  disability_assessment: "care_recipient",
+  long_term_care_assessment: "care_recipient",
+  caregiver_support_services: "caregiver",
+  caregiver_employment_support: "caregiver",
+  caregiver_support_contact: "caregiver",
+};
+
+export function itemAudience(itemId: string): ResultAudience | null {
+  return ITEM_AUDIENCES[itemId] ?? null;
+}
+
+export function resultAudienceTitle(audience: ResultAudience): string {
+  return audience === "care_recipient" ? "給父親（被照顧者）" : "給你（照顧者）";
+}
+
+export function resultAudienceDescription(audience: ResultAudience): string {
+  return audience === "care_recipient"
+    ? "先把職災、失能與長照的辦理順序接起來。"
+    : "照顧者也可以使用支持、喘息與就業協助，不必一個人扛。";
+}
 
 /** 結果分區的標題。 */
 const STATUS_SECTION_TITLES: Record<ItemStatus, string> = {

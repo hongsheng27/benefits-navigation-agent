@@ -21,7 +21,12 @@ import { QuestionGroupList } from "../components/alt/QuestionGroupList";
 import { RelatedProvisionsPanel } from "../components/alt/RelatedProvisionsPanel";
 import { ResultList } from "../components/alt/ResultList";
 import { useBackendSession } from "../hooks/useBackendSession";
-import { INTAKE_DEMO_SCENES } from "../mocks/intakeDemoScript";
+import {
+  DEFAULT_INTAKE_DEMO_CASE_ID,
+  INTAKE_DEMO_CASES,
+  type IntakeDemoCase,
+  type IntakeDemoCaseId,
+} from "../mocks/intakeDemoScript";
 import type { PostConsultPanelKind } from "../types/postConsult";
 import type { SessionSnapshot } from "../types/session";
 import { MAX_LIFE_EVENT_TEXT_LENGTH } from "../types/session";
@@ -156,13 +161,7 @@ function StepProgress({ step }: { step: Exclude<IntakeUiStep, "landing"> }) {
   );
 }
 
-function ModeToggle({
-  mode,
-  onToggle,
-}: {
-  mode: IntakeMode;
-  onToggle: () => void;
-}) {
+function ModeToggle({ mode, onToggle }: { mode: IntakeMode; onToggle: () => void }) {
   return (
     <button
       type="button"
@@ -174,13 +173,7 @@ function ModeToggle({
   );
 }
 
-function BackLink({
-  disabled,
-  onBack,
-}: {
-  disabled?: boolean;
-  onBack: () => void;
-}) {
+function BackLink({ disabled, onBack }: { disabled?: boolean; onBack: () => void }) {
   return (
     <button
       type="button"
@@ -256,6 +249,8 @@ type IntakeStepsProps = {
   /** 回看稍早步驟時，禁止再送出以免打亂後端狀態。 */
   isReviewing?: boolean;
   demoAnswers?: Record<string, boolean | number | string>;
+  /** 純前端 demo 可選擇用服務對象分組結果，不會改動 API contract。 */
+  groupResultsByAudience?: boolean;
   /** 結果頁回看問題時使用（後端結果快照可能已清空 questionGroups）。 */
   cachedQuestionGroups?: SessionSnapshot["questionGroups"];
   onStart?: () => void;
@@ -285,6 +280,7 @@ function IntakeSteps({
   readOnly,
   isReviewing = false,
   demoAnswers,
+  groupResultsByAudience = false,
   cachedQuestionGroups = [],
   onStart,
   onSubmitDescribe,
@@ -304,6 +300,7 @@ function IntakeSteps({
   const [openPanel, setOpenPanel] = useState<PostConsultPanelKind | null>(null);
   const trimmed = description.trim();
   const actionsLocked = readOnly || isReviewing;
+  const hideDemoResultActions = readOnly && groupResultsByAudience;
   const canSubmit =
     !actionsLocked &&
     trimmed.length > 0 &&
@@ -601,9 +598,7 @@ function IntakeSteps({
             <div className="mt-6 rounded-sm border border-[#e0d8ca] bg-[#fdfbf7] px-4 py-6 text-[0.95rem] leading-[1.95] text-[#4a453d]">
               <p>
                 我們已記下這是「
-                {snapshot.lifeEvent
-                  ? lifeEventName(snapshot.lifeEvent)
-                  : "相關情況"}
+                {snapshot.lifeEvent ? lifeEventName(snapshot.lifeEvent) : "相關情況"}
                 」。
               </p>
               <p className="mt-3">
@@ -612,12 +607,15 @@ function IntakeSteps({
             </div>
           ) : (
             <div className="mt-6">
-              <ResultList snapshot={snapshot} />
+              <ResultList
+                snapshot={snapshot}
+                groupByAudience={groupResultsByAudience}
+              />
             </div>
           )}
 
           <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            {!isReviewing ? (
+            {!isReviewing && !hideDemoResultActions ? (
               <>
                 <button
                   type="button"
@@ -635,7 +633,7 @@ function IntakeSteps({
                 </button>
               </>
             ) : null}
-            {onGoToTracking && !isReviewing ? (
+            {onGoToTracking && !isReviewing && !hideDemoResultActions ? (
               <button
                 type="button"
                 onClick={() => onGoToTracking(snapshot.lifeEvent)}
@@ -751,6 +749,65 @@ function DemoNavBar({
   );
 }
 
+function DemoCaseSelector({
+  cases,
+  selectedId,
+  onSelect,
+}: {
+  cases: readonly IntakeDemoCase[];
+  selectedId: IntakeDemoCaseId;
+  onSelect: (caseId: IntakeDemoCaseId) => void;
+}) {
+  return (
+    <section
+      className="mb-10 border-b border-[#e0d8ca] pb-8"
+      aria-labelledby="demo-case-selector-title"
+    >
+      <h2
+        id="demo-case-selector-title"
+        className="text-[0.92rem] font-semibold tracking-[0.02em] text-[#2f4f45]"
+      >
+        選擇示範案例
+      </h2>
+      <p className="mt-1 text-[0.85rem] leading-[1.8] text-[#6b6459]">
+        兩個案例使用相同流程；切換後會從示範第一幕開始。
+      </p>
+      <div
+        className="mt-4 grid gap-3 sm:grid-cols-2"
+        role="group"
+        aria-label="示範案例"
+      >
+        {cases.map((demoCase, index) => {
+          const selected = demoCase.id === selectedId;
+          return (
+            <button
+              key={demoCase.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSelect(demoCase.id)}
+              className={`rounded-sm border px-4 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45] ${
+                selected
+                  ? "border-[#2f4f45] bg-[#eef2ef]"
+                  : "border-[#d8cfc0] bg-[#fffdfa] hover:border-[#8fa79c]"
+              }`}
+            >
+              <span className="block text-[0.76rem] tracking-[0.08em] text-[#6b6459]">
+                案例 {index + 1}
+              </span>
+              <span className="mt-1 block text-[0.95rem] font-semibold text-[#171513]">
+                {demoCase.title}
+              </span>
+              <span className="mt-1 block text-[0.82rem] leading-[1.7] text-[#6b6459]">
+                {demoCase.summary}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function HomePageDemo({
   onExitDemo,
   onToggleMode,
@@ -762,16 +819,28 @@ function HomePageDemo({
   onGoToTracking?: (lifeEventId: string | null) => void;
   hideBrandHeader?: boolean;
 }) {
+  const [selectedCaseId, setSelectedCaseId] = useState<IntakeDemoCaseId>(
+    DEFAULT_INTAKE_DEMO_CASE_ID,
+  );
   const [sceneIndex, setSceneIndex] = useState(0);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
-  const scene = INTAKE_DEMO_SCENES[sceneIndex];
-  const isLast = sceneIndex >= INTAKE_DEMO_SCENES.length - 1;
+  const selectedCase =
+    INTAKE_DEMO_CASES.find((demoCase) => demoCase.id === selectedCaseId) ??
+    INTAKE_DEMO_CASES[0];
+  const scenes = selectedCase.scenes;
+  const scene = scenes[sceneIndex];
+  const isLast = sceneIndex >= scenes.length - 1;
 
   useEffect(() => {
     if (scene.step !== "landing") {
       stepHeadingRef.current?.focus();
     }
-  }, [scene.step, sceneIndex]);
+  }, [scene.step, sceneIndex, selectedCaseId]);
+
+  function selectCase(caseId: IntakeDemoCaseId) {
+    setSelectedCaseId(caseId);
+    setSceneIndex(0);
+  }
 
   function exit() {
     onExitDemo?.();
@@ -793,31 +862,40 @@ function HomePageDemo({
         </div>
       }
       footerExtra={
-        <p className="text-[0.78rem] leading-[1.7] text-[#8b8377]">示範模式 · 不連線服務</p>
+        <p className="text-[0.78rem] leading-[1.7] text-[#8b8377]">
+          示範模式 · 不連線服務
+        </p>
       }
     >
+      {sceneIndex === 0 ? (
+        <DemoCaseSelector
+          cases={INTAKE_DEMO_CASES}
+          selectedId={selectedCaseId}
+          onSelect={selectCase}
+        />
+      ) : null}
       <IntakeSteps
+        key={selectedCase.id}
         uiStep={scene.step}
         snapshot={scene.snapshot ?? null}
         description={scene.description ?? ""}
         readOnly
         demoAnswers={scene.answers}
+        groupResultsByAudience={selectedCaseId === "occupational_injury_care"}
         stepHeadingRef={stepHeadingRef}
         onGoToTracking={onGoToTracking}
         onBack={
-          sceneIndex > 0
-            ? () => setSceneIndex((i) => Math.max(0, i - 1))
-            : undefined
+          sceneIndex > 0 ? () => setSceneIndex((i) => Math.max(0, i - 1)) : undefined
         }
       />
       <DemoNavBar
         sceneIndex={sceneIndex}
-        total={INTAKE_DEMO_SCENES.length}
+        total={scenes.length}
         narration={scene.narration}
         isLast={isLast}
         canGoBack={sceneIndex > 0}
         onBack={() => setSceneIndex((i) => Math.max(0, i - 1))}
-        onNext={() => setSceneIndex((i) => Math.min(i + 1, INTAKE_DEMO_SCENES.length - 1))}
+        onNext={() => setSceneIndex((i) => Math.min(i + 1, scenes.length - 1))}
         onSkip={exit}
         onFinish={exit}
       />
@@ -916,11 +994,7 @@ function HomePageLive({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = description.trim();
-    if (
-      trimmed.length === 0 ||
-      trimmed.length > MAX_LIFE_EVENT_TEXT_LENGTH ||
-      busy
-    ) {
+    if (trimmed.length === 0 || trimmed.length > MAX_LIFE_EVENT_TEXT_LENGTH || busy) {
       return;
     }
     await describeEvent(trimmed);
