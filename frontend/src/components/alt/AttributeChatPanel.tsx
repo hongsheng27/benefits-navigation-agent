@@ -41,8 +41,13 @@ type AttributeChatPanelProps = {
 };
 
 const RESULT_GATE_MESSAGE_ID = "result_gate";
+const BRIDGE_MESSAGE_ID = "bridge";
 const RESULT_GATE_PROMPT =
   "我們好像已經掌握夠多了。要先看看整理結果嗎？若你還有別的情況想說，也可以從頭再說明一次。";
+
+function bridgePrompt(situationLabel: string): string {
+  return `好，我們先以「${situationLabel}」往下整理。`;
+}
 
 function firstMissingQuestion(groups: QuestionGroupView[]): QuestionView | null {
   return groups[0]?.questions[0] ?? null;
@@ -109,17 +114,36 @@ export function AttributeChatPanel({
   );
   const currentFieldId = currentQuestion?.fieldId ?? null;
   const gateActive = resultGate !== null;
+  const skippedQuestions =
+    gateActive && groups.length === 0 && answeredCount === 0;
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [
-    {
-      id: "seed",
-      role: "assistant",
-      content: promptForField(
-        collectorQuestion,
-        firstMissingQuestion(groups)?.fieldId ?? null,
-      ),
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    // 確認後沒有追問時直接開閘門：先承接事件，再問要不要看結果。
+    if (resultGate && groups.length === 0) {
+      return [
+        {
+          id: BRIDGE_MESSAGE_ID,
+          role: "assistant",
+          content: bridgePrompt(resultGate.situationLabel),
+        },
+        {
+          id: RESULT_GATE_MESSAGE_ID,
+          role: "assistant",
+          content: RESULT_GATE_PROMPT,
+        },
+      ];
+    }
+    return [
+      {
+        id: "seed",
+        role: "assistant",
+        content: promptForField(
+          collectorQuestion,
+          firstMissingQuestion(groups)?.fieldId ?? null,
+        ),
+      },
+    ];
+  });
 
   const showChoiceChips =
     !gateActive &&
@@ -162,7 +186,7 @@ export function AttributeChatPanel({
   }, [collectorQuestion, currentFieldId, currentQuestion, busy, gateActive]);
 
   useEffect(() => {
-    if (!gateActive) {
+    if (!gateActive || !resultGate) {
       return;
     }
     setMode("chat");
@@ -175,14 +199,33 @@ export function AttributeChatPanel({
         if (
           last?.role === "assistant" &&
           last.id !== RESULT_GATE_MESSAGE_ID &&
+          last.id !== BRIDGE_MESSAGE_ID &&
           currentQuestion === null
         ) {
           return current.slice(0, -1);
         }
         return current;
       })();
+      const hasUserTurn = withoutTrailingEmptyAsk.some(
+        (message) => message.role === "user",
+      );
+      const hasBridge = withoutTrailingEmptyAsk.some(
+        (message) => message.id === BRIDGE_MESSAGE_ID,
+      );
+      // 從未進過問答時補承接句，避免只剩閘門像另開一頁。
+      const withBridge =
+        !hasUserTurn && !hasBridge
+          ? [
+              {
+                id: BRIDGE_MESSAGE_ID,
+                role: "assistant" as const,
+                content: bridgePrompt(resultGate.situationLabel),
+              },
+              ...withoutTrailingEmptyAsk,
+            ]
+          : withoutTrailingEmptyAsk;
       return [
-        ...withoutTrailingEmptyAsk,
+        ...withBridge,
         {
           id: RESULT_GATE_MESSAGE_ID,
           role: "assistant",
@@ -190,7 +233,7 @@ export function AttributeChatPanel({
         },
       ];
     });
-  }, [gateActive, currentQuestion]);
+  }, [gateActive, currentQuestion, resultGate]);
 
   async function submitChatText(text: string) {
     if (!text || disabled || readOnly || busy) {
@@ -263,7 +306,9 @@ export function AttributeChatPanel({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-[0.88rem] leading-[1.7] text-[#5c564e]">
           {gateActive
-            ? "問得差不多了。你可以先看整理結果，或從頭再說一次其他情況。"
+            ? skippedQuestions
+              ? "目前沒有要再問的細節。你可以先看整理結果，或從頭再說一次其他情況。"
+              : "問得差不多了。你可以先看整理結果，或從頭再說一次其他情況。"
             : showChoiceChips
               ? "可直接點選下方選項，或用自己的話打字。選項會寫成條件代號，不會用對話判定資格。"
               : "這題沒有固定選項，請用自己的話回答。我們會轉成條件代號，不會用對話判定資格。"}{" "}
