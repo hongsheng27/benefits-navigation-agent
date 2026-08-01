@@ -54,19 +54,29 @@ AWS_REGION = os.environ.get("AWS_REGION", "us-west-2")
 # Long-term care related URLs to fetch from each agency.
 # Format: (source_id, publisher_name, url, document_type, title_hint)
 LTC_URLS: list[tuple[str, str, str, str, str]] = [
-    # 衛生福利部 — 長照 2.0 核心政策頁面
+    # 衛生福利部 1966 長照專區
     ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/mp-201.html",
-     "benefit_page", "長照服務專線 1966"),
-    ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/cp-6456-69932-207.html",
+     "benefit_page", "長照服務專線 1966 首頁"),
+    ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/cp-6572-69919-207.html",
      "benefit_page", "長照十年計畫 2.0"),
-    ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/cp-6572-70882-207.html",
-     "application_page", "如何申請長照服務"),
-    ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/cp-6461-69937-207.html",
-     "benefit_page", "長照服務項目"),
-    ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/cp-6459-69935-207.html",
-     "benefit_page", "長照補助對象與額度"),
-    ("mohw", "衛生福利部", "https://www.mohw.gov.tw/cp-5201-69870-1.html",
-     "benefit_page", "衛福部長照政策專區"),
+    ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/cp-6533-70777-207.html",
+     "application_page", "申請長照服務（含服務對象、CMS 等級、給付額度及部分負擔）"),
+    ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/np-6449-207.html",
+     "benefit_page", "長照服務項目總覽"),
+    ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/cp-6451-69935-207.html",
+     "benefit_page", "居家服務、日間照顧、家庭托顧及小規模多機能"),
+    ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/lp-6457-207.html",
+     "benefit_page", "住宿式機構服務"),
+    ("mohw", "衛生福利部", "https://1966.gov.tw/LTC/np-6450-207.html",
+     "benefit_page", "照顧、交通、輔具與喘息四大給付分類"),
+    ("mohw", "衛生福利部", "https://www.mohw.gov.tw/cp-84-177-1.html",
+     "benefit_page", "衛福部長照專區"),
+
+    # 衛生福利部社會及家庭署
+    ("mohw", "衛生福利部社會及家庭署", "https://www.sfaa.gov.tw/sfaa/menus/5db",
+     "benefit_page", "老人福利"),
+    ("mohw", "衛生福利部社會及家庭署", "https://www.sfaa.gov.tw/sfaa/page/5e9",
+     "benefit_page", "身心障礙福利簡介"),
 
     # 勞動部 — 外籍看護、長照相關勞動政策
     ("mol", "勞動部", "https://www.mol.gov.tw/1607/2458/2462/",
@@ -74,29 +84,25 @@ LTC_URLS: list[tuple[str, str, str, str, str]] = [
     ("mol", "勞動部", "https://www.wda.gov.tw/News_Content.aspx?n=C4D0B39B6E12E61F&sms=CDA642B408087F65&s=2B75C7B5B7036AFF",
      "benefit_page", "照顧服務員訓練"),
 
-    # 內政部 — 老人福利
-    ("moi", "內政部", "https://www.sfaa.gov.tw/SFAA/Pages/List.aspx?nodeid=362",
-     "benefit_page", "社家署老人福利"),
-    ("moi", "內政部", "https://www.sfaa.gov.tw/SFAA/Pages/List.aspx?nodeid=370",
-     "benefit_page", "社家署身心障礙福利"),
-
     # 退輔會 — 榮民長照
-    ("vac", "國軍退除役官兵輔導委員會", "https://www.vac.gov.tw/cp-1374-1375-1.html",
-     "benefit_page", "退輔會安養服務"),
-    ("vac", "國軍退除役官兵輔導委員會", "https://www.vac.gov.tw/cp-1376-1377-1.html",
-     "benefit_page", "退輔會就醫就養"),
+    ("vac", "國軍退除役官兵輔導委員會", "https://www.vac.gov.tw/cp-2088-5066-1.html",
+     "benefit_page", "申請入住榮家資訊簡要表"),
+    ("vac", "國軍退除役官兵輔導委員會", "https://www.vac.gov.tw/np-1897-1.html",
+     "benefit_page", "就醫服務"),
+    ("vac", "國軍退除役官兵輔導委員會", "https://www.vac.gov.tw/np-1898-1.html",
+     "benefit_page", "就養服務"),
 
     # 財政部 — 長照特別扣除額
-    ("mof", "財政部", "https://www.etax.nat.gov.tw/etwmain/tax-info/understanding/tax-q-and-a/national/individual-income-tax/basic-tax-knowledge/kfZCEi5",
-     "legal_text", "長照特別扣除額"),
+    ("mof", "財政部", "https://www.etax.nat.gov.tw/etwmain/tax-info/understanding/tax-q-and-a/national/individual-income-tax/exemption-scope/filling/Q93kjbx",
+     "legal_text", "長照特別扣除額（每人每年 18 萬元）"),
 
     # 原民會 — 原住民族長照
-    ("cip", "原住民族委員會", "https://www.cip.gov.tw/zh-tw/news/data-list/0747F81AFCF8B45F/0C3331F0EBD318C6634956A1B0EDEC01-info.html",
-     "benefit_page", "原住民族長期照顧"),
+    ("cip", "原住民族委員會", "https://www.cip.gov.tw/zh-tw/news/data-list/7661900BAFAAA37D/index.html?cumid=7661900BAFAAA37D",
+     "benefit_page", "原住民族長照專區"),
 
-    # 國發會 — 長照政策規劃
-    ("ndc", "國家發展委員會", "https://www.ndc.gov.tw/Content_List.aspx?n=3F4163D5F8B839DE",
-     "benefit_page", "人口高齡化對策"),
+    # 國發會 — 高齡化對策
+    ("ndc", "國家發展委員會", "https://www.ndc.gov.tw/Content_List.aspx?n=2688C8F5935982DC",
+     "benefit_page", "高齡化政策專區"),
 ]
 
 
