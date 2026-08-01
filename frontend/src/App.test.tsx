@@ -26,7 +26,6 @@ function stubSessionHealth() {
           json: async () => ({ errorCode: "session_not_found" }),
         });
       }
-      // Agency / cases clients may probe the API; allow failure → mock fallback.
       return Promise.resolve({
         ok: false,
         status: 404,
@@ -36,15 +35,44 @@ function stubSessionHealth() {
   );
 }
 
-describe("App", () => {
-  it("renders the live intake by default and walks the same UI in demo mode", async () => {
-    stubSessionHealth();
+async function openConsult() {
+  fireEvent.click(screen.getByRole("button", { name: "新諮詢" }));
+  expect(
+    await screen.findByRole("button", { name: "開始說明我的情況" }),
+  ).toBeInTheDocument();
+}
 
+describe("App", () => {
+  it("opens on the product home and returns via the brand mark", async () => {
+    stubSessionHealth();
     render(<App />);
 
     expect(
+      await screen.findByRole("heading", {
+        name: /生活突然改變時/,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "回到接住主頁" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "開始新諮詢" }));
+    expect(
       await screen.findByRole("button", { name: "開始說明我的情況" }),
     ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "回到接住主頁" }));
+    expect(
+      await screen.findByRole("heading", {
+        name: /生活突然改變時/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the live intake and walks the same UI in demo mode", async () => {
+    stubSessionHealth();
+
+    render(<App />);
+    await openConsult();
+
     expect(screen.getByRole("button", { name: "切換到示範完整流程" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "主要功能" })).toBeInTheDocument();
 
@@ -59,9 +87,6 @@ describe("App", () => {
     expect(screen.getByDisplayValue(/配偶過世一個月了/)).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "回到正式諮詢" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "切換到示範完整流程" }),
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "看下一步" }));

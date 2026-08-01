@@ -7,10 +7,11 @@ import {
 } from "./lib/agencySituation";
 import { AgenciesPage } from "./pages/AgenciesPage";
 import { HomePageAlt, type IntakeMode } from "./pages/HomePageAlt";
+import { ProductHomePage } from "./pages/ProductHomePage";
 import { TrackedCasesPage } from "./pages/TrackedCasesPage";
 
 export default function App() {
-  const [section, setSection] = useState<AppSection>("consult");
+  const [section, setSection] = useState<AppSection>("home");
   const [intakeMode, setIntakeMode] = useState<IntakeMode>("live");
   const [agencyFocus, setAgencyFocus] = useState<AgencySituationFocus | null>(
     null,
@@ -19,11 +20,27 @@ export default function App() {
     null,
   );
 
+  function goHome() {
+    setSection("home");
+    setIntakeMode("live");
+    setAgencyFocus(null);
+    setTrackingHighlight(null);
+  }
+
+  function goConsult() {
+    setIntakeMode("live");
+    setSection("consult");
+  }
+
   return (
     <div className="min-h-screen">
       <AppNav
         active={section}
         onNavigate={(next) => {
+          if (next === "home") {
+            goHome();
+            return;
+          }
           setSection(next);
           if (next === "consult") {
             setIntakeMode("live");
@@ -36,6 +53,14 @@ export default function App() {
           }
         }}
       />
+
+      {section === "home" ? (
+        <ProductHomePage
+          onStartConsult={goConsult}
+          onOpenTracking={() => setSection("tracking")}
+          onOpenAgencies={() => setSection("agencies")}
+        />
+      ) : null}
 
       {section === "consult" ? (
         <HomePageAlt
@@ -54,11 +79,7 @@ export default function App() {
       {section === "tracking" ? (
         <TrackedCasesPage
           highlightLifeEventId={trackingHighlight}
-          onStartConsult={() => {
-            setTrackingHighlight(null);
-            setIntakeMode("live");
-            setSection("consult");
-          }}
+          onStartConsult={goConsult}
           onViewAgencies={(trackedCase) => {
             setAgencyFocus(focusFromCase(trackedCase));
             setSection("agencies");
