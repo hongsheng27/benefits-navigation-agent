@@ -37,11 +37,14 @@ class Settings(BaseSettings):
     application_timezone: str = "Asia/Taipei"
 
     # --- Data store backend selector ---
-    # "sqlite" (default, local development) or "postgresql" (RDS deployment).
-    data_store_backend: str = "sqlite"
+    # "postgresql" (default, connects to shared RDS) or "sqlite" (local fallback).
+    # If PostgreSQL is unreachable at startup, the app auto-falls back to SQLite.
+    data_store_backend: str = "postgresql"
 
-    # --- RDS PostgreSQL settings (only used when data_store_backend=postgresql) ---
-    rds_host: str = ""
+    # --- RDS PostgreSQL settings ---
+    # Defaults point to the shared team RDS instance so deployment works
+    # without a .env file. Override via environment variables if needed.
+    rds_host: str = "database-1.c54m4aak2pcn.us-west-2.rds.amazonaws.com"
     rds_port: int = 5432
     rds_database: str = "benefits_navigation"
     rds_username: str = "benefits_admin"

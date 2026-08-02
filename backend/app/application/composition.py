@@ -166,9 +166,20 @@ def build_dependencies(
     settings = get_settings()
 
     if settings.data_store_backend == "postgresql":
-        return _build_postgresql_dependencies(overrides, settings)
+        try:
+            return _build_postgresql_dependencies(overrides, settings)
+        except (DependencyConfigurationError, RepositoryUnavailableError, Exception) as exc:
+            import logging
 
-    # Default: SQLite
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "PostgreSQL (RDS) connection failed: %s. "
+                "Falling back to local SQLite.",
+                exc,
+            )
+            # Fall through to SQLite below
+
+    # Fallback / explicit SQLite
     return _build_sqlite_dependencies(overrides, db_path)
 
 
