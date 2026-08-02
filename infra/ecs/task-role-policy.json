@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeOneModelThroughItsInferenceProfile",
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Resource": [
+        "arn:aws:bedrock:${AWS_REGION}:${AWS_ACCOUNT_ID}:inference-profile/${BEDROCK_MODEL_ID}",
+        "arn:aws:bedrock:*::foundation-model/${BEDROCK_FOUNDATION_MODEL_ID}"
+      ]
+    }
+  ]
+}
