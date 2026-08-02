@@ -19,6 +19,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 from contextlib import closing
+from typing import TypeVar
 
 from app.orchestration.data_errors import (
     DataLayerError,
@@ -26,12 +27,14 @@ from app.orchestration.data_errors import (
     RepositoryUnavailableError,
 )
 
+T = TypeVar("T")
+
 
 def _enable_foreign_keys(connection: sqlite3.Connection) -> None:
     connection.execute("PRAGMA foreign_keys = ON")
 
 
-def execute_read[T](
+def execute_read(
     connection_factory: Callable[[], sqlite3.Connection],
     operation: Callable[[sqlite3.Connection], T],
 ) -> T:
@@ -65,7 +68,7 @@ def execute_read[T](
     return result
 
 
-def execute_transaction[T](
+def execute_transaction(
     connection_factory: Callable[[], sqlite3.Connection],
     operation: Callable[[sqlite3.Connection], T],
 ) -> T:
