@@ -2,7 +2,10 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as trackingClient from "../api/trackingClient";
-import { addTrackedBenefitItem } from "../lib/trackingStore";
+import {
+  addTrackedBenefitItem,
+  listTrackedBenefitItems,
+} from "../lib/trackingStore";
 import { MOCK_TRACKED_CASES } from "../mocks/trackedCases";
 import { TrackedCasesPage } from "./TrackedCasesPage";
 
@@ -52,11 +55,16 @@ describe("TrackedCasesPage", () => {
 
     expect(await screen.findByText("喪葬給付")).toBeInTheDocument();
     expect(screen.getByText("追蹤中")).toBeInTheDocument();
+    expect(screen.getByText("辦理進度")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "已完成" })).toBeInTheDocument();
     expect(screen.queryByText("還沒有可追蹤的案件")).not.toBeInTheDocument();
     // Fixture case titles must not appear while isMock.
     for (const fixture of MOCK_TRACKED_CASES) {
       expect(screen.queryByText(fixture.title)).not.toBeInTheDocument();
     }
+
+    fireEvent.click(screen.getByRole("button", { name: "已完成" }));
+    expect(listTrackedBenefitItems()[0]?.completedStepCount).toBe(1);
 
     fireEvent.click(screen.getByRole("button", { name: "取消追蹤" }));
     expect(await screen.findByText("還沒有可追蹤的案件")).toBeInTheDocument();

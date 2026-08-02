@@ -38,7 +38,7 @@ const LEDE =
 const EXAMPLE_PROMPTS = [
   "配偶過世一個月了，想確認還有哪些給付來得及申請。",
   "公司裁員，我被資遣了，想知道失業給付怎麼申請。",
-  "爸媽需要長期照顧，不知道長照可以從哪裡開始。",
+  "爸工作受傷需要長期照顧，不知道長照可以從哪裡開始。",
 ] as const;
 
 const BOUNDARIES = [
@@ -366,12 +366,9 @@ function IntakeSteps({
           onConfirmRestart: onReset,
         }
       : null;
+  // 正式諮詢一律用對話窗；表單僅留給示範／回看唯讀。
   const useAttributeChat =
-    !readOnly &&
-    !isReviewing &&
-    Boolean(onAnswerChatTurn) &&
-    (!snapshotHasLifeEvent(snapshot, "occupational_injury") ||
-      gateWithoutPriorQuestions);
+    !readOnly && !isReviewing && Boolean(onAnswerChatTurn);
 
   const showBack = uiStep !== "landing" && onBack !== undefined;
 
@@ -634,11 +631,7 @@ function IntakeSteps({
                     readOnly={readOnly || isReviewing || showResultGate}
                     onSubmit={(answers) => onAnswerFields?.(answers)}
                     submitLabel={
-                      !readOnly &&
-                      !showResultGate &&
-                      snapshotHasLifeEvent(snapshot, "occupational_injury")
-                        ? "送出答案"
-                        : undefined
+                      !readOnly && !showResultGate ? "送出答案" : undefined
                     }
                   />
                 ) : null}
