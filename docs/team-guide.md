@@ -9,26 +9,24 @@
 需要先安裝 [uv](https://docs.astral.sh/uv/) 與 Node.js 22.12 以上。不需要自己裝
 Python，uv 會取得正確的版本。
 
-**前端**
+**從 repo 根目錄開工（建議）**
 
 ```bash
-cd frontend
-npm install
-npm run dev            # http://localhost:5173
+make install     # 第一次：前後端相依套件
+make backend     # http://127.0.0.1:8000 — 先清埠再啟動，避免殭屍 uvicorn
+make frontend    # http://127.0.0.1:5173 — 先清埠再啟動
 ```
 
-**後端**
+請不要同時開多個後端／前端 dev server；Windows 上舊的 `--reload` 子行程常會
+佔住埠，瀏覽器卻連到舊程式。需要換埠時設 `BACKEND_PORT` / `FRONTEND_PORT`，
+並同步 `VITE_API_BASE_URL`。
 
-```bash
-cd backend
-uv sync                                 # 自動取得 Python 3.13、建立 .venv、安裝套件
-uv run uvicorn app.main:app --reload    # http://localhost:8000
-```
+環境變數複製根目錄 `.env.example` 到根目錄 `.env`，並在 `frontend/.env` 設
+`VITE_API_BASE_URL=http://127.0.0.1:8000`。後端會依序讀取 `../.env` 與
+`backend/.env`。
 
-環境變數複製根目錄 `.env.example` 到根目錄 `.env`。後端會依序讀取 `../.env` 與
-`backend/.env`；前端讀 `frontend/.env.local` 或根目錄的 `VITE_` 變數。
-
-兩邊都啟動後，前端右上角會顯示「後端已連線」。
+兩邊都啟動後，前端右上角會顯示「後端已連線」。`GET /health` 的 `startedAt`
+可確認打到的是剛開的行程。
 
 ## 每天的循環
 

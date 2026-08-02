@@ -76,8 +76,8 @@ def test_only_the_life_event_input_carries_free_text() -> None:
             if any(marker in field_name for marker in _FREE_TEXT_MARKERS):
                 text_bearing.add(kind)
 
-    assert text_bearing == {"life_event_text"}
-    assert len(members) == 7
+    assert text_bearing == {"life_event_text", "attribute_chat_turn"}
+    assert len(members) == 8
 
 
 def test_error_response_has_no_field_that_can_hold_a_value() -> None:
@@ -166,6 +166,8 @@ def test_snapshot_projects_items_amounts_and_citations() -> None:
 
     assert snapshot.session_id == "s_test"
     assert snapshot.life_event == "spouse_death"
+    assert snapshot.life_events == ()
+    assert snapshot.extra_candidate_life_events == ()
     assert snapshot.attributes == {"deceased_insurance_type": "labor_insurance"}
 
     funeral, pension = snapshot.items
@@ -173,6 +175,31 @@ def test_snapshot_projects_items_amounts_and_citations() -> None:
     assert funeral.amount_period is AmountPeriod.ONE_TIME
     assert funeral.citations[0].url == "https://example.gov.tw/rule"
     assert pension.decisive_conditions[0].actual == "five_to_fifteen_years"
+
+
+def test_snapshot_projects_life_events_array() -> None:
+    state = _state().model_copy(
+        update={
+            "life_event": "occupational_injury",
+            "life_events": ("occupational_injury", "job_loss"),
+            "extra_candidate_life_events": (
+                "disability_onset",
+                "long_term_care_need",
+                "caregiver_burden",
+            ),
+        }
+    )
+    snapshot = SessionSnapshot.from_state(state)
+    payload = snapshot.model_dump(by_alias=True)
+
+    assert snapshot.life_events == ("occupational_injury", "job_loss")
+    assert list(payload["lifeEvents"]) == ["occupational_injury", "job_loss"]
+    assert list(payload["extraCandidateLifeEvents"]) == [
+        "disability_onset",
+        "long_term_care_need",
+        "caregiver_burden",
+    ]
+    assert payload["lifeEvent"] == "occupational_injury"
 
 
 def test_snapshot_reports_progress_and_defaults_to_no_questions() -> None:

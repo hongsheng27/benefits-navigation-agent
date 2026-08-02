@@ -91,6 +91,17 @@ export type ErrorCode =
   | "invalid_field_value"
   | "unknown_item"
   | "invalid_transition"
+  /**
+   * 無法把使用者的描述對應到已登記的事件。
+   *
+   * **這不是程式錯誤，不要顯示「系統發生錯誤」。** 請顯示「我們沒有看懂，
+   * 可以換個說法嗎」之類的訊息，並讓使用者重新送一次 `life_event_text`。
+   *
+   * 後端刻意不區分「模型壞掉」與「描述看不懂」—— 對使用者而言下一步都一樣。
+   */
+  | "event_not_recognized"
+  /** 諮詢後 grounded 說明暫時無法產生；前端可退回 stub。 */
+  | "explanation_unavailable"
   | "internal_error";
 
 /** 自由文字的長度上限，與後端的 MAX_LIFE_EVENT_TEXT_LENGTH 相同。 */
@@ -115,12 +126,20 @@ export type LifeEventTextInput = {
 export type EventConfirmationInput = {
   kind: "event_confirmation";
   confirmed: boolean;
+  /** 確認時勾選的事件（1～5）；省略則沿用後端目前的 lifeEvents。 */
+  eventIds?: string[];
 };
 
 /** 畫面 4 送出一組答案；畫面 7 修正答案也用這個形狀。鍵是欄位代號。 */
 export type AttributeAnswersInput = {
   kind: "attribute_answers";
   answers: Record<string, AttributeValue>;
+};
+
+/** 畫面 4 對話模式：一句話補資格欄位（抽取後丟棄原文）。 */
+export type AttributeChatTurnInput = {
+  kind: "attribute_chat_turn";
+  text: string;
 };
 
 /** 使用者選「這一項我不想辦」。 */
@@ -147,15 +166,15 @@ export type HelpRequestInput = {
 };
 
 /**
- * 推進一步時可以送的七種輸入。
+ * 推進一步時可以送的輸入。
  *
- * 用 kind 區分，所以 TypeScript 會依 kind 的值收窄其餘欄位。這也是「自由文字只
- * 存在第一步」的型別保證：其他六種形狀沒有文字欄位。
+ * 自由文字只在 `life_event_text` 與 `attribute_chat_turn`；其餘為結構化輸入。
  */
 export type AdvanceInput =
   | LifeEventTextInput
   | EventConfirmationInput
   | AttributeAnswersInput
+  | AttributeChatTurnInput
   | ItemDeclineInput
   | ReviewConfirmationInput
   | ReferralChoiceInput
@@ -218,6 +237,8 @@ export type ItemView = {
   amountCurrency: string | null;
 
   explanation: string | null;
+  /** 複合情境時，此項目來自哪些 life event。 */
+  sourceLifeEvents: string[];
 };
 
 /**
@@ -253,6 +274,10 @@ export type SessionSnapshot = {
   stepTotal: number;
 
   lifeEvent: string | null;
+  /** 複合情境：建議或已確認的事件（最多 5）。lifeEvent 為第一筆相容欄位。 */
+  lifeEvents: string[];
+  /** 確認頁額外候補（最多 3），預設未勾選。 */
+  extraCandidateLifeEvents: string[];
 
   /** 使用者答過的答案，畫面 7 複查時要顯示。 */
   attributes: Record<string, AttributeValue>;
@@ -267,6 +292,9 @@ export type SessionSnapshot = {
 
   /** 為 true 時輪詢應該繼續。 */
   isProcessing: boolean;
+
+  /** 對話式補欄位的下一問（系統產生）。 */
+  collectorQuestion: string | null;
 
   createdAt: string;
   expiresAt: string;

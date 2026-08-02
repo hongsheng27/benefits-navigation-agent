@@ -923,7 +923,23 @@ class EvidenceRetriever(Protocol):
 
 `state_machine.py` 的 `transition()` 接受這三個介面作為參數（或由 DI container 注入），Phase 4 替換實作時不需修改狀態機本身。
 
-### 2. AgentRunner（Phase 5，建議提前做假實作 T20）
+### 2. ~~AgentRunner~~ → LLM port（**這一節已被取代，2026-07-30**）
+
+> **不要照下面這個形狀實作。** 實際做出來的是
+> [ADR-0015](../../../docs/decisions/0015-narrow-llm-port-instead-of-agent-loop.md)
+> 決定的窄 LLM port，在 `backend/app/llm/port.py`。
+>
+> 兩個差異值得知道：
+>
+> 1. **Port 不知道什麼是生命事件。** 它只做「送一段指示加一段內容，
+>    拿回符合指定 JSON Schema 的結果」。任務的知識（要問什麼、schema 長什麼樣）
+>    放在 `app/llm/tasks/`，那樣換模型廠商時不必重新決定 prompt。
+> 2. **`FakeLanguageModel` 不回寫死的 `spouse_death`。** 沒登記答案就拋錯。
+>    一個會「大概猜一下」的假實作會讓測試在真實模型接上之前就通過，
+>    於是缺口被藏起來。寫死答案的版本在 `demo_fixtures.demo_language_model()`，
+>    必須明確注入。
+
+下面是**原本**的規劃，保留作為對照：
 
 ```python
 class AgentRunner(Protocol):
@@ -931,8 +947,6 @@ class AgentRunner(Protocol):
     def extract_life_event(self, text: str) -> str: ...
     def explain_results(self, items: tuple[CandidateItem, ...]) -> dict[str, str]: ...
 ```
-
-**建議**：把 T20（假的 AgentRunner）提前到 Phase 2 完成後立即做。有了它，端到端測試完全不需要 LLM。假實作回傳寫死的 `"spouse_death"` 和空字串解釋。
 
 ### 3. 隱私閘門 hooks（Phase 3）
 

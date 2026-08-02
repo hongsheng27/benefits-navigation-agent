@@ -314,6 +314,72 @@ _DEATH_REGISTRATION = GraphRelation(
     canonical_order=0,
 )
 
+_CARE_FIXTURE_ITEMS: tuple[CandidateItem, ...] = (
+    CandidateItem(
+        item_id="occupational_injury_recognition_follow_up",
+        display_name="追蹤職業災害認定",
+        program_status="candidate",
+        relevance_score=None,
+        missing_field_ids=(),
+        prerequisites=(),
+        produces=(),
+    ),
+    CandidateItem(
+        item_id="occupational_accident_disability_benefit",
+        display_name="職災保險失能給付",
+        program_status="candidate",
+        relevance_score=None,
+        missing_field_ids=(),
+        prerequisites=(),
+        produces=(),
+    ),
+    CandidateItem(
+        item_id="disability_assessment",
+        display_name="身心障礙鑑定",
+        program_status="candidate",
+        relevance_score=None,
+        missing_field_ids=(),
+        prerequisites=(),
+        produces=(),
+    ),
+    CandidateItem(
+        item_id="long_term_care_assessment",
+        display_name="長照需求評估",
+        program_status="candidate",
+        relevance_score=None,
+        missing_field_ids=(),
+        prerequisites=(),
+        produces=(),
+    ),
+    CandidateItem(
+        item_id="caregiver_support_services",
+        display_name="家庭照顧者支持與喘息服務",
+        program_status="candidate",
+        relevance_score=None,
+        missing_field_ids=(),
+        prerequisites=(),
+        produces=(),
+    ),
+    CandidateItem(
+        item_id="caregiver_employment_support",
+        display_name="照顧者就業支持",
+        program_status="candidate",
+        relevance_score=None,
+        missing_field_ids=(),
+        prerequisites=(),
+        produces=(),
+    ),
+    CandidateItem(
+        item_id="caregiver_support_contact",
+        display_name="支持專線與人工協助",
+        program_status="candidate",
+        relevance_score=None,
+        missing_field_ids=(),
+        prerequisites=(),
+        produces=(),
+    ),
+)
+
 _FIXTURE_ITEMS_BY_EVENT: dict[str, tuple[CandidateItem, ...]] = {
     "spouse_death": (
         CandidateItem(
@@ -364,6 +430,27 @@ _FIXTURE_ITEMS_BY_EVENT: dict[str, tuple[CandidateItem, ...]] = {
             produces=(),
         ),
     ),
+    "occupational_injury": _CARE_FIXTURE_ITEMS,
+    "job_loss": (
+        CandidateItem(
+            item_id="unemployment_benefit",
+            display_name="失業給付",
+            program_status="candidate",
+            relevance_score=None,
+            missing_field_ids=(),
+            prerequisites=(),
+            produces=(),
+        ),
+        CandidateItem(
+            item_id="employment_service",
+            display_name="就業服務／職訓諮詢",
+            program_status="candidate",
+            relevance_score=None,
+            missing_field_ids=(),
+            prerequisites=(),
+            produces=(),
+        ),
+    ),
 }
 
 # 制度 → 方案代號。制度分類屬於資料層，這裡只是離線示範。
@@ -371,14 +458,97 @@ _FIXTURE_SYSTEM_ITEMS: dict[str, tuple[str, ...]] = {
     "household_registration": ("death_registration",),
     "labor_insurance": ("funeral_benefit", "survivor_pension"),
     "national_health_insurance": ("health_insurance_change",),
+    "occupational_accident_insurance": (
+        "occupational_injury_recognition_follow_up",
+        "occupational_accident_disability_benefit",
+    ),
+    "disability_support": ("disability_assessment",),
+    "long_term_care": (
+        "long_term_care_assessment",
+        "caregiver_support_services",
+        "caregiver_support_contact",
+    ),
+    "caregiver_employment": ("caregiver_employment_support",),
 }
+
+
+def _matches_when_known(
+    user_attributes: UserAttributes,
+    field_id: str,
+    accepted_values: frozenset[str],
+) -> bool:
+    """缺值時先保留；有答案時才用固定選項判斷相關性。"""
+    value = user_attributes.get(field_id)
+    return value is None or value in accepted_values
+
+
+def _care_item_is_relevant(item_id: str, user_attributes: UserAttributes) -> bool:
+    """Case 2 的離線相關性條件；只篩方向，不產生資格結論。"""
+    if item_id == "occupational_injury_recognition_follow_up":
+        return _matches_when_known(
+            user_attributes,
+            "disability_cause",
+            frozenset({"cause_occupational_injury"}),
+        ) and _matches_when_known(
+            user_attributes,
+            "occupational_injury_recognition",
+            frozenset({"recognition_processing", "recognition_not_applied", "unsure"}),
+        )
+    if item_id == "occupational_accident_disability_benefit":
+        return _matches_when_known(
+            user_attributes,
+            "disability_cause",
+            frozenset({"cause_occupational_injury"}),
+        ) and _matches_when_known(
+            user_attributes,
+            "care_recipient_insurance_type",
+            frozenset({"labor_insurance", "occupational_accident_insurance", "unsure"}),
+        )
+    if item_id == "disability_assessment":
+        return _matches_when_known(
+            user_attributes,
+            "disability_assessment_status",
+            frozenset(
+                {
+                    "disability_assessment_in_progress",
+                    "disability_assessment_not_applied",
+                    "unsure",
+                }
+            ),
+        )
+    if item_id == "caregiver_support_services":
+        return _matches_when_known(
+            user_attributes,
+            "caregiver_relationship",
+            frozenset(
+                {
+                    "relationship_spouse",
+                    "relationship_child",
+                    "relationship_parent",
+                    "relationship_other_relative",
+                }
+            ),
+        ) and _matches_when_known(
+            user_attributes,
+            "current_care_arrangement",
+            frozenset(
+                {"care_mostly_solo", "care_shared_by_family", "care_not_arranged"}
+            ),
+        )
+    if item_id == "caregiver_employment_support":
+        return _matches_when_known(
+            user_attributes,
+            "caregiver_employment_impact",
+            frozenset({"left_job", "reduced_hours", "considering_employment_change"}),
+        )
+    return True
 
 
 class FixtureEntitlementGraphRepository:
     """離線用的 `EntitlementGraphRepository`：一份寫死的對照表。
 
-    只有 MVP 情境（配偶過世）有資料。其他事件回空 tuple，因為這個實作**沒有**那些
-    事件的資料 —— 回一組猜的項目會讓下游誤以為展開成功。
+    目前有配偶過世與父親職災失能兩組 demo fixture。其他事件回空 tuple，因為這個
+    實作**沒有**那些事件的資料 —— 回一組猜的項目會讓下游誤以為展開成功。
 
     取代之前的 `FixtureEntitlementSource`。差別不只是改名：回傳型別從
     `state.CandidateItem`（workflow 的判定狀態）換成
@@ -391,11 +561,26 @@ class FixtureEntitlementGraphRepository:
         event_id: str,
         user_attributes: UserAttributes,
     ) -> tuple[CandidateItem, ...]:
-        """查對照表。事件不在表上時回空 tuple。"""
-        # 這份 fixture 不依屬性篩選 —— 依屬性收斂候選集合需要 graph 上的條件邊，
-        # 那屬於資料層。先照樣接收參數，讓 SQLite 實作換進來時簽章不用改。
-        del user_attributes
-        return _FIXTURE_ITEMS_BY_EVENT.get(event_id, ())
+        """查對照表，並在有所在地時附上對應地方方案。
+
+        全國項目一律展開；地方項目由 `jurisdiction_items` 依
+        `applicant_jurisdiction` 收斂。事件不在表上時回空 tuple。
+        """
+        from app.orchestration.jurisdiction_items import local_items_for_attributes
+
+        base = _FIXTURE_ITEMS_BY_EVENT.get(event_id, ())
+        if not base:
+            return ()
+        if event_id == "occupational_injury":
+            base = tuple(
+                item
+                for item in base
+                if _care_item_is_relevant(item.item_id, user_attributes)
+            )
+        local = local_items_for_attributes(user_attributes, life_event_ids=(event_id,))
+        if not local:
+            return base
+        return base + local
 
     def _find(self, item_id: str) -> CandidateItem | None:
         for items in _FIXTURE_ITEMS_BY_EVENT.values():

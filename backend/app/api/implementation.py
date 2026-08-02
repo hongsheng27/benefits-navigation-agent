@@ -36,9 +36,13 @@ PENDING_CAPABILITIES: tuple[PendingCapability, ...] = (
     PendingCapability.PLAIN_LANGUAGE_EXPLANATION,
     # 辦理清單尚未組裝。
     PendingCapability.ACTION_PLAN,
-    # 屬性 allowlist 驗證與原文丟棄的行為尚未實作。
-    PendingCapability.PRIVACY_GATE,
 )
+
+# 已經移除的（續）：
+# - PRIVACY_GATE：三個部分都完成了。未登記的欄位代號會讓整筆請求被拒
+#   （`unknown_field`）、值本身依登記表的型別與選項驗證（`invalid_field_value`）、
+#   而自由文字現在真的被丟棄 —— `resolve_life_event` 只回事件代號清單，原文沒有任何
+#   路徑進到 state、紀錄檔或回應裡。
 
 
 def implementation_notice() -> ImplementationNotice:
