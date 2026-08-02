@@ -4,8 +4,10 @@ import { listTrackedCases } from "../api/trackingClient";
 import styles from "../components/alt/alt.module.css";
 import {
   addTrackedBenefitItem,
+  clearTrackedBenefitItems,
   listPendingBenefitItems,
   listTrackedBenefitItems,
+  removeTrackedBenefitItem,
   type PendingBenefitItem,
 } from "../lib/trackingStore";
 import type {
@@ -255,10 +257,12 @@ function BenefitItemCard({
   item,
   mode,
   onAdd,
+  onRemove,
 }: {
   item: TrackedBenefitItem | PendingBenefitItem;
   mode: "tracked" | "pending";
   onAdd?: () => void;
+  onRemove?: () => void;
 }) {
   return (
     <article className="border border-[#e0d8ca] bg-[#fdfbf7] px-4 py-5 sm:px-5">
@@ -286,10 +290,23 @@ function BenefitItemCard({
           加入追蹤
         </button>
       ) : null}
-      {mode === "tracked" && "addedAt" in item ? (
-        <p className="mt-3 text-[0.78rem] text-[#8b8377]">
-          加入於 {formatDate(item.addedAt)}
-        </p>
+      {mode === "tracked" ? (
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {"addedAt" in item ? (
+            <p className="text-[0.78rem] text-[#8b8377]">
+              加入於 {formatDate(item.addedAt)}
+            </p>
+          ) : null}
+          {onRemove ? (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="text-[0.82rem] font-semibold text-[#6b6459] underline decoration-[#cfc5b4] underline-offset-2 hover:text-[#2f4f45] hover:decoration-[#2f4f45]"
+            >
+              取消追蹤
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </article>
   );
@@ -333,11 +350,13 @@ export function TrackedCasesPage({
     return () => controller.abort();
   }, []);
 
-  const sortedCases = useMemo(
-    () =>
-      [...cases].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)),
-    [cases],
-  );
+  // 後端案件 API 未就緒（isMock）時不渲染假案件；只顯示本機「加入追蹤」項目。
+  const sortedCases = useMemo(() => {
+    if (isMock) {
+      return [];
+    }
+    return [...cases].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  }, [cases, isMock]);
 
   const hasTracked = trackedItems.length > 0 || sortedCases.length > 0;
   const hasPending = pendingItems.length > 0;
@@ -351,14 +370,8 @@ export function TrackedCasesPage({
           你正在處理的事
         </h1>
         <p className="mt-3 max-w-xl text-[0.92rem] leading-[1.9] text-[#5c564e] sm:text-[0.95rem]">
-          已加入追蹤的項目會排在前面；本輪諮詢還沒加入的，會出現在「待追蹤」。
+          這裡只顯示你從結果頁「加入追蹤」的項目；本輪諮詢還沒加入的，會出現在「待追蹤」。
         </p>
-
-        {isMock && sortedCases.length > 0 ? (
-          <p className="mt-5 border-l-2 border-[#8a5a1a] bg-[#f6f1e6] px-4 py-3 text-[0.85rem] leading-[1.85] text-[#4a453d]">
-            案件列表目前含示範資料。你從結果頁「加入追蹤」的項目會另外列在上方。
-          </p>
-        ) : null}
 
         {loading ? (
           <p className="mt-10 text-[0.9rem] text-[#8b8377]">正在載入……</p>
@@ -388,18 +401,38 @@ export function TrackedCasesPage({
           <div className="mt-8 space-y-10">
             {hasTracked ? (
               <section>
-                <h2 className="text-[1.1rem] font-semibold text-[#2f4f45]">
-                  追蹤中
-                </h2>
-                <p className="mt-1 text-[0.85rem] text-[#6b6459]">
-                  你已加入的項目會優先顯示。
-                </p>
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h2 className="text-[1.1rem] font-semibold text-[#2f4f45]">
+                      追蹤中
+                    </h2>
+                    <p className="mt-1 text-[0.85rem] text-[#6b6459]">
+                      只會顯示你曾按過「加入追蹤」的項目（存在這個瀏覽器裡）。
+                    </p>
+                  </div>
+                  {trackedItems.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearTrackedBenefitItems();
+                        refreshLocalTracking();
+                      }}
+                      className="text-[0.82rem] font-semibold text-[#6b6459] underline decoration-[#cfc5b4] underline-offset-2 hover:text-[#2f4f45] hover:decoration-[#2f4f45]"
+                    >
+                      清空全部追蹤
+                    </button>
+                  ) : null}
+                </div>
                 <div className="mt-4 space-y-4">
                   {trackedItems.map((item) => (
                     <BenefitItemCard
                       key={`tracked-${item.itemId}`}
                       item={item}
                       mode="tracked"
+                      onRemove={() => {
+                        removeTrackedBenefitItem(item.itemId);
+                        refreshLocalTracking();
+                      }}
                     />
                   ))}
                   {sortedCases.map((item) => (

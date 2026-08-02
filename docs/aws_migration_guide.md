@@ -440,7 +440,7 @@ Do not read the current behaviour as Option B having been chosen.
 | Concern             | Local mock now                                                                | Target                                                    |
 | ------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------- |
 | Agency directory UI | `frontend/src/mocks/agencies.ts` via `frontend/src/api/agencyClient.ts`       | `GET /agencies` backed by SQLite / RDS source registry    |
-| Case tracking UI    | `frontend/src/mocks/trackedCases.ts` via `frontend/src/api/trackingClient.ts` | `GET /cases` (or equivalent) persisted session/case store |
+| Case tracking UI    | Result-page「加入追蹤」→ `trackingStore` (localStorage); `listTrackedCases()` empty until API exists | `GET /cases` (or equivalent) persisted session/case store |
 
 ### What to change
 
@@ -456,8 +456,13 @@ Do not read the current behaviour as Option B having been chosen.
 2. **Case tracking**
    - Implement backend list endpoint for saved consult cases.
    - Shape responses like `frontend/src/types/tracking.ts`.
-   - Default client already tries the API and falls back to mock on failure;
-     set `VITE_USE_CASE_TRACKING_MOCK=true` only when you want to force mock.
+   - Until that API exists, `listTrackedCases()` returns an empty list
+     (`isMock: true`). The tracking page shows only items the user added via
+     result-page「加入追蹤」in `localStorage` (`frontend/src/lib/trackingStore.ts`).
+   - Optional fixture file `frontend/src/mocks/trackedCases.ts` is for tests /
+     manual demos only — do not wire it back into the live tracking page.
+   - Set `VITE_USE_CASE_TRACKING_MOCK=true` to force the empty mock path
+     (skip the network call).
 
 ### Environment variables
 

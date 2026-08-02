@@ -77,6 +77,25 @@ export function addTrackedBenefitItem(
   return next;
 }
 
+/** 從本機已追蹤清單移除單一項目。 */
+export function removeTrackedBenefitItem(itemId: string): void {
+  if (!canUseStorage()) {
+    return;
+  }
+  const remaining = listTrackedBenefitItems().filter(
+    (item) => item.itemId !== itemId,
+  );
+  writeJson(window.localStorage, TRACKED_KEY, remaining);
+}
+
+/** 清空本機全部已追蹤項目（不影響本輪待追蹤）。 */
+export function clearTrackedBenefitItems(): void {
+  if (!canUseStorage()) {
+    return;
+  }
+  writeJson(window.localStorage, TRACKED_KEY, []);
+}
+
 export function listPendingBenefitItems(): PendingBenefitItem[] {
   if (!canUseStorage()) {
     return [];
