@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   addTrackedBenefitItem,
@@ -7,6 +7,8 @@ import {
   syncPendingBenefitItemsFromResults,
 } from "../../lib/trackingStore";
 import { getItemDetail } from "../../mocks/itemDetails";
+import { getProvisionsForContext } from "../../mocks/relatedProvisions";
+import type { RelatedProvision } from "../../types/postConsult";
 import type { ItemStatus, ItemView, SessionSnapshot } from "../../types/session";
 import styles from "./alt.module.css";
 import {
@@ -194,7 +196,7 @@ function StatusGroups({
           {group.items.length} 項
         </span>
       </Heading>
-      <ul className="mt-3 divide-y divide-[#eee7db] border border-[#e0d8ca] bg-[#fdfbf7]">
+      <ul className="mt-3 space-y-3">
         {group.items.map((item) => (
           <ResultRow
             item={item}
@@ -259,18 +261,38 @@ function ResultRow({
   onGoToTracking?: (lifeEventId: string | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [lawOpen, setLawOpen] = useState(false);
+  const [selectedProvisionId, setSelectedProvisionId] = useState<string | null>(
+    null,
+  );
   const [tracked, setTracked] = useState(() => isBenefitItemTracked(item.itemId));
   const detail = getItemDetail(item.itemId);
   const amountLabel = formatAmountFromItem(item) ?? detail?.amountLabel ?? null;
   const officialUrl = detail?.officialUrl ?? item.citations[0]?.url ?? null;
   const explanation = item.explanation ?? itemFallbackExplanation(item.itemId);
+  const provisions = useMemo(
+    () =>
+      getProvisionsForContext({
+        itemIds: [item.itemId],
+      }),
+    [item.itemId],
+  );
+  const dialogProvisions = useMemo(() => {
+    if (!selectedProvisionId) {
+      return provisions;
+    }
+    const selected = provisions.filter(
+      (provision) => provision.provisionId === selectedProvisionId,
+    );
+    return selected.length > 0 ? selected : provisions;
+  }, [provisions, selectedProvisionId]);
 
   function handleAddTracking() {
     addTrackedBenefitItem(buildTrackedItemFromResult(item, lifeEventId));
     setTracked(true);
   }
   return (
-    <li className="px-4 py-4 sm:px-5">
+    <li className="rounded-sm border border-[#e0d8ca] bg-[#fdfbf7] px-4 py-4 sm:px-5">
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="text-[0.98rem] leading-[1.8] font-semibold text-[#171513]">
           {itemName(item.itemId)}
@@ -322,6 +344,72 @@ function ResultRow({
           ))}
         </ul>
       ) : null}
+
+      <dl className="mt-3 space-y-1.5 rounded-sm border border-[#ebe4d6] bg-[#faf8f4] px-3 py-3 text-[0.85rem] leading-[1.75] text-[#4a453d]">
+        <div className="flex flex-wrap gap-x-2">
+          <dt className="shrink-0 text-[#8b8377]">主管機關</dt>
+          <dd>{detail?.agency ?? "請向承辦窗口確認"}</dd>
+        </div>
+        <div className="flex flex-wrap gap-x-2">
+          <dt className="shrink-0 text-[#8b8377]">建議下一步</dt>
+          <dd>
+            {detail?.steps[0] ??
+              "先查看詳情，確認申請方式與應備文件"}
+          </dd>
+        </div>
+        {amountLabel ? (
+          <div className="flex flex-wrap gap-x-2">
+            <dt className="shrink-0 text-[#8b8377]">金額／性質</dt>
+            <dd>{amountLabel}</dd>
+          </div>
+        ) : null}
+        {!explanation ? (
+          <div className="flex flex-wrap gap-x-2">
+            <dt className="shrink-0 text-[#8b8377]">簡要說明</dt>
+            <dd>
+              {detail?.summary ??
+                "這是整理出的可能相關項目；正式申請仍以承辦機關說明為準。"}
+            </dd>
+          </div>
+        ) : null}
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <dt className="shrink-0 text-[#8b8377]">相關法條</dt>
+          <dd className="min-w-0 flex-1">
+            {provisions.length > 0 ? (
+              <ul className="flex flex-col gap-1">
+                {provisions.map((provision) => (
+                  <li key={provision.provisionId}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProvisionId(provision.provisionId);
+                        setLawOpen(true);
+                      }}
+                      className="text-left font-semibold text-[#2f4f45] underline decoration-[#a8bdb2] underline-offset-2 hover:decoration-[#2f4f45]"
+                    >
+                      {provision.lawName}
+                      {provision.articleLabel
+                        ? `（${provision.articleLabel}）`
+                        : ""}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedProvisionId(null);
+                  setLawOpen(true);
+                }}
+                className="font-semibold text-[#6b6459] underline decoration-[#cfc5b4] underline-offset-2 hover:text-[#2f4f45] hover:decoration-[#2f4f45]"
+              >
+                尚無對應摘錄（點此說明）
+              </button>
+            )}
+          </dd>
+        </div>
+      </dl>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         <button
@@ -412,7 +500,133 @@ function ResultRow({
           </p>
         </div>
       ) : null}
+
+      {lawOpen ? (
+        <ItemProvisionsDialog
+          itemTitle={itemName(item.itemId)}
+          provisions={dialogProvisions}
+          onClose={() => {
+            setLawOpen(false);
+            setSelectedProvisionId(null);
+          }}
+        />
+      ) : null}
     </li>
+  );
+}
+
+function ItemProvisionsDialog({
+  itemTitle,
+  provisions,
+  onClose,
+}: {
+  itemTitle: string;
+  provisions: RelatedProvision[];
+  onClose: () => void;
+}) {
+  const titleId = useId();
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[#171513]/45 p-4 sm:items-center"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-sm border border-[#e0d8ca] bg-[#faf8f4] px-4 py-5 shadow-lg sm:px-5"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[0.78rem] tracking-[0.06em] text-[#8b8377]">
+              相關法條
+            </p>
+            <h2
+              id={titleId}
+              className="mt-1 text-[1.05rem] font-semibold leading-[1.5] text-[#171513]"
+            >
+              {itemTitle}
+            </h2>
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-sm border border-[#c9c0b0] px-3 py-1.5 text-[0.82rem] font-semibold text-[#4a453d] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45]"
+          >
+            關閉
+          </button>
+        </div>
+
+        <p className="mt-3 rounded-sm border border-[#e2d3b5] bg-[#f8f3ea] px-3 py-2.5 text-[0.8rem] leading-[1.75] text-[#5c564e]">
+          候選摘錄僅供對照，不是已核對的全國法規條號；正式申請請以承辦機關最新公告為準。
+        </p>
+
+        {provisions.length === 0 ? (
+          <p className="mt-4 text-[0.9rem] leading-[1.9] text-[#6b6459]">
+            這筆項目目前還沒有對應的法條摘錄。可改用頁面下方「一起看相關法條」，或直接洽詢承辦單位。
+          </p>
+        ) : (
+          <ul className="mt-4 space-y-4">
+            {provisions.map((provision) => (
+              <li
+                key={provision.provisionId}
+                className="border-t border-[#eee7db] pt-4 first:border-t-0 first:pt-0"
+              >
+                <h3 className="text-[0.95rem] font-semibold text-[#171513]">
+                  {provision.title}
+                </h3>
+                <p className="mt-1 text-[0.8rem] text-[#6b6459]">
+                  {provision.lawName}
+                  {provision.articleLabel ? ` · ${provision.articleLabel}` : ""}
+                  {" · "}
+                  {provision.publisherName}
+                </p>
+                <p className="mt-2 text-[0.88rem] leading-[1.85] text-[#4a453d]">
+                  {provision.plainLanguageSummary}
+                </p>
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[0.82rem] font-semibold text-[#2f4f45]">
+                    看原文摘錄
+                  </summary>
+                  <p className="mt-2 whitespace-pre-wrap text-[0.82rem] leading-[1.8] text-[#5c564e]">
+                    {provision.excerpt}
+                  </p>
+                </details>
+                <p className="mt-2">
+                  <a
+                    href={provision.sourceUrl}
+                    rel="noreferrer noopener"
+                    target="_blank"
+                    className="text-[0.82rem] font-semibold text-[#2f4f45] underline decoration-[#a8bdb2] underline-offset-2 hover:decoration-[#2f4f45]"
+                  >
+                    開啟官方來源
+                  </a>
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 

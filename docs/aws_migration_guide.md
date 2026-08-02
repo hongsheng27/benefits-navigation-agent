@@ -459,6 +459,10 @@ Do not read the current behaviour as Option B having been chosen.
    - Until that API exists, `listTrackedCases()` returns an empty list
      (`isMock: true`). The tracking page shows only items the user added via
      result-page「加入追蹤」in `localStorage` (`frontend/src/lib/trackingStore.ts`).
+   - Local tracked items also store per-item `flowSteps` /
+     `completedStepCount` for the in-browser progress bar（「已完成」advances
+     the current step）. When migrating to a real case API, persist those fields
+     server-side or map them onto `TrackedCase.flowSteps`.
    - Optional fixture file `frontend/src/mocks/trackedCases.ts` is for tests /
      manual demos only — do not wire it back into the live tracking page.
    - Set `VITE_USE_CASE_TRACKING_MOCK=true` to force the empty mock path

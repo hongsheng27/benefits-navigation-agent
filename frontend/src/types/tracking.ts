@@ -50,6 +50,12 @@ export type TrackedCase = {
   agencies: string[];
 };
 
+/** 單一追蹤項目內的辦理步驟（本機進度用）。 */
+export type TrackedBenefitFlowStep = {
+  stepId: string;
+  label: string;
+};
+
 /**
  * 結果頁「加入追蹤」的單一補助／手續項目。
  * 存在 localStorage；與案件級 TrackedCase 並存。
@@ -63,4 +69,8 @@ export type TrackedBenefitItem = {
   agency?: string;
   nextAction?: string;
   addedAt: string;
+  /** 辦理任務列表；舊資料讀取時會依 itemId 補齊。 */
+  flowSteps: TrackedBenefitFlowStep[];
+  /** 已完成步數（0～flowSteps.length）；目前步驟 = completedStepCount。 */
+  completedStepCount: number;
 };

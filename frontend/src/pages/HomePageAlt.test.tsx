@@ -273,17 +273,11 @@ describe("HomePageAlt", () => {
     fireEvent.click(await screen.findByRole("button", { name: "對，就是這些情況" }));
 
     expect(await screen.findByText("你和需要照顧的人是什麼關係？")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "一次回答多題" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "子女" }));
 
-    expect(screen.getByText("再請你回答幾個問題")).toBeInTheDocument();
-    expect(screen.queryByText("給父親（被照顧者）")).not.toBeInTheDocument();
-    expect(calls.filter((call) => call.url.endsWith("/sessions/advance"))).toHaveLength(
-      2,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "送出答案" }));
-
     expect(await screen.findByText(/我們好像已經掌握夠多了/)).toBeInTheDocument();
+    expect(screen.getByText("再確認一下就可以了")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "查看結果" }));
 
     expect(await screen.findByText("給父親（被照顧者）")).toBeInTheDocument();
@@ -508,7 +502,7 @@ describe("HomePageAlt", () => {
     render(<HomePageAlt />);
     expect(await screen.findByText("服務已就緒")).toBeInTheDocument();
     await startIntake();
-    describeSituation("爸媽需要長期照顧，不知道長照可以從哪裡開始。");
+    describeSituation("爸工作受傷需要長期照顧，不知道長照可以從哪裡開始。");
     fireEvent.click(await screen.findByRole("button", { name: "對，就是這件事" }));
 
     expect(await screen.findByText("我們接著往下看")).toBeInTheDocument();

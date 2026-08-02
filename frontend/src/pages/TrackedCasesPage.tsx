@@ -4,6 +4,7 @@ import { listTrackedCases } from "../api/trackingClient";
 import styles from "../components/alt/alt.module.css";
 import {
   addTrackedBenefitItem,
+  advanceTrackedBenefitStep,
   clearTrackedBenefitItems,
   listPendingBenefitItems,
   listTrackedBenefitItems,
@@ -258,12 +259,22 @@ function BenefitItemCard({
   mode,
   onAdd,
   onRemove,
+  onAdvanceStep,
 }: {
   item: TrackedBenefitItem | PendingBenefitItem;
   mode: "tracked" | "pending";
   onAdd?: () => void;
   onRemove?: () => void;
+  onAdvanceStep?: () => void;
 }) {
+  const isTracked = mode === "tracked" && "flowSteps" in item;
+  const flowSteps = isTracked ? item.flowSteps : [];
+  const completedStepCount = isTracked ? item.completedStepCount : 0;
+  const totalSteps = flowSteps.length;
+  const progressRatio = totalSteps > 0 ? completedStepCount / totalSteps : 0;
+  const allDone = isTracked && totalSteps > 0 && completedStepCount >= totalSteps;
+  const currentStep = isTracked ? flowSteps[completedStepCount] : null;
+
   return (
     <article className="border border-[#e0d8ca] bg-[#fdfbf7] px-4 py-5 sm:px-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -281,6 +292,92 @@ function BenefitItemCard({
           {item.nextAction}
         </p>
       ) : null}
+
+      {isTracked && totalSteps > 0 ? (
+        <section className="mt-4" aria-label="辦理進度">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h4 className="text-[0.88rem] font-semibold tracking-[0.04em] text-[#2f4f45]">
+              辦理進度
+            </h4>
+            <p className="text-[0.78rem] text-[#6b6459]">
+              {allDone
+                ? `全部 ${totalSteps} 步已完成`
+                : `第 ${completedStepCount + 1}／${totalSteps} 步`}
+            </p>
+          </div>
+          <div
+            className="mt-2 h-2 overflow-hidden rounded-full bg-[#e8e0d2]"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={totalSteps}
+            aria-valuenow={completedStepCount}
+            aria-label={`${item.name} 進度 ${completedStepCount}／${totalSteps}`}
+          >
+            <div
+              className="h-full rounded-full bg-[#2f4f45] transition-[width] duration-500 ease-out"
+              style={{ width: `${Math.round(progressRatio * 100)}%` }}
+            />
+          </div>
+          <ol className="mt-4 space-y-2">
+            {flowSteps.map((step, index) => {
+              const done = index < completedStepCount;
+              const current = index === completedStepCount && !allDone;
+              const marker = done
+                ? "bg-[#2f4f45] text-[#f7f4ee]"
+                : current
+                  ? "border-2 border-[#2f4f45] bg-[#f1f4f0] text-[#2f4f45] shadow-[0_0_0_3px_rgba(47,79,69,0.12)]"
+                  : "border border-[#d8cfc0] bg-[#f7f4ee] text-[#8b8377]";
+              return (
+                <li
+                  key={step.stepId}
+                  className={`flex gap-3 rounded-sm px-2 py-2 transition-colors duration-300 ${
+                    current ? "bg-[#f1f4f0]" : ""
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-full text-[0.72rem] font-semibold transition-all duration-300 ${marker}`}
+                  >
+                    {done ? "✓" : index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className={`text-[0.9rem] font-semibold ${
+                        current
+                          ? "text-[#2f4f45]"
+                          : done
+                            ? "text-[#5c564e]"
+                            : "text-[#8b8377]"
+                      }`}
+                    >
+                      {step.label}
+                      <span className="ml-2 text-[0.75rem] font-normal text-[#8b8377]">
+                        {done ? "已完成" : current ? "進行中" : "待辦"}
+                      </span>
+                    </p>
+                    {current && onAdvanceStep ? (
+                      <button
+                        type="button"
+                        onClick={onAdvanceStep}
+                        className="mt-2 rounded-sm bg-[#2f4f45] px-3.5 py-1.5 text-[0.82rem] font-semibold text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                      >
+                        已完成
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+          {allDone ? (
+            <p className="mt-3 text-[0.85rem] leading-[1.8] text-[#2f4f45]">
+              這項已走完目前整理的步驟。若還要辦別的，可繼續看其他追蹤項目。
+            </p>
+          ) : currentStep ? (
+            <p className="sr-only">目前步驟：{currentStep.label}</p>
+          ) : null}
+        </section>
+      ) : null}
+
       {mode === "pending" && onAdd ? (
         <button
           type="button"
@@ -429,6 +526,10 @@ export function TrackedCasesPage({
                       key={`tracked-${item.itemId}`}
                       item={item}
                       mode="tracked"
+                      onAdvanceStep={() => {
+                        advanceTrackedBenefitStep(item.itemId);
+                        refreshLocalTracking();
+                      }}
                       onRemove={() => {
                         removeTrackedBenefitItem(item.itemId);
                         refreshLocalTracking();
@@ -472,7 +573,6 @@ export function TrackedCasesPage({
                           lifeEventId: item.lifeEventId,
                           lifeEventLabel: item.lifeEventLabel,
                           agency: item.agency,
-                          nextAction: "回來看辦理進度與應備文件",
                         });
                         refreshLocalTracking();
                       }}

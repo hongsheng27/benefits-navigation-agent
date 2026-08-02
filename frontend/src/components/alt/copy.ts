@@ -107,7 +107,7 @@ export const LIFE_EVENT_CATALOG: readonly LifeEventCopy[] = [
     eventId: "long_term_care_need",
     label: "長照需求",
     category: "健康與照顧",
-    examplePrompt: "爸媽需要長期照顧，想知道長照服務與補助怎麼開始申請。",
+    examplePrompt: "爸工作受傷需要長期照顧，不知道長照可以從哪裡開始。",
   },
   {
     eventId: "caregiver_burden",
