@@ -8,6 +8,7 @@ import type {
   CopilotMessage,
   PostConsultPanelKind,
 } from "../../types/postConsult";
+import { CopilotReplyBody } from "./CopilotReplyBody";
 
 type PostConsultPanelProps = {
   kind: PostConsultPanelKind;
@@ -160,7 +161,10 @@ export function PostConsultPanel({
                       : "self-end bg-[#2f4f45] text-[#f7f4ee]"
                   }`}
                 >
-                  {message.content}
+                  <CopilotReplyBody
+                    content={message.content}
+                    tone={message.role === "assistant" ? "assistant" : "user"}
+                  />
                 </div>
               ))}
               {busy ? (
