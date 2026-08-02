@@ -1,0 +1,122 @@
+{
+  "_comment": "事件關係圖種子資料。節點代號即是 API 使用的事件代號與方案代號 —— life_event 節點的 node_id 必須與 life_event_extraction.LIFE_EVENT_CODES 一致，否則展開會拋 invalid_event_id。",
+  "_design_notes": {
+    "邊條件 vs 規則條件": "graph_edge_conditions 只放『這一項適不適用於你』，例如已經做過評估的人不需要看到『申請評估』。『符不符合資格』（年齡門檻、身分別）一律留在規則樹 rule_conditions —— 把年齡條件放在邊上會讓不符合的人整項消失，而正確行為是顯示它並說出差在哪一條。",
+    "程式節點是展開的終點": "BFS 走到 benefit_program 節點就停，不會再往下走。所以 requires 與 produces 邊純粹用來表達關係與排序，不會造成額外的項目出現。",
+    "欄位沒答時的行為": "邊條件用到的欄位若使用者還沒回答，該路徑會保留，並把欄位代號記進 missing_field_ids。所以一開始兩條路都會出現，等使用者答了才收斂 —— 這是刻意的，不猜。"
+  },
+  "version": "0.1",
+  "programs": [
+    {
+      "program_id": "ltc_needs_assessment",
+      "canonical_name": "申請長照需求評估",
+      "program_status": "candidate",
+      "_note": "刻意沒有任何事實欄位。額度、部分負擔比例、辦理期限都要等人工審查過官方依據才會有。"
+    },
+    {
+      "program_id": "ltc_service_after_assessment",
+      "canonical_name": "聯繫個案管理員調整照顧計畫",
+      "program_status": "candidate",
+      "_note": "給已經完成評估的家庭。同樣沒有任何未經審查的事實。"
+    }
+  ],
+  "nodes": [
+    {
+      "node_id": "long_term_care",
+      "node_type": "life_event",
+      "display_name": "長期照顧需求",
+      "program_id": null
+    },
+    {
+      "node_id": "ltc_needs_assessment",
+      "node_type": "benefit_program",
+      "display_name": "申請長照需求評估",
+      "program_id": "ltc_needs_assessment"
+    },
+    {
+      "node_id": "ltc_service_after_assessment",
+      "node_type": "benefit_program",
+      "display_name": "聯繫個案管理員調整照顧計畫",
+      "program_id": "ltc_service_after_assessment"
+    },
+    {
+      "node_id": "ltc_management_center",
+      "node_type": "agency",
+      "display_name": "長期照顧管理中心",
+      "program_id": null
+    }
+  ],
+  "edges": [
+    {
+      "edge_id": "ltc_e01",
+      "from_node_id": "long_term_care",
+      "to_node_id": "ltc_needs_assessment",
+      "edge_type": "triggers",
+      "canonical_order": 0,
+      "conditions": [
+        {
+          "condition_id": "c1",
+          "field_id": "has_completed_care_assessment",
+          "operator": "==",
+          "expected_value_type": "boolean",
+          "expected_value_json": "false",
+          "condition_order": 0,
+          "_why": "已經做過評估的人不需要再申請一次。這是適用性，不是資格 —— 沒做過的人不會因為這條被擋掉。"
+        }
+      ]
+    },
+    {
+      "edge_id": "ltc_e02",
+      "from_node_id": "long_term_care",
+      "to_node_id": "ltc_service_after_assessment",
+      "edge_type": "triggers",
+      "canonical_order": 1,
+      "conditions": [
+        {
+          "condition_id": "c1",
+          "field_id": "has_completed_care_assessment",
+          "operator": "==",
+          "expected_value_type": "boolean",
+          "expected_value_json": "true",
+          "condition_order": 0,
+          "_why": "還沒評估的人聯繫不到個案管理員，因為還沒有人被指派給他。"
+        }
+      ]
+    },
+    {
+      "edge_id": "ltc_e03",
+      "from_node_id": "ltc_service_after_assessment",
+      "to_node_id": "ltc_needs_assessment",
+      "edge_type": "requires",
+      "canonical_order": 0,
+      "conditions": [],
+      "_why": "沒做過需求評估就沒有個案管理員可以聯繫。這條邊讓前者在清單上排在後者之後，並標成「要先辦」，而不是把它藏起來。"
+    },
+    {
+      "edge_id": "ltc_e04",
+      "from_node_id": "ltc_needs_assessment",
+      "to_node_id": "ltc_service_after_assessment",
+      "edge_type": "produces",
+      "canonical_order": 0,
+      "conditions": [],
+      "_why": "評估完成後會核定照顧計畫，接下來才談得上調整服務內容。"
+    },
+    {
+      "edge_id": "ltc_e05",
+      "from_node_id": "ltc_needs_assessment",
+      "to_node_id": "ltc_management_center",
+      "edge_type": "administered_by",
+      "canonical_order": 0,
+      "conditions": [],
+      "_why": "受理窗口是居住地的長照管理中心。這就是題庫要問 residence_city_code 的原因。"
+    },
+    {
+      "edge_id": "ltc_e06",
+      "from_node_id": "ltc_service_after_assessment",
+      "to_node_id": "ltc_management_center",
+      "edge_type": "administered_by",
+      "canonical_order": 0,
+      "conditions": []
+    }
+  ]
+}

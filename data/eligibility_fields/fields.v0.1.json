@@ -1,5 +1,9 @@
 {
-  "_comment": "欄位登記表種子資料。這幾筆是佔位用，正式欄位由政策資料負責人依法規決定。代號與選項沿用 MVP 情境（配偶過世），切點為暫定。",
+  "_comment": "欄位登記表種子資料。文案不在這裡 —— 這份檔案只宣告代號、型別、選項與「為什麼要問」，實際問句由前端依 field_id 決定。新增欄位是隱私決策：purpose 不能空白，pii_classification 必須明確標示。",
+  "_domains": {
+    "spouse_death": "配偶過世（情境一）。切點為暫定，正式欄位由政策資料負責人依法規決定。",
+    "long_term_care": "長期照顧（情境二）。範圍限定在「能不能申請長照需求評估、下一步該做什麼」，刻意不含 CMS 失能等級與給付試算 —— 失能等級是照管專員到府評估後才知道的結果，使用者事前答不出來，放進來只會讓多數人卡在「需要更多資訊」。"
+  },
   "version": "0.1",
   "fields": [
     {
@@ -16,7 +20,8 @@
       "purpose": "投保身分決定由哪個機關受理，以及適用哪一套給付規則",
       "used_by": ["funeral_benefit", "survivor_pension"],
       "topic_id": "deceased_insurance",
-      "status": "draft"
+      "status": "draft",
+      "pii_classification": "eligibility_sensitive"
     },
     {
       "field_id": "has_dependent_children",
@@ -26,7 +31,8 @@
       "purpose": "遺屬年金有加給條件，依據是否有未成年子女",
       "used_by": ["survivor_pension"],
       "topic_id": "family_situation",
-      "status": "draft"
+      "status": "draft",
+      "pii_classification": "eligibility_sensitive"
     },
     {
       "field_id": "applicant_age_band",
@@ -41,7 +47,130 @@
       "purpose": "遺屬年金有年齡條件，不同年齡區間適用不同規定",
       "used_by": ["survivor_pension"],
       "topic_id": "applicant_situation",
-      "status": "draft"
+      "status": "draft",
+      "pii_classification": "none"
+    },
+
+    {
+      "field_id": "care_recipient_age_band",
+      "value_kind": "band",
+      "option_ids": [
+        "under_50",
+        "50_to_54",
+        "55_to_64",
+        "65_or_above"
+      ],
+      "required": true,
+      "purpose": "長照服務對象分四類，各有不同年齡門檻（一般失能者、失智症者、原住民族失能者、領有身障證明者）。年齡級距決定要往哪一類判斷。收級距而不收精確年齡，因為判斷只需要知道落在哪一段",
+      "used_by": ["ltc_needs_assessment"],
+      "topic_id": "care_recipient_basic",
+      "status": "draft",
+      "pii_classification": "none"
+    },
+    {
+      "field_id": "daily_activity_assistance_need",
+      "value_kind": "code",
+      "option_ids": [
+        "none",
+        "occasional",
+        "daily",
+        "unsure"
+      ],
+      "required": true,
+      "purpose": "長照服務以日常生活需要他人協助為前提。這一題只用來判斷要不要建議申請評估，不取代照管專員的正式評估，也不會拿來推算給付額度。保留 unsure 選項，因為家屬經常無法自行判斷程度",
+      "used_by": ["ltc_needs_assessment"],
+      "topic_id": "care_recipient_basic",
+      "status": "draft",
+      "pii_classification": "eligibility_sensitive"
+    },
+    {
+      "field_id": "has_dementia_diagnosis",
+      "value_kind": "boolean",
+      "option_ids": [],
+      "required": true,
+      "purpose": "經醫師診斷為失智症者適用較低的年齡門檻。不問這一題，50 到 64 歲的失智症家庭會被一般年齡條件誤擋在門外",
+      "used_by": ["ltc_needs_assessment"],
+      "topic_id": "care_recipient_identity",
+      "status": "draft",
+      "pii_classification": "eligibility_sensitive"
+    },
+    {
+      "field_id": "is_indigenous",
+      "value_kind": "boolean",
+      "option_ids": [],
+      "required": true,
+      "purpose": "原住民族失能者適用較低的年齡門檻。問這一題是為了讓符合資格的人被找出來，不是用來分類使用者；除了年齡門檻判斷之外，不會用於任何其他推論",
+      "used_by": ["ltc_needs_assessment"],
+      "topic_id": "care_recipient_identity",
+      "status": "draft",
+      "pii_classification": "eligibility_sensitive"
+    },
+    {
+      "field_id": "has_disability_certificate",
+      "value_kind": "boolean",
+      "option_ids": [],
+      "required": true,
+      "purpose": "領有身心障礙證明的失能者不受一般年齡門檻限制。另外身障福利與長照的輔具補助有互斥規定，不先知道有沒有證明，後續給的建議可能是使用者實際上申請不到的",
+      "used_by": ["ltc_needs_assessment", "ltc_service_after_assessment"],
+      "topic_id": "care_recipient_identity",
+      "status": "draft",
+      "pii_classification": "eligibility_sensitive"
+    },
+    {
+      "field_id": "has_completed_care_assessment",
+      "value_kind": "boolean",
+      "option_ids": [],
+      "required": true,
+      "purpose": "已完成需求評估者的下一步是聯繫個案管理員調整照顧計畫；尚未評估者的下一步是撥打 1966 申請評估。兩者流程完全不同，判斷錯會把人導到錯的窗口",
+      "used_by": ["ltc_needs_assessment", "ltc_service_after_assessment"],
+      "topic_id": "care_current_arrangement",
+      "status": "draft",
+      "pii_classification": "none"
+    },
+    {
+      "field_id": "employs_foreign_caregiver",
+      "value_kind": "boolean",
+      "option_ids": [],
+      "required": true,
+      "purpose": "已聘僱外籍家庭看護工的家庭，可使用的長照服務項目與額度與未聘僱者不同。不問就會給出使用者實際上申請不到的建議",
+      "used_by": ["ltc_needs_assessment", "ltc_service_after_assessment"],
+      "topic_id": "care_current_arrangement",
+      "status": "draft",
+      "pii_classification": "none"
+    },
+    {
+      "field_id": "residence_city_code",
+      "value_kind": "code",
+      "option_ids": [
+        "taipei",
+        "new_taipei",
+        "taoyuan",
+        "taichung",
+        "tainan",
+        "kaohsiung",
+        "keelung",
+        "hsinchu_city",
+        "hsinchu_county",
+        "miaoli",
+        "changhua",
+        "nantou",
+        "yunlin",
+        "chiayi_city",
+        "chiayi_county",
+        "pingtung",
+        "yilan",
+        "hualien",
+        "taitung",
+        "penghu",
+        "kinmen",
+        "lienchiang"
+      ],
+      "required": true,
+      "purpose": "長照服務由被照顧者居住地的長照管理中心受理，不知道縣市就給不出正確的洽詢窗口。只收到縣市層級，不收更細的地址",
+      "used_by": ["ltc_needs_assessment", "ltc_service_after_assessment"],
+      "topic_id": "care_location",
+      "status": "draft",
+      "pii_classification": "eligibility_sensitive"
     }
   ]
 }

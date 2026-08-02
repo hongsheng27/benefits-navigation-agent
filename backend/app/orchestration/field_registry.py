@@ -46,6 +46,17 @@ DEFAULT_REGISTRY_PATH = (
 )
 
 
+PII_CLASSIFICATIONS: frozenset[str] = frozenset(
+    {"none", "eligibility_sensitive", "direct_identifier"}
+)
+"""欄位的隱私分級。與 SQLite `field_registry.pii_classification` 的 CHECK 一致。
+
+- `none`：級距、是非題等，單獨看不指向特定個人
+- `eligibility_sensitive`：健康、族群、經濟身分、居住地等
+- `direct_identifier`：姓名、身分證字號等。**目前沒有任何欄位該用這一級**
+"""
+
+
 class FieldDefinition(BaseModel):
     """登記表裡一個欄位的完整定義。"""
 
@@ -60,11 +71,27 @@ class FieldDefinition(BaseModel):
     topic_id: str
     status: str = "draft"  # draft 或 active
 
+    # 預設值刻意是 `eligibility_sensitive` 而不是 `none`：忘記標的時候要往
+    # 「當作敏感」的方向倒。過度保護的代價是多一道確認，反過來的代價是把敏感
+    # 資訊當成一般欄位處理。
+    pii_classification: str = "eligibility_sensitive"
+
     @field_validator("purpose")
     @classmethod
     def purpose_not_blank(cls, v: str) -> str:
         if not v.strip():
             msg = "purpose 不能是空白字串。新增欄位是隱私決策，必須寫出理由。"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("pii_classification")
+    @classmethod
+    def pii_is_known(cls, v: str) -> str:
+        if v not in PII_CLASSIFICATIONS:
+            msg = (
+                f"pii_classification 必須是 {sorted(PII_CLASSIFICATIONS)} 之一，"
+                f"得到 {v!r}。"
+            )
             raise ValueError(msg)
         return v
 

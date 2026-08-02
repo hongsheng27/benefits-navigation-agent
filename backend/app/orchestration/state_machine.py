@@ -41,6 +41,10 @@ from dataclasses import dataclass
 
 from app.orchestration.determination import evaluate_ready_items, visible_items
 from app.orchestration.field_registry import FieldRegistry
+from app.orchestration.life_event_extraction import (
+    DEFAULT_EXTRACTOR,
+    LifeEventExtractorPort,
+)
 from app.orchestration.local_worker import RefreshWorkerPort
 from app.orchestration.protocols import (
     CoverageScope,
@@ -233,6 +237,8 @@ class _Seams:
     # 這個接縫只暴露 `submit()`，所以 request path 在型別上就沒有辦法同步執行
     # crawl 或 LLM（Req 11.10）。
     refresh_worker: RefreshWorkerPort | None = None
+    # 事件辨識。預設是關鍵字比對，之後換 LLM 版時只換這個注入值。
+    life_event_extractor: LifeEventExtractorPort = DEFAULT_EXTRACTOR
 
 
 def advance(
@@ -247,6 +253,7 @@ def advance(
     coverage_scope: CoverageScope | None = None,
     evidence_repository: EvidenceRepository | None = None,
     refresh_worker: RefreshWorkerPort | None = None,
+    life_event_extractor: LifeEventExtractorPort | None = None,
 ) -> SessionState:
     """依輸入推進狀態，並自動走完不需要使用者的中間步驟。
 
@@ -293,6 +300,11 @@ def advance(
         ),
         evidence_repository=evidence_repository,
         refresh_worker=refresh_worker,
+        life_event_extractor=(
+            life_event_extractor
+            if life_event_extractor is not None
+            else DEFAULT_EXTRACTOR
+        ),
     )
 
     # 流程已經結束就不再接受任何輸入（Req 1.5、Req 5.3）。
@@ -340,7 +352,7 @@ def _handle_input(
     """依輸入種類產生新狀態。這裡只處理「使用者做了什麼」，不處理自動推進。"""
     match user_input:
         case LifeEventTextInput():
-            return _receive_life_event(state, user_input)
+            return _receive_life_event(state, user_input, seams.life_event_extractor)
         case EventConfirmationInput():
             return _confirm_event(state, user_input)
         case AttributeAnswersInput():
@@ -356,19 +368,35 @@ def _handle_input(
 
 
 def _receive_life_event(
-    state: SessionState, user_input: LifeEventTextInput
+    state: SessionState,
+    user_input: LifeEventTextInput,
+    extractor: LifeEventExtractorPort,
 ) -> SessionState:
-    """接收自由文字。
+    """接收自由文字，抽出事件代號。
 
-    真正的實作會呼叫 LLM 抽取事件代號與屬性（T21）。目前暫時用寫死的代號，
-    讓流程可以走通。
+    抽取器只能從 `LIFE_EVENT_CODES` 這個封閉集合裡選一個，認不出來時回 `None`。
+    `None` 不是錯誤，是一個正常答案 —— 它代表「我沒把握」，而把沒把握說出來
+    遠比猜一個代號安全：猜錯會把使用者帶到完全不相干的方案。
+
+    認不出來時給重試機會（`MAX_EVENT_RETRIES`），超過上限才走人工協助出口。
+    這裡用 `EVENT_NOT_RECOGNIZED` 而不是 `EVENT_RETRY_LIMIT_REACHED`，兩者語意
+    不同：前者是系統聽不懂，後者是系統聽懂了但使用者說不對。
 
     自由文字本身沒有被保存 —— SessionState 沒有欄位放它（ADR-0007）。
     """
-    # TODO(T21): 呼叫 LLM 抽取事件代號。目前寫死，不管輸入什麼都回同一個值。
-    # 直接覆寫 life_event，所以使用者否認後重新描述也會正確更新。
-    extracted_event = "spouse_death"
+    extracted_event = extractor.extract(user_input.text)
 
+    if extracted_event is None:
+        retries = state.event_retry_count + 1
+        update: dict[str, object] = {
+            "life_event": None,
+            "event_retry_count": retries,
+        }
+        if retries > MAX_EVENT_RETRIES:
+            update["exit_reason"] = ExitReason.EVENT_NOT_RECOGNIZED
+        return state.model_copy(update=update)
+
+    # 直接覆寫 life_event，所以使用者否認後重新描述也會正確更新。
     return state.model_copy(update={"life_event": extracted_event})
 
 
@@ -693,7 +721,16 @@ def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState
     )
 
     if not items:
-        return state
+        # 認得事件代號，但 entitlement graph 裡沒有對應的項目。
+        #
+        # 在事件辨識還寫死的時候這條路走不到，所以一直沒有出口；現在辨識會回真實
+        # 代號了，「聽懂了但沒資料」變成常見情況（例如長照目前就是這樣）。不設出口
+        # 的話使用者會停在一個沒有項目、也沒有原因的空白畫面。
+        #
+        # 暫時沿用 `EVENT_NOT_RECOGNIZED`：從使用者的角度，「認不出你的情況」與
+        # 「對應不到任何項目」的結果一樣是「這裡幫不上忙，請找人」。兩者要分開報
+        # 就得新增一個 ExitReason，那是對外契約的變動，留給前端一起決定。
+        return state.model_copy(update={"exit_reason": ExitReason.EVENT_NOT_RECOGNIZED})
 
     return state.model_copy(update={"items": items})
 

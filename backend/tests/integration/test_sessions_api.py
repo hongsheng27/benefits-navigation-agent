@@ -78,7 +78,7 @@ def test_advancing_with_text_then_confirming_reveals_items(
     after_text = client.post(
         "/sessions/advance",
         headers=_headers(session_id),
-        json={"input": {"kind": "life_event_text", "text": "家人剛過世"}},
+        json={"input": {"kind": "life_event_text", "text": "我先生剛過世"}},
     )
     assert after_text.status_code == 200
     assert after_text.json()["lifeEvent"] == "spouse_death"
@@ -126,7 +126,7 @@ def test_reading_the_current_session_reflects_earlier_advances(
     client.post(
         "/sessions/advance",
         headers=_headers(session_id),
-        json={"input": {"kind": "life_event_text", "text": "測試"}},
+        json={"input": {"kind": "life_event_text", "text": "我先生剛過世"}},
     )
 
     response = client.get("/sessions/current", headers=_headers(session_id))
@@ -156,7 +156,7 @@ def test_an_unknown_session_is_not_found(client: TestClient) -> None:
 def test_text_sent_at_the_wrong_step_is_a_conflict(client: TestClient) -> None:
     session_id, _ = _create(client)
     for payload in (
-        {"kind": "life_event_text", "text": "測試"},
+        {"kind": "life_event_text", "text": "我先生剛過世"},
         {"kind": "event_confirmation", "confirmed": True},
     ):
         client.post(
@@ -166,7 +166,7 @@ def test_text_sent_at_the_wrong_step_is_a_conflict(client: TestClient) -> None:
     response = client.post(
         "/sessions/advance",
         headers=_headers(session_id),
-        json={"input": {"kind": "life_event_text", "text": "又一段"}},
+        json={"input": {"kind": "life_event_text", "text": "我父親剛過世"}},
     )
 
     assert response.status_code == 409
@@ -182,7 +182,7 @@ def test_declining_an_unknown_item_is_reported(client: TestClient) -> None:
     client.post(
         "/sessions/advance",
         headers=_headers(session_id),
-        json={"input": {"kind": "life_event_text", "text": "測試"}},
+        json={"input": {"kind": "life_event_text", "text": "我先生剛過世"}},
     )
     client.post(
         "/sessions/advance",
@@ -206,7 +206,7 @@ def _advance_to_questions(client: TestClient) -> str:
     client.post(
         "/sessions/advance",
         headers=_headers(session_id),
-        json={"input": {"kind": "life_event_text", "text": "測試"}},
+        json={"input": {"kind": "life_event_text", "text": "我先生剛過世"}},
     )
     client.post(
         "/sessions/advance",
