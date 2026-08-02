@@ -1,6 +1,9 @@
 import type { TrackedCase } from "../types/tracking";
 
-/** 追蹤進度頁的示範案件（離線假資料）。 */
+/**
+ * 追蹤案件示範 fixture（單元測試／手動示範用）。
+ * 正式追蹤頁不再注入這些資料；使用者項目來自結果頁「加入追蹤」。
+ */
 export const MOCK_TRACKED_CASES: TrackedCase[] = [
   {
     caseId: "case_spouse_20260728",

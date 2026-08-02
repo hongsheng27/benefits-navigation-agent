@@ -248,7 +248,7 @@ export function AgenciesPage({ focus = null, onClearFocus }: AgenciesPageProps) 
 
         {isMock ? (
           <p className="mt-4 max-w-2xl border-l-2 border-[#8a5a1a] bg-[#f6f1e6] px-3 py-2.5 text-[0.82rem] leading-[1.8] text-[#4a453d] sm:mt-5 sm:px-4 sm:py-3 sm:text-[0.85rem] sm:leading-[1.85]">
-            目前機關與案件皆為示範資料。之後會改讀資料庫與你的真實諮詢紀錄。
+            目前機關目錄為示範資料。追蹤案件需你先在結果頁「加入追蹤」；之後會改讀資料庫與真實諮詢紀錄。
           </p>
         ) : null}
 
