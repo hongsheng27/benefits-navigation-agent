@@ -2,7 +2,7 @@
 name = "jiezhu-backend"
 version = "0.1.0"
 description = "接住 benefits navigation backend"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "boto3>=1.43.62",
     "fastapi>=0.115",
@@ -21,7 +21,7 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py311"
 line-length = 88
 
 [tool.ruff.lint]

@@ -146,7 +146,9 @@ ALLOWED_INPUTS: dict[WorkflowState, set[type]] = {
 # 守門條件回傳 True 表示可以進入，False 表示跳過（走 NOMINAL_PATH 的下一步）。
 # 沒有列在這裡的狀態永遠可以進入。
 
-type Guard = Callable[[SessionState], bool]
+from typing import TypeAlias
+
+Guard: TypeAlias = "Callable[[SessionState], bool]"
 
 ENTRY_GUARDS: dict[WorkflowState, Guard] = {
     # CONFIRM 只在有項目需要人工協助或資訊不足時才進入。

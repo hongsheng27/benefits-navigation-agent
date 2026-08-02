@@ -33,6 +33,7 @@ state。這在安全上稱為 bearer token（持有即通行）。因此：
 import secrets
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from typing import TypeAlias
 
 from app.orchestration.state import SessionState
 
@@ -46,7 +47,7 @@ SESSION_ID_BYTES = 32
 # 傳遞 session_id 的 header 名稱。
 SESSION_ID_HEADER = "X-Session-Id"
 
-type Clock = Callable[[], datetime]
+Clock: TypeAlias = "Callable[[], datetime]"
 
 
 def _utc_now() -> datetime:

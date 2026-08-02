@@ -48,9 +48,10 @@ schema，也不是對外 API 契約。
 import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal, Union
+from typing import TypeAlias
 
-type FrozenValue = None | bool | int | float | str | tuple[FrozenValue, ...]
+FrozenValue: TypeAlias = "Union[None, bool, int, float, str, tuple[Any, ...]]"
 """Recursively immutable value for condition expected/actual fields.
 
 Mutable containers (dict, list) passed to contract constructors are automatically

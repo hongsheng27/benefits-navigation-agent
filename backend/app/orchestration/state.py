@@ -137,7 +137,10 @@ class ExitReason(StrEnum):
     USER_REQUESTED_HELP = "user_requested_help"  # 使用者主動要求人工協助
 
 
-type AttributeValue = bool | int | str
+from typing import Union
+from typing import TypeAlias as _TypeAlias
+
+AttributeValue: _TypeAlias = "Union[bool, int, str]"
 """一筆去識別化的資格答案。
 
 `bool` 排在 `int` 前面，因為 Python 把 `bool` 當成 `int` 的子類別，順序反了會被
