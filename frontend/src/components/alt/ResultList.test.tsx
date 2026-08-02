@@ -37,7 +37,7 @@ function snapshotWithItems(): SessionSnapshot {
       },
       {
         itemId: "employment_service",
-        kind: "service",
+        kind: "benefit",
         status: "needs_human_review",
         missingFieldIds: [],
         decisiveConditions: [],
@@ -60,7 +60,7 @@ function snapshotWithItems(): SessionSnapshot {
     implementation: {
       isMock: true,
       pending: [],
-      placeholderNotice: null,
+      placeholderNotice: "示範資料",
     },
   };
 }

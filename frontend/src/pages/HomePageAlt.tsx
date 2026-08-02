@@ -338,6 +338,7 @@ function IntakeSteps({
   const trimmed = description.trim();
   const actionsLocked = readOnly || isReviewing;
   const hideDemoResultActions = readOnly && groupResultsByAudience;
+  const fixResultActions = !readOnly && !isReviewing;
   const canSubmit =
     !actionsLocked &&
     trimmed.length > 0 &&
@@ -676,7 +677,7 @@ function IntakeSteps({
       ) : null}
 
       {uiStep === "result" && snapshot ? (
-        <section>
+        <section className={fixResultActions ? "pb-20" : undefined}>
           <StepProgress step="result" />
           <h1
             ref={stepHeadingRef}
@@ -715,20 +716,25 @@ function IntakeSteps({
             </div>
           )}
 
-          <div className="mt-12">
-            <p className="text-[0.88rem] leading-[1.9] text-[#6b6459]">
-              若想再多了解依據或怎麼申請，可以從這裡繼續：
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              {!isReviewing && !hideDemoResultActions ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setOpenPanel("related_provisions")}
-                    className="w-full rounded-sm bg-[#2f4f45] px-4 py-2.5 text-center text-[0.92rem] font-semibold tracking-[0.04em] text-[#f7f4ee] transition-colors hover:bg-[#254038] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
-                  >
-                    一起看相關法條
-                  </button>
+          <div
+            className={
+              fixResultActions
+                ? "fixed inset-x-0 bottom-0 z-40 border-t border-[#d8cfc0] bg-[#f7f4ee]/97 shadow-[0_-8px_24px_rgba(47,79,69,0.08)] backdrop-blur"
+                : "mt-12"
+            }
+          >
+            <div
+              className={
+                fixResultActions
+                  ? "mx-auto w-full max-w-[40rem] px-5 py-4 sm:px-8"
+                  : undefined
+              }
+            >
+              <p className="text-[0.88rem] leading-[1.9] text-[#6b6459]">
+                若想再多了解依據或怎麼申請，可以從這裡繼續：
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {!isReviewing && !hideDemoResultActions ? (
                   <button
                     type="button"
                     onClick={() => setOpenPanel("application_guide")}
@@ -736,26 +742,17 @@ function IntakeSteps({
                   >
                     一起看申請解說
                   </button>
-                </>
-              ) : null}
-              {onGoToTracking && !isReviewing && !hideDemoResultActions ? (
-                <button
-                  type="button"
-                  onClick={() => onGoToTracking(snapshot.lifeEvent)}
-                  className="w-full rounded-sm border border-[#c9c0b0] bg-transparent px-4 py-2.5 text-center text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
-                >
-                  去追蹤進度看這筆
-                </button>
-              ) : null}
-              {!actionsLocked && onReset ? (
-                <button
-                  type="button"
-                  onClick={() => onReset()}
-                  className="w-full rounded-sm border border-[#c9c0b0] bg-transparent px-4 py-2.5 text-center text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
-                >
-                  重新開始
-                </button>
-              ) : null}
+                ) : null}
+                {onGoToTracking && !isReviewing && !hideDemoResultActions ? (
+                  <button
+                    type="button"
+                    onClick={() => onGoToTracking(snapshot.lifeEvent)}
+                    className="w-full rounded-sm border border-[#c9c0b0] bg-transparent px-4 py-2.5 text-center text-[0.92rem] text-[#3a352e] transition-colors hover:border-[#2f4f45] hover:text-[#2f4f45] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4f45]"
+                  >
+                    去追蹤進度看這筆
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </section>
