@@ -21,6 +21,7 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from app.adapters.event_ids import event_id_candidates
 from app.adapters.sqlite.connection import execute_read
 from app.adapters.sqlite.mapping import map_program_status
 from app.orchestration.data_contracts import CandidateItem, GraphRelation
@@ -114,16 +115,21 @@ class SqliteEntitlementGraphRepository:
         user_attributes: Mapping[str, Any],
     ) -> tuple[CandidateItem, ...]:
         # 1. Verify event_id is a life_event node
-        event_node = connection.execute(
-            """
-            SELECT node_id, node_type
-            FROM graph_nodes
-            WHERE node_id = ?
-            """,
-            (event_id,),
-        ).fetchone()
+        event_node = None
+        for candidate_id in event_id_candidates(event_id):
+            event_node = connection.execute(
+                """
+                SELECT node_id, node_type
+                FROM graph_nodes
+                WHERE node_id = ?
+                """,
+                (candidate_id,),
+            ).fetchone()
+            if event_node is not None and str(event_node[1]) == "life_event":
+                break
         if event_node is None or str(event_node[1]) != "life_event":
             raise InvalidEventIdError("invalid_event_id")
+        resolved_event_id = str(event_node[0])
 
         # 2. Load all edges and conditions
         edges = connection.execute(
@@ -162,30 +168,32 @@ class SqliteEntitlementGraphRepository:
         program_nodes = connection.execute(
             """
             SELECT gn.node_id, gn.program_id, gn.display_name,
-                   bp.program_status
+                   bp.program_status, bp.summary
             FROM graph_nodes gn
             JOIN benefit_programs bp ON bp.program_id = gn.program_id
             WHERE gn.node_type = 'benefit_program'
             """
         ).fetchall()
-        program_info: dict[str, tuple[str, str, str]] = {}
+        program_info: dict[str, tuple[str, str, str, str]] = {}
         for row in program_nodes:
             node_id = str(row[0])
             program_id = str(row[1])
             display_name = str(row[2])
             status = str(row[3])
-            program_info[node_id] = (program_id, display_name, status)
+            summary = str(row[4])
+            program_info[node_id] = (program_id, display_name, status, summary)
 
         # 4. BFS from event node, tracking per-program missing fields
         # For each program node, track: set of paths that reach it,
         # and per-path missing field sets
         program_missing_fields: dict[str, set[str]] = defaultdict(set)
-        program_reachable: set[str] = set()
+        program_reachable: list[str] = []
+        reachable_program_ids: set[str] = set()
 
         # BFS with path condition evaluation
         # Each queue entry is (node_id, accumulated_missing_fields_along_path)
         visited_edges: set[str] = set()
-        queue: list[tuple[str, set[str]]] = [(event_id, set())]
+        queue: list[tuple[str, set[str]]] = [(resolved_event_id, set())]
         visited_nodes: set[str] = set()
 
         while queue:
@@ -199,7 +207,9 @@ class SqliteEntitlementGraphRepository:
 
             # If this is a program node, mark it reachable
             if current in program_info:
-                program_reachable.add(current)
+                if current not in reachable_program_ids:
+                    reachable_program_ids.add(current)
+                    program_reachable.append(current)
                 program_missing_fields[current].update(inherited_missing)
 
             for to_node, edge_id, _edge_type in adjacency.get(current, []):
@@ -233,15 +243,17 @@ class SqliteEntitlementGraphRepository:
                 # If to_node is a program, record missing fields for it
                 if to_node in program_info:
                     program_missing_fields[to_node].update(path_missing)
-                    program_reachable.add(to_node)
+                    if to_node not in reachable_program_ids:
+                        reachable_program_ids.add(to_node)
+                        program_reachable.append(to_node)
                 else:
                     # Propagate missing fields through intermediate nodes
                     queue.append((to_node, path_missing))
 
         # 5. Build CandidateItems for visible programs
         items: list[CandidateItem] = []
-        for node_id in sorted(program_reachable):
-            program_id, display_name, status = program_info[node_id]
+        for node_id in program_reachable:
+            program_id, display_name, status, summary = program_info[node_id]
             if status not in _VISIBLE_STATUSES:
                 continue
 
@@ -258,6 +270,7 @@ class SqliteEntitlementGraphRepository:
                     missing_field_ids=missing,
                     prerequisites=prerequisites,
                     produces=produces,
+                    summary=summary or None,
                 )
             )
 
@@ -310,7 +323,7 @@ class SqliteEntitlementGraphRepository:
         rows = connection.execute(
             """
             SELECT gn_prog.program_id, gn_prog.display_name,
-                   bp.program_status
+                   bp.program_status, bp.summary
             FROM graph_nodes gn_sys
             JOIN graph_edges ge
               ON ge.from_node_id = gn_sys.node_id
@@ -337,6 +350,7 @@ class SqliteEntitlementGraphRepository:
                 missing_field_ids=(),
                 prerequisites=(),
                 produces=(),
+                summary=str(row[3]) or None,
             )
             for row in rows
         )

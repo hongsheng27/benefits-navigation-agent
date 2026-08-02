@@ -263,7 +263,8 @@ function ResultRow({
   const detail = getItemDetail(item.itemId);
   const amountLabel = formatAmountFromItem(item) ?? detail?.amountLabel ?? null;
   const officialUrl = detail?.officialUrl ?? item.citations[0]?.url ?? null;
-  const explanation = item.explanation ?? itemFallbackExplanation(item.itemId);
+  const explanation =
+    item.explanation ?? item.summary ?? itemFallbackExplanation(item.itemId);
 
   function handleAddTracking() {
     addTrackedBenefitItem(buildTrackedItemFromResult(item, lifeEventId));
@@ -273,7 +274,7 @@ function ResultRow({
     <li className="px-4 py-4 sm:px-5">
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="text-[0.98rem] leading-[1.8] font-semibold text-[#171513]">
-          {itemName(item.itemId)}
+          {item.displayName ?? itemName(item.itemId)}
         </span>
         <span className="rounded-xs border border-[#d8cfc0] px-2 py-0.5 text-[0.75rem] leading-[1.8] tracking-[0.06em] text-[#6b6459]">
           項目類型：{itemCategoryLabel(item.itemId, item.kind)}

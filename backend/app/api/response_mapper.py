@@ -168,6 +168,8 @@ def map_item_to_api_view(
         item_id=item.item_id,
         kind=item.kind,
         status=item.status,
+        display_name=item.display_name,
+        summary=item.summary,
         program_status=item.program_status,
         missing_field_ids=item.missing_field_ids,
         decisive_conditions=decisive_conditions,

@@ -1,5 +1,6 @@
 import { getProvisionsForContext } from "../../mocks/relatedProvisions";
-import type { CopilotContext } from "../../types/postConsult";
+import type { CopilotContext, RelatedProvision } from "../../types/postConsult";
+import type { CitationView } from "../../types/session";
 import { lifeEventName } from "./copy";
 import { PostConsultPanel } from "./PostConsultPanel";
 
@@ -7,6 +8,8 @@ type RelatedProvisionsPanelProps = {
   lifeEventId: string | null;
   lifeEventIds?: string[];
   itemIds?: string[];
+  citations?: CitationView[];
+  allowFixtureFallback?: boolean;
   jurisdiction?: string | null;
   sessionId?: string | null;
   onClose: () => void;
@@ -16,21 +19,39 @@ export function RelatedProvisionsPanel({
   lifeEventId,
   lifeEventIds = [],
   itemIds = [],
+  citations = [],
+  allowFixtureFallback = true,
   jurisdiction = null,
   sessionId = null,
   onClose,
 }: RelatedProvisionsPanelProps) {
   const resolvedLifeEventIds =
-    lifeEventIds.length > 0
-      ? lifeEventIds
-      : lifeEventId
-        ? [lifeEventId]
-        : [];
-  const provisions = getProvisionsForContext({
+    lifeEventIds.length > 0 ? lifeEventIds : lifeEventId ? [lifeEventId] : [];
+  const databaseProvisions: RelatedProvision[] = Array.from(
+    new Map(citations.map((citation) => [citation.documentId, citation])).values(),
+  ).map((citation) => ({
+    provisionId: citation.documentId,
+    title: citation.title,
+    lawName: citation.title,
+    articleLabel: null,
+    publisherName: citation.publisherName,
+    sourceUrl: citation.url,
+    excerpt: citation.excerpt,
+    plainLanguageSummary: citation.excerpt,
+    reviewStatus: "candidate",
+    relatedItemIds: itemIds,
     lifeEventIds: resolvedLifeEventIds,
-    itemIds,
-    jurisdiction,
-  });
+  }));
+  const provisions =
+    databaseProvisions.length > 0
+      ? databaseProvisions
+      : allowFixtureFallback
+        ? getProvisionsForContext({
+            lifeEventIds: resolvedLifeEventIds,
+            itemIds,
+            jurisdiction,
+          })
+        : [];
   const lifeEventLabel = lifeEventId
     ? lifeEventName(lifeEventId)
     : resolvedLifeEventIds[0]

@@ -151,6 +151,7 @@ class CandidateItem:
     missing_field_ids: tuple[str, ...]
     prerequisites: tuple[GraphRelation, ...]
     produces: tuple[GraphRelation, ...]
+    summary: str | None = None
 
     def __post_init__(self) -> None:
         score = self.relevance_score

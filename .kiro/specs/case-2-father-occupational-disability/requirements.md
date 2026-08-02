@@ -4,17 +4,19 @@
 
 本功能把「父親職災失能」從只有事件確認的畫面，接成由後端 session workflow 驅動的
 完整 vertical slice。自然語言由 LLM 萃取成 `occupational_injury` 與
-`long_term_care_need`；確認後的候選項目、
-問題與篩選則由後端的離線 fixture 提供，暫時模擬未來的 SQLite repositories。
+`long_term_care_need`；確認後的候選項目、問題、篩選與結果來源由後端 repository
+提供。本機使用 SQLite，取得 RDS 網路與帳密後可切換至 PostgreSQL adapter。
 
-Fixture 是可替換的資料來源，不是資格判定捷徑。它沒有經過官方資料審查，因此所有保留在
-結果中的項目一律為 `needs_human_review`，不得標成 `eligible` 或 `ineligible`，也不得
-附上編造的法條或 citation。
+目前 seed 與 RDS ingestion 內容是可替換的候選資料，不是資格判定捷徑。它沒有經過
+官方資料審查，因此所有保留在結果中的項目一律為 `needs_human_review`，不得標成
+`eligible` 或 `ineligible`。候選官方摘錄可以顯示供使用者查閱，但不得通過 verified
+evidence gate 或支撐資格結論。
 
 ## Glossary
 
 - **Case_2_Input**：父親工作事故失能、需要長期照顧，且照顧者因此減少工時的虛構描述
-- **Backend_Fixture**：實作既有 repository protocols 的後端記憶體資料，未來可由 SQLite adapter 取代
+- **Entitlement_Repository**：實作既有 protocol 的 SQLite 或 PostgreSQL 資料查詢層
+- **Candidate_Citation**：資料庫中的候選官方摘錄，只供結果頁查閱，不是已驗證資格依據
 - **Candidate_Item**：可能相關的福利或行政事項，不代表使用者已符合資格
 - **Question_Field**：後端登記、只接受固定選項的去識別化欄位
 - **Relevance_Filter**：依結構化答案決定哪些 Candidate_Item 仍與情境相關的確定性條件
@@ -62,10 +64,10 @@ Fixture 是可替換的資料來源，不是資格判定捷徑。它沒有經過
 
 #### Acceptance Criteria
 
-1. WHEN 新的結構化答案被接受, THE Session_Workflow SHALL 以最新 attributes 再次查詢 Backend_Fixture
+1. WHEN 新的結構化答案被接受, THE Session_Workflow SHALL 以最新 attributes 再次查詢 Entitlement_Repository
 2. THE Relevance_Filter SHALL 由固定條件執行，不得呼叫 LLM
-3. WHILE 篩選所需欄位尚未回答, THE Backend_Fixture SHALL 保留可能相關的項目並讓 workflow 繼續提問
-4. WHEN 一個項目的固定相關性條件明確不成立, THE Backend_Fixture SHALL 從後續候選清單移除該項目
+3. WHILE 篩選所需欄位尚未回答, THE Entitlement_Repository SHALL 保留可能相關的項目並讓 workflow 繼續提問
+4. WHEN 一個項目的固定相關性條件明確不成立, THE Entitlement_Repository SHALL 從後續候選清單移除該項目
 5. THE Relevance_Filter SHALL 不把相關性解讀為符合資格
 
 ### Requirement 4: Case 2 結果
@@ -74,12 +76,14 @@ Fixture 是可替換的資料來源，不是資格判定捷徑。它沒有經過
 
 #### Acceptance Criteria
 
-1. THE Backend_Fixture SHALL 最多提供七個 Case 2 Candidate_Item：追蹤職災認定、職災保險失能給付、身心障礙鑑定、長照需求評估、家庭照顧者支持與喘息服務、照顧者就業支持、支持專線與人工協助
+1. THE Entitlement_Repository SHALL 最多提供七個 Case 2 Candidate_Item：追蹤職災認定、職災保險失能給付、身心障礙鑑定、長照需求評估、家庭照顧者支持與喘息服務、照顧者就業支持、支持專線與人工協助
 2. WHEN Case_2_Input 的示範答案全部送出, THE result SHALL 保留上述七個項目
 3. THE frontend SHALL 依 item ID 將結果分為「給父親（被照顧者）」與「給你（照顧者）」
-4. THE result SHALL 顯示 Backend_Fixture 尚未完成正式規則與官方依據審查
+4. THE result SHALL 顯示資料庫候選資料尚未完成正式規則與官方依據審查
 5. EVERY retained Candidate_Item SHALL have status `needs_human_review`
-6. THE result SHALL NOT contain fabricated citations, amounts, deadlines, agencies, legal provisions, eligibility conclusions, or application guarantees
+6. THE result SHALL NOT contain fabricated amounts, deadlines, agencies, legal provisions, eligibility conclusions, or application guarantees
+7. WHEN Candidate_Citation exists for a retained item, THE result SHALL expose its database title, publisher, URL and excerpt
+8. Candidate_Citation SHALL NOT satisfy the verified citation query used by deterministic eligibility evaluation
 
 ### Requirement 5: 可替換資料來源
 
@@ -87,11 +91,14 @@ Fixture 是可替換的資料來源，不是資格判定捷徑。它沒有經過
 
 #### Acceptance Criteria
 
-1. THE Backend_Fixture SHALL implement the existing `EntitlementGraphRepository` boundary
+1. THE SQLite and PostgreSQL adapters SHALL implement the existing `EntitlementGraphRepository` boundary
 2. THE Session_Workflow SHALL depend on repository contracts rather than fixture constants
-3. THE API request and Session_Snapshot shapes SHALL remain compatible with a future SQLite repository
-4. THE frontend SHALL NOT inspect whether candidates came from fixture or SQLite to decide the next step
-5. THE implementation notice SHALL continue reporting mock entitlement data, rule evaluation, official citations and action plan
+3. THE API SHALL expose database `displayName` and `summary` so UUID-based RDS programs do not require frontend ID mappings
+4. THE frontend SHALL NOT inspect whether candidates came from SQLite or PostgreSQL to decide the next step
+5. THE live frontend SHALL use citations returned in Session_Snapshot and SHALL NOT fall back to frontend legal fixtures
+6. THE demo frontend MAY retain fixture provisions because demo mode does not call backend services
+7. THE PostgreSQL adapter SHALL translate legacy RDS event IDs such as `work_injury` and `long_term_care` without changing canonical workflow IDs
+8. THE implementation notice SHALL continue reporting rule evaluation, verified official citations and action plan as incomplete
 
 ### Requirement 6: 重新進入時開始新諮詢
 
@@ -109,9 +116,8 @@ Fixture 是可替換的資料來源，不是資格判定捷徑。它沒有經過
 
 ## Out of Scope
 
-- SQLite schema、migration 或 `origin/feat/databaseV3` 合併
 - 正式 eligibility Rule DSL 與 `eligible`／`ineligible` 結論
-- 官方法條下載、citation 審查、RAG 或法律完整性宣稱
+- citation 人工審查、RAG 或法律完整性宣稱
 - 從第一段自然語言直接萃取七個 Question_Field
-- 保存原始描述、session 持久化、AWS deployment 或新的雲端服務
+- 保存原始描述、session 持久化、AWS deployment 或建立新的雲端服務
 - 跨重新整理、跨頁面或跨瀏覽器分頁恢復諮詢進度

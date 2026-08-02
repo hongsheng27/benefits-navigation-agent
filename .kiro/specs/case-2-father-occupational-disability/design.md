@@ -10,11 +10,12 @@ POST life_event_text
   -> LanguageModelPort: {event_ids: [occupational_injury, long_term_care_need]}
   -> SessionSnapshot: lifeEvents[] + primary lifeEvent
   -> 使用者確認
-  -> FixtureEntitlementGraphRepository.expand_from_event(...)
+  -> SqliteEntitlementGraphRepository.expand_from_event(...)
   -> FieldRegistry / questionGroups
   -> POST attribute_answers
   -> repository 依最新 attributes 重新展開並做 relevance filter
   -> governance gate: candidate -> needs_human_review
+  -> EvidenceRepository.get_candidate_citations(...)
   -> SessionSnapshot.items
   -> React 結果頁
 ```
@@ -27,12 +28,16 @@ POST life_event_text
 - Case 2 回傳 `occupational_injury` 與 `long_term_care_need`，不把身障方案或減少工時自動當成額外事件。
 - 不選問題、不篩選方案、不判斷資格。
 
-### Backend fixture
+### Database repositories
 
-- 將 `occupational_injury` 展開成最多七個候選項目。
-- 依已知結構化 answers 執行固定的 relevance predicates。
+- SQLite migration `0008_case2_database_seed` 建立 7 個 Case 2 候選項目、event graph、
+  relevance conditions 與候選官方摘錄；不建立 verified rule 或 citation。
+- SQLite 與 PostgreSQL adapters 依已知結構化 answers 執行固定 graph conditions。
 - 缺少 predicate 欄位時保留項目，避免過早排除。
 - 所有項目的 `program_status` 維持 `candidate`。
+- PostgreSQL adapter 先找 canonical event ID；不存在時才查 RDS ingestion 使用的 legacy alias。
+- `get_candidate_citations` 供結果頁展示 candidate／under_review／verified 資料；
+  `get_citations` 仍只回 verified 資料並由 eligibility service 使用。
 
 ### Field registry
 
@@ -55,10 +60,11 @@ POST life_event_text
 - Case 2 的表單、「送出答案」與父親／照顧者結果分組以 `lifeEvents.includes("occupational_injury")` 判斷，不依賴職災是否排在第一。
 - Case 2 的選項先存在 `QuestionGroupList` 的 component state；選項點擊不呼叫 API，只有使用者按下「送出答案」才將整組 answers 送到 backend。
 - Case 2 結果依既有 item audience mapping 分成父親／照顧者。
-- 中文題目、選項及展示名稱仍由前端 copy mapping 負責；後端擁有欄位、選項與項目 ID。
+- 中文題目與選項仍由前端 copy mapping 負責；項目顯示名稱與摘要優先採用 database response。
+- 正式模式的相關法條面板只使用 `SessionSnapshot.items[].citations`；demo mode 才允許 fixture fallback。
 - Demo mode 與既有 mock scenes 全部保留。
 
-## Fixture Candidate Rules
+## Database Candidate Rules
 
 條件只做「是否相關」篩選，不是資格規則。缺值時條件視為尚未排除。
 
@@ -78,7 +84,7 @@ Case 2 的示範答案會保留七項。
 
 - 原始自然語言只活在單次 LLM 呼叫範圍，不進 state、log 或 response。
 - Session 只保存已登記的事件 ID 與固定欄位的 option ID。
-- Fixture 不含真實姓名、公司、事故資料或其他 PII。
+- Seed 不含真實姓名、公司、事故資料或其他 PII。
 - 沒有 verified rules 或 verified citations，因此不產生正式資格結論。
 
 ## Frontend Session Lifecycle
@@ -91,12 +97,13 @@ component mount 期間的 confirm、answers 與 delete 都重用該 ID；不寫�
 context。舊的 backend in-memory session 不會被自動復原，依既有兩小時 TTL 到期；使用者
 在同一頁按「重新開始」時仍會立即呼叫 delete endpoint。
 
-## Migration Boundary
+## RDS Cutover Boundary
 
-未來合併 `origin/feat/databaseV3` 後，以 `SqliteEntitlementGraphRepository` 取代 fixture。
-只要 SQLite adapter 維持相同 protocol 與 filtering semantics，前端 API 與 state machine
-呼叫流程不需改寫。欄位登記內容之後可移至 SQLite，但本批仍使用既有 reviewed JSON
-loader，避免在 `main` 重做未合併分支的 schema。
+本機已由 `SqliteEntitlementGraphRepository` 提供 vertical slice。RDS 連線可用後，設定
+`DATA_STORE_BACKEND=postgresql` 與 `RDS_*` 環境變數即可切換 composition root；前端 API
+與 state machine 不需改寫。第一次 live validation 必須確認 RDS 實際具有 graph edges、
+field metadata、program evidence links，以及 legacy event alias 能命中。若資料仍只有
+ingestion candidate rows，結果維持 `needs_human_review`。
 
 ## Verification
 

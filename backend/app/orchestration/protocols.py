@@ -136,6 +136,14 @@ class EligibilityService(Protocol):
 class EvidenceRepository(Protocol):
     """官方依據的唯讀查詢。"""
 
+    def get_candidate_citations(self, item_id: str) -> Sequence[Citation]:
+        """取出可供使用者查閱的候選官方資料。
+
+        這些資料可以是 candidate、under_review 或 verified，只能用於結果頁的
+        「相關資料」展示；不得拿來通過 eligibility 的 evidence gate。
+        """
+        ...
+
     def get_citations(self, item_id: str) -> Sequence[Citation]:
         """取出一個項目的官方依據。找不到時回空序列。
 
@@ -695,6 +703,10 @@ class FixtureEvidenceRepository:
 
     def get_citations(self, item_id: str) -> tuple[Citation, ...]:
         """查官方依據。沒有的話回空 tuple，呼叫端應據此降級。"""
+        return self._citations.get(item_id, ())
+
+    def get_candidate_citations(self, item_id: str) -> tuple[Citation, ...]:
+        """離線 fixture 沒有 review status，回傳建構時明確提供的資料。"""
         return self._citations.get(item_id, ())
 
     def get_citations_for_references(

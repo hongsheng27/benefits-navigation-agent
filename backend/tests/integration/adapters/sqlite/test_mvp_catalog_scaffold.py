@@ -35,7 +35,7 @@ _MVP_IDS = frozenset(
 def _migrate_to_version_7(tmp_path: Path) -> Path:
     """Run all migrations up to version 7 on a fresh database."""
     database = tmp_path / "test-scaffold.db"
-    result = migrate_database(database)
+    result = migrate_database(database, migrations=load_migrations()[:7])
     assert result.current_version == 7
     assert "0007_mvp_catalog_scaffold" in result.applied_migration_ids
     return database

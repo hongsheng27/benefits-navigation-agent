@@ -61,8 +61,8 @@ component library 或部署平台。詳見
 目前接受的本機架構以 SQLite 作為資料策展與 runtime 的單一真相來源；ADR-0017 已選定未來 Hackathon shared target，但在替代 adapter 與 cutover validation 完成前仍維持 SQLite。FastAPI application composition root 將建立並注入 `EntitlementGraphRepository`、
 `EligibilityService`、`EvidenceRepository` 與 `SourceRefreshService`；workflow／state machine
 只依賴 storage-neutral contracts，不包含 SQL。Runtime 不讀 JSON，也沒有 JSON fallback。
-這項架構已核准，但 schema migration、repositories、Rule DSL 與 runtime wiring 尚未完成，
-不能視為目前程式已完成切換。詳見
+這項架構的 schema migrations、SQLite／PostgreSQL repositories 與 runtime wiring 已完成；
+Case 2 目前使用 candidate seed，正式 Rule DSL 與 verified evidence 仍待人工策展。詳見
 [SQLite runtime accepted ADR-0013](docs/decisions/0013-use-sqlite-runtime-behind-repositories.md)
 與 [finalized data-layer rule-engine spec](.kiro/specs/data-layer-rule-engine/requirements.md)。
 
@@ -116,7 +116,7 @@ migration 與 runtime implementation。
 | RAG                       | Amazon Bedrock Knowledge Bases 或自製 retrieval                         | **後續決定**；先固定 `Retriever` interface              |
 | Relevance metadata        | Backend-only deterministic ordering                                     | **已核准、待完成**；無固定數值範圍，API／frontend 省略且不影響資格判斷 |
 | Vector store / embeddings | 由 Bedrock Knowledge Bases 管理或自選方案                               | **後續決定**；資料量大時疊加語意搜尋                    |
-| Entitlement graph / runtime storage | 本機 SQLite → Amazon RDS for PostgreSQL behind storage-neutral repositories | **local 與 AWS target 已核准、migration 待完成**；先完成 SQLite vertical slice，再以 PostgreSQL adapter cutover，見 [ADR-0013](docs/decisions/0013-use-sqlite-runtime-behind-repositories.md) 與 [ADR-0017](docs/decisions/0017-target-rds-postgresql-and-s3.md) |
+| Entitlement graph / runtime storage | 本機 SQLite → Amazon RDS for PostgreSQL behind storage-neutral repositories | **SQLite vertical slice 與 PostgreSQL adapters 已完成**；RDS 實際資料與私網連線待驗證，見 [ADR-0013](docs/decisions/0013-use-sqlite-runtime-behind-repositories.md) 與 [ADR-0017](docs/decisions/0017-target-rds-postgresql-and-s3.md) |
 | Eligibility rules         | Canonical versioned `all_of`／`any_of` Rule DSL                         | **架構已核准、implementation 待完成**；`program_rule_fields` 僅為唯讀 compatibility projection |
 | Session state boundary    | Client / server split                                                   | **已決定**；direct identifiers 留在 client              |
 | Session persistence       | 記憶體，不持久化                                                        | **MVP 已定**；結束即消失，保存政策見 ADR-0007           |

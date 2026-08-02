@@ -65,7 +65,7 @@ def _synthetic_database(tmp_path: Path) -> Path:
     """Migrate an isolated database that lives only under tmp_path."""
     database = tmp_path / "synthetic-isolation.db"
     result = migrate_database(database)
-    assert result.current_version == 7
+    assert result.current_version == 8
     return database
 
 

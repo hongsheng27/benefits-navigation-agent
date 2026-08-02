@@ -131,7 +131,7 @@ def test_0006_preserves_rows_and_creates_under_review_manifest(
 
     result = migrate_database(database)
 
-    assert result.current_version == 7
+    assert result.current_version == 8
     with closing(sqlite3.connect(database)) as connection:
         assert _object_type(connection, "program_rule_fields") == "view"
         assert _object_type(connection, "legacy_program_rule_fields_v1") == "table"
@@ -373,5 +373,5 @@ def test_0006_captures_inventory_after_acquiring_immediate_write_lock(
 
     result = migrate_database(database)
 
-    assert result.current_version == 7
+    assert result.current_version == 8
     assert observed_transaction is True

@@ -110,6 +110,8 @@ def adapt_graph_candidate(
     return CandidateItem(
         item_id=candidate.item_id,
         kind=kind,
+        display_name=candidate.display_name,
+        summary=candidate.summary,
         program_status=candidate.program_status,
         missing_field_ids=candidate.missing_field_ids,
     )

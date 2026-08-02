@@ -10,9 +10,11 @@
 
 > **main × databaseV3 整合狀態**：FastAPI composition root 已把 SQLite／PostgreSQL
 > repositories 注入最新 main 的多事件與 LLM workflow；主流程不改由資料庫控制。
-> Workflow 測試仍可明確注入 fixture。Case 2 的七個候選項目目前仍是 fixture，尚未
-> 寫入 SQLite graph／Rule DSL；在完成 seed migration 前，本機資料庫不會自動產生同等結果。
-> Fixture 不能標成 `verified`，只有人工審查過的資料才能進入完整資格判定。
+> Workflow 測試仍可明確注入 fixture。SQLite migration 0008 已把 Case 2 七個候選項目、
+> relevance graph 與候選來源寫入本機資料庫；沒有建立正式 Rule DSL 或 verified citation。
+> PostgreSQL adapters 已有 legacy event alias，但 RDS 實際 graph／evidence rows 仍須在取得
+> 私網連線與 database credentials 後驗證。候選資料不能標成 `verified`，只有人工審查過的
+> 規則與依據才能進入完整資格判定。
 
 > 程式碼描述目前實作；Accepted ADR 與 finalized spec 描述目標行為。兩者不一致時必須記錄 implementation gap，不能把目標文件當成已完成程式，也不能因 legacy code 存在而忽略 accepted architecture。
 
@@ -22,15 +24,15 @@
 | --- | --- | --- |
 | 政府機關 OID、來源、文件與方案 catalog | `backend/app/services/benefit_catalog.py` 與 SQLite | 已有基礎；方案多為候選狀態 |
 | Legacy 結構化規則欄位 | `program_rule_fields`、`backend/app/rules/engine.py` | 可運作，但不是 accepted canonical Rule DSL |
-| Shared data contracts | `backend/app/orchestration/data_contracts.py` | Owner 核准的 shared shape 已對齊；後續 SQLite mapper 尚待完成 |
-| Storage-neutral interfaces 與離線實作 | `backend/app/orchestration/protocols.py` | 已落地；SQLite implementations 尚未完成 |
+| Shared data contracts | `backend/app/orchestration/data_contracts.py` | 已對齊，候選項目包含 database summary |
+| Storage-neutral interfaces 與離線實作 | `backend/app/orchestration/protocols.py` | 已落地；SQLite／PostgreSQL implementations 已接入 composition root |
 | 規則引擎轉接 | `backend/app/orchestration/rule_adapter.py` | 已有 mapping 與安全降級，完整結構化資料仍待資料層提供 |
 | 來源刷新組裝 | `backend/app/orchestration/source_refresh.py` | 本機 queue；不阻塞 request |
-| 逐項判定組裝 | `backend/app/orchestration/determination.py` | 狀態閘門與單項失敗隔離已完成；SQLite EligibilityService 尚待接入 |
+| 逐項判定組裝 | `backend/app/orchestration/determination.py` | 狀態閘門、單項失敗隔離與 SQLite EligibilityService 已接入；Case 2 尚無 approved rules |
 | 欄位登記與缺漏計算 | `field_registry.py`、`missing_fields.py` | 已落地，資料內容仍是有限 draft |
-| SQLite migration runner | `backend/app/adapters/sqlite/migrations.py` | data-layer tasks 1.1–1.7 已實作（metadata → programs → graph → rules/evidence → refresh/compatibility → legacy preservation） |
+| SQLite migration runner | `backend/app/adapters/sqlite/migrations.py` | migrations 0001–0008 已實作，0008 提供 Case 2 candidate vertical slice |
 
-目前 workflow 測試可使用不連 SQLite 的 fixture implementations。這不表示 runtime 已切換到 canonical SQLite repositories。
+目前 workflow 測試仍可使用不連 SQLite 的 fixture implementations；正式本機 runtime 預設已使用 SQLite repositories。
 
 ## 二、責任邊界
 
@@ -57,7 +59,7 @@ Data-layer spec 不再建立 `backend/app/domain/contracts.py` 或 `backend/app/
 | --- | --- | --- |
 | `EntitlementGraphRepository` | 事件牽動哪些項目？前置需求、產出與體系關係為何？ | `CandidateItem`、`GraphRelation` |
 | `EligibilityService` | 需要哪些欄位？這個／這批項目可否做確定性判斷？ | `FieldRegistryEntry`、`EligibilityDecision` |
-| `EvidenceRepository` | 項目與實際評估的 source references 對應哪些已核准證據？ | `Citation` |
+| `EvidenceRepository` | 哪些候選資料可顯示？實際評估的 source references 對應哪些已核准證據？ | `Citation` |
 | `SourceRefreshService` | 目前 coverage 與 gaps 為何？是否已排入同日去重更新？ | coverage contracts、`RefreshReceipt` |
 
 Repository 成功但沒有資料時回 immutable empty collection；open、query 或 mapping 失敗時 raise storage-neutral error，不能用空結果掩蓋失敗。
@@ -68,6 +70,7 @@ Repository 成功但沒有資料時回 immutable empty collection；open、query
 - `EligibilityDecision` 包含 stable、去重的 `missing_field_ids`。
 - `Citation.published_at`、`effective_at`、`retrieved_at` 使用 timezone-aware `datetime | None`。
 - `EvidenceRepository` 除 item lookup 外，提供依實際評估 `source_references` 查詢 citations 的操作。
+- `get_candidate_citations` 可回 candidate／under_review／verified 供結果頁查閱；`get_citations` 保持 verified-only，兩者不得混用。
 - Collections 使用 immutable tuple；空集合使用 `()`，不用 `None`。
 - DB `program_id` 只在 adapter boundary 映射成 `item_id`。
 
@@ -155,4 +158,4 @@ Refresh 必須先用 request-start committed state 建立 response，再非阻�
 - `main` 擁有使用者流程、LLM 事件萃取、複數事件確認、問答與送出時機。
 - database adapters 擁有 graph expansion、deterministic eligibility、evidence 與 coverage／refresh。
 - LLM 只萃取輸入或解釋結果，不得執行資格判定，也不得把 fixture 升成 `verified`。
-- 下一個資料任務是把 Case 2 fixture 以可審查的 seed migration 寫入 SQLite；完成前保留 fixture 供隔離測試使用。
+- 下一個資料任務是取得 RDS 私網連線與 database credentials，核對現有 graph／evidence rows；缺資料時再用獨立 PostgreSQL seed 補齊，不覆寫隊友資料。

@@ -211,6 +211,8 @@ class CandidateItem(BaseModel):
 
     item_id: str  # 項目代號，例如 funeral_benefit
     kind: ItemKind  # 福利或行政事項
+    display_name: str | None = None  # 資料庫提供的顯示名稱；前端不再依賴固定 ID
+    summary: str | None = None  # 資料庫候選摘要；不代表資格結論
     status: ItemStatus = ItemStatus.PENDING  # 這個項目自己的狀態，與其他項目無關
 
     # 複合情境展開時，此項目來自哪些 life_event（用於結果分區）。

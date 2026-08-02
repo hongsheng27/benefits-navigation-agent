@@ -22,8 +22,11 @@
 - [x] 20. 將 multi-event 上限由 3 調整為 5，並驗證四個合法事件不會被誤判為無法辨識
 - [x] 21. 以 live Bedrock 驗證複合描述的五個合法事件可全部寫入 `lifeEvents`
 - [x] 22. 改以 `lifeEvents` membership 辨識 Case 2，並驗證職災排第二時仍需由使用者明確送出答案
-
-## Deferred SQLite Cutover
-
-`origin/feat/databaseV3` 合併後，以 SQLite adapter 與 seed 取代 fixture。本批不複製該分支
-的 schema、migration 或 composition root。
+- [x] 23. 新增 SQLite migration 0008，建立 Case 2 七個 candidate programs、graph conditions 與候選來源
+- [x] 24. 讓 workflow 從 database repository 取得項目名稱、摘要、篩選結果與候選 citations
+- [x] 25. 保留 verified-only eligibility evidence gate，candidate citations 只供結果頁查閱
+- [x] 26. 正式前端停用法條 fixture fallback，改顯示 backend SessionSnapshot citations
+- [x] 27. 新增 PostgreSQL legacy event ID alias 與 citation mapper 相容修正
+- [x] 28. 新增三個 SQLite Case 2 integration cases（seed、完整流程、排除邊界）
+- [ ] 29. 取得 RDS 私網連線與 database credentials 後，驗證實際 graph／evidence rows
+- [ ] 30. 依 RDS 實際 schema 補齊 Case 2 graph seed 或 ingestion normalization，並重跑 live flow

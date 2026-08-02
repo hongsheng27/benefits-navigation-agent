@@ -122,6 +122,8 @@ def map_domain_to_workflow(
         return state.CandidateItem(
             item_id=candidate.item_id,
             kind=kind,
+            display_name=candidate.display_name,
+            summary=candidate.summary,
             status=state.ItemStatus.PENDING,
             program_status=candidate.program_status,
             missing_field_ids=candidate.missing_field_ids,
@@ -149,6 +151,8 @@ def map_domain_to_workflow(
     return state.CandidateItem(
         item_id=candidate.item_id,
         kind=kind,
+        display_name=candidate.display_name,
+        summary=candidate.summary,
         status=status,
         program_status=candidate.program_status,
         missing_field_ids=missing_field_ids,

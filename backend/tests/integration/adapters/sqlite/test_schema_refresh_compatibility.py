@@ -109,12 +109,12 @@ def _insert_generation(
         )
 
 
-def test_refresh_compatibility_schema_is_version_six(tmp_path: Path) -> None:
+def test_refresh_compatibility_schema_is_current(tmp_path: Path) -> None:
     database = tmp_path / "refresh-compatibility.db"
 
     result = migrate_database(database)
 
-    assert result.current_version == 7
+    assert result.current_version == 8
     assert result.applied_migration_ids == (
         "0001_metadata",
         "0002_programs_fields",
@@ -123,6 +123,7 @@ def test_refresh_compatibility_schema_is_version_six(tmp_path: Path) -> None:
         "0005_refresh_compatibility",
         "0006_preserve_legacy_rules",
         "0007_mvp_catalog_scaffold",
+        "0008_case2_database_seed",
     )
     with closing(sqlite3.connect(database)) as connection:
         tables = _object_names(connection, "table")
@@ -161,7 +162,7 @@ def test_refresh_compatibility_schema_is_version_six(tmp_path: Path) -> None:
         "trg_program_rule_fields_read_only_update",
         "trg_program_rule_fields_read_only_delete",
     }.issubset(triggers)
-    assert version == ("7",)
+    assert version == ("8",)
     assert foreign_key_errors == []
 
 

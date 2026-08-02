@@ -15,6 +15,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from app.adapters.event_ids import event_id_candidates
 from app.adapters.postgresql.connection import execute_read
 from app.orchestration.data_contracts import CandidateItem, GraphRelation
 from app.orchestration.data_errors import InvalidEventIdError
@@ -29,7 +30,11 @@ def _evaluate_condition(
 ) -> bool:
     """Evaluate a single graph edge condition against a user attribute value."""
     try:
-        expected = json.loads(expected_json) if isinstance(expected_json, str) else expected_json
+        expected = (
+            json.loads(expected_json)
+            if isinstance(expected_json, str)
+            else expected_json
+        )
     except (json.JSONDecodeError, TypeError):
         return False
 
@@ -95,13 +100,18 @@ class PgEntitlementGraphRepository:
     ) -> tuple[CandidateItem, ...]:
         with conn.cursor(row_factory=dict_row) as cur:
             # Verify event node exists and is a life_event
-            cur.execute(
-                "SELECT node_id, node_type FROM graph_nodes WHERE node_id = %s",
-                (event_id,),
-            )
-            node_row = cur.fetchone()
+            node_row = None
+            for candidate_id in event_id_candidates(event_id):
+                cur.execute(
+                    "SELECT node_id, node_type FROM graph_nodes WHERE node_id = %s",
+                    (candidate_id,),
+                )
+                node_row = cur.fetchone()
+                if node_row is not None and node_row["node_type"] == "life_event":
+                    break
             if node_row is None or node_row["node_type"] != "life_event":
-                raise InvalidEventIdError(event_id)
+                raise InvalidEventIdError("invalid_event_id")
+            resolved_event_id = node_row["node_id"]
 
             # Get all edges from this event
             cur.execute(
@@ -111,7 +121,7 @@ class PgEntitlementGraphRepository:
                 WHERE e.from_node_id = %s AND e.edge_type = 'triggers'
                 ORDER BY e.canonical_order, e.to_node_id
                 """,
-                (event_id,),
+                (resolved_event_id,),
             )
             trigger_edges = cur.fetchall()
 
@@ -173,7 +183,7 @@ class PgEntitlementGraphRepository:
             cur.execute(
                 """
                 SELECT n.node_id, n.display_name, n.program_id,
-                       p.program_status
+                       p.program_status, p.summary
                 FROM graph_nodes n
                 JOIN benefit_programs p ON p.program_id = n.program_id
                 WHERE n.node_id = ANY(%s)
@@ -182,6 +192,10 @@ class PgEntitlementGraphRepository:
                 (list(reachable.keys()),),
             )
             program_nodes = cur.fetchall()
+            order_by_node = {
+                node_id: index for index, node_id in enumerate(reachable.keys())
+            }
+            program_nodes.sort(key=lambda row: order_by_node[row["node_id"]])
 
             # Build CandidateItems
             items: list[CandidateItem] = []
@@ -201,8 +215,13 @@ class PgEntitlementGraphRepository:
                         program_status=status,
                         relevance_score=0.0,
                         missing_field_ids=tuple(missing),
-                        prerequisites=self._get_relations(conn, pn["program_id"], "requires"),
-                        produces=self._get_relations(conn, pn["program_id"], "produces"),
+                        prerequisites=self._get_relations(
+                            conn, pn["program_id"], "requires"
+                        ),
+                        produces=self._get_relations(
+                            conn, pn["program_id"], "produces"
+                        ),
+                        summary=pn["summary"] or None,
                     )
                 )
 

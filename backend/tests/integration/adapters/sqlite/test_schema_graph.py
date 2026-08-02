@@ -76,7 +76,7 @@ def test_fresh_schema_has_required_graph_objects(tmp_path: Path) -> None:
 
     result = migrate_database(database)
 
-    assert result.current_version == 7
+    assert result.current_version == 8
     assert result.applied_migration_ids == (
         "0001_metadata",
         "0002_programs_fields",
@@ -85,6 +85,7 @@ def test_fresh_schema_has_required_graph_objects(tmp_path: Path) -> None:
         "0005_refresh_compatibility",
         "0006_preserve_legacy_rules",
         "0007_mvp_catalog_scaffold",
+        "0008_case2_database_seed",
     )
     with closing(sqlite3.connect(database)) as connection:
         connection.execute("PRAGMA foreign_keys = ON")

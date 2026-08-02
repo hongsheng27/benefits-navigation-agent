@@ -7,7 +7,6 @@ from verified official sources.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
 
 import psycopg
 from psycopg.rows import dict_row
@@ -28,6 +27,13 @@ class PgEvidenceRepository:
         return execute_read(
             self._pool,
             lambda conn: self._citations_for_program(conn, item_id),
+        )
+
+    def get_candidate_citations(self, item_id: str) -> tuple[Citation, ...]:
+        """Get display-only candidate or reviewed official material."""
+        return execute_read(
+            self._pool,
+            lambda conn: self._candidate_citations_for_program(conn, item_id),
         )
 
     def get_citations_for_references(
@@ -67,6 +73,38 @@ class PgEvidenceRepository:
                   AND pel.review_status = 'verified'
                   AND ee.review_status = 'verified'
                   AND sd.review_status = 'verified'
+                ORDER BY sd.document_id, ee.evidence_id
+                """,
+                (program_id,),
+            )
+            return self._map_rows(cur.fetchall())
+
+    def _candidate_citations_for_program(
+        self, conn: psycopg.Connection, program_id: str
+    ) -> tuple[Citation, ...]:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    sd.document_id,
+                    sd.title,
+                    sd.publisher_name,
+                    sd.canonical_url,
+                    ee.excerpt,
+                    sd.published_at,
+                    sd.effective_at,
+                    sd.retrieved_at
+                FROM program_evidence_links pel
+                JOIN evidence_excerpts ee
+                  ON ee.evidence_id = pel.evidence_id
+                JOIN source_documents sd
+                  ON sd.document_id = ee.document_id
+                WHERE pel.program_id = %s
+                  AND pel.review_status IN ('candidate', 'under_review', 'verified')
+                  AND ee.review_status IN ('candidate', 'under_review', 'verified')
+                  AND sd.review_status IN (
+                      'candidate', 'under_review', 'verified', 'stale'
+                  )
                 ORDER BY sd.document_id, ee.evidence_id
                 """,
                 (program_id,),
@@ -131,8 +169,8 @@ class PgEvidenceRepository:
                 Citation(
                     document_id=r["document_id"],
                     title=r["title"],
-                    publisher_name=r["publisher_name"],
-                    canonical_url=r["canonical_url"],
+                    publisher=r["publisher_name"],
+                    url=r["canonical_url"],
                     excerpt=r["excerpt"],
                     published_at=r["published_at"],
                     effective_at=r.get("effective_at"),

@@ -134,7 +134,7 @@ def test_dry_run_migrates_disposable_copy_to_version_six(
     execution = execute_catalog_migration(source, apply=False)
 
     assert execution.mode == "dry-run"
-    assert execution.migration_result.current_version == 7
+    assert execution.migration_result.current_version == 8
     assert execution.migration_result.applied_migration_ids == (
         "0001_metadata",
         "0002_programs_fields",
@@ -143,6 +143,7 @@ def test_dry_run_migrates_disposable_copy_to_version_six(
         "0005_refresh_compatibility",
         "0006_preserve_legacy_rules",
         "0007_mvp_catalog_scaffold",
+        "0008_case2_database_seed",
     )
     assert execution.working_database_path != source
     assert not execution.working_database_path.exists()
@@ -163,7 +164,7 @@ def test_successful_apply_exposes_only_final_committed_bridge(
     )
 
     assert execution.mode == "apply"
-    assert execution.migration_result.current_version == 7
+    assert execution.migration_result.current_version == 8
     with closing(sqlite3.connect(source)) as connection:
         object_type = connection.execute(
             "SELECT type FROM sqlite_master WHERE name = 'program_rule_fields'"
@@ -196,7 +197,7 @@ def test_successful_apply_exposes_only_final_committed_bridge(
     assert object_type == ("view",)
     assert visible == [("legacy-program", "legacy-field", "synthetic-value")]
     assert draft_statuses == [("under_review",)]
-    assert version == ("7",)
+    assert version == ("8",)
     assert foreign_key_errors == []
     assert backup_object_type == ("table",)
     assert backup_has_migrations is None

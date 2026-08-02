@@ -135,29 +135,48 @@ describe("post-consult panels", () => {
     expect(screen.queryByText(/聯合奠祭/)).not.toBeInTheDocument();
   });
 
-  it("shows empty guide state instead of spouse-death fallback", () => {
+  it("uses backend citations and disables fixture fallback in live mode", () => {
     render(
-      <ApplicationGuidePanel lifeEventId="serious_illness" onClose={() => {}} />,
+      <RelatedProvisionsPanel
+        lifeEventId="occupational_injury"
+        itemIds={["database-program-id"]}
+        citations={[
+          {
+            documentId: "database-document-id",
+            title: "資料庫回傳的職災資料",
+            publisherName: "測試主管機關",
+            publishedAt: null,
+            url: "https://example.gov.tw/database-document",
+            excerpt: "這段摘錄由 backend session snapshot 回傳。",
+            effectiveAt: null,
+            retrievedAt: null,
+          },
+        ]}
+        allowFixtureFallback={false}
+        onClose={() => {}}
+      />,
     );
 
+    expect(screen.getAllByText("資料庫回傳的職災資料").length).toBeGreaterThan(0);
     expect(
-      screen.getAllByText(/還沒有對應的申請步驟說明/).length,
+      screen.getAllByText("這段摘錄由 backend session snapshot 回傳。").length,
     ).toBeGreaterThan(0);
+    expect(screen.queryByText("職業災害認定與職災保險說明")).not.toBeInTheDocument();
+  });
+
+  it("shows empty guide state instead of spouse-death fallback", () => {
+    render(<ApplicationGuidePanel lifeEventId="serious_illness" onClose={() => {}} />);
+
+    expect(screen.getAllByText(/還沒有對應的申請步驟說明/).length).toBeGreaterThan(0);
     expect(screen.queryByText("辦理死亡登記")).not.toBeInTheDocument();
     expect(screen.queryByText(/配偶過世/)).not.toBeInTheDocument();
   });
 
   it("shows job-loss application guide without funeral steps", () => {
-    render(
-      <ApplicationGuidePanel lifeEventId="job_loss" onClose={() => {}} />,
-    );
+    render(<ApplicationGuidePanel lifeEventId="job_loss" onClose={() => {}} />);
 
-    expect(
-      screen.getByText("失業／被資遣後常見申請與辦理順序"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("向公立就業服務機構辦理求職登記"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("失業／被資遣後常見申請與辦理順序")).toBeInTheDocument();
+    expect(screen.getByText("向公立就業服務機構辦理求職登記")).toBeInTheDocument();
     expect(screen.queryByText("辦理死亡登記")).not.toBeInTheDocument();
   });
 });

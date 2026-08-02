@@ -32,6 +32,17 @@ class SqliteEvidenceRepository:
             lambda conn: self._citations_for_program(conn, item_id),
         )
 
+    def get_candidate_citations(self, item_id: str) -> tuple[Citation, ...]:
+        """Get display-only candidate or reviewed official material.
+
+        This method is intentionally separate from ``get_citations`` so an
+        unreviewed excerpt can never satisfy an eligibility evidence gate.
+        """
+        return execute_read(
+            self._connection_factory,
+            lambda conn: self._candidate_citations_for_program(conn, item_id),
+        )
+
     def get_citations_for_references(
         self,
         item_id: str,
@@ -72,6 +83,37 @@ class SqliteEvidenceRepository:
               AND pel.review_status = 'verified'
               AND ee.review_status = 'verified'
               AND sd.review_status = 'verified'
+            ORDER BY sd.document_id, ee.evidence_id
+            """,
+            (program_id,),
+        ).fetchall()
+        return self._map_rows(rows)
+
+    def _candidate_citations_for_program(
+        self, connection: sqlite3.Connection, program_id: str
+    ) -> tuple[Citation, ...]:
+        rows = connection.execute(
+            """
+            SELECT DISTINCT
+                sd.document_id,
+                sd.title,
+                sd.publisher_name,
+                sd.canonical_url,
+                ee.excerpt,
+                sd.published_at,
+                sd.effective_at,
+                sd.retrieved_at
+            FROM program_evidence_links pel
+            JOIN evidence_excerpts ee
+              ON ee.evidence_id = pel.evidence_id
+            JOIN source_documents sd
+              ON sd.document_id = ee.document_id
+            WHERE pel.program_id = ?
+              AND pel.review_status IN ('candidate', 'under_review', 'verified')
+              AND ee.review_status IN ('candidate', 'under_review', 'verified')
+              AND sd.review_status IN (
+                  'candidate', 'under_review', 'verified', 'stale'
+              )
             ORDER BY sd.document_id, ee.evidence_id
             """,
             (program_id,),

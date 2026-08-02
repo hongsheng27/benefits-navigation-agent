@@ -23,17 +23,17 @@
 
 ## 這個版本還沒有的
 
-- 官方依據檢索：`RETRIEVE_RULES` 仍是空操作，`EvidenceRepository` 的接縫備好了但沒接上
-- 白話說明：`EXPLAIN_RESULT` 仍是空操作，還沒接模型（T22，要等依據先有內容）
+- 已驗證官方依據：`RETRIEVE_RULES` 會附上候選資料供查閱，但 Case 2 尚無人工核對 citation
+- 白話說明：`EXPLAIN_RESULT` 仍是空操作，還沒接模型
 
 ## 流程規則是真的，資料來源還不全是
 
 轉換規則、守門條件、自動推進與護欄都已經是最終行為。**事件辨識已經接上真實模型**
-（`_receive_life_event` → `llm/tasks/resolve_life_event.py`），但**項目展開仍來自離線
-fixture**（等資料層的 SQLite repository）。每一處都有註解說明。
+（`_receive_life_event` → `llm/tasks/resolve_life_event.py`）。正式本機 runtime 已由
+composition root 注入 SQLite repositories；測試仍可明確注入 fixture。
 
 資料來源不由這個模組自己去拿，而是透過 `protocols.py` 的接縫注入（見 `advance()`
-的具名參數）。目前注入的是不需要 SQLite 的離線實作，換成真實來源時這個模組不用改。
+的具名參數）。SQLite／PostgreSQL 與離線 fixture 都使用同一組 contracts。
 """
 
 from collections.abc import Callable, Iterator
@@ -77,6 +77,9 @@ from app.orchestration.state import (
     ItemStatus,
     SessionState,
     WorkflowState,
+)
+from app.orchestration.state import (
+    Citation as WorkflowCitation,
 )
 from app.privacy.attribute_gate import RegistryBackedPrivacyGate
 from app.schemas.session import (
@@ -246,8 +249,7 @@ class _Seams:
     language_model: LanguageModelPort
     life_events: LifeEventRegistry
     coverage_scope: CoverageScope
-    # 官方依據的檢索還沒接上（`RETRIEVE_RULES` 仍是空操作）。保留欄位是為了讓資料層
-    # 交出 repository 時只需改 `_do_retrieve_rules`，不必再動 `advance()` 的簽章。
+    # 官方資料 repository。候選資料只供結果頁查閱；verified 路徑才可支撐資格判定。
     evidence_repository: EvidenceRepository | None = None
     # 背景 refresh 的交付邊界。`None` 代表只排入 service 的佇列、不再往下交付。
     # 這個接縫只暴露 `submit()`，所以 request path 在型別上就沒有辦法同步執行
@@ -522,6 +524,8 @@ def _refresh_entitlements(state: SessionState, seams: _Seams) -> SessionState:
         refreshed.append(
             existing.model_copy(
                 update={
+                    "display_name": incoming.display_name,
+                    "summary": incoming.summary,
                     "program_status": incoming.program_status,
                     "missing_field_ids": incoming.missing_field_ids,
                 }
@@ -1017,13 +1021,46 @@ def _do_resolve_entitlements(state: SessionState, seams: _Seams) -> SessionState
 
 
 def _do_retrieve_rules(state: SessionState, seams: _Seams) -> SessionState:
-    """檢索官方依據。
+    """Attach database-backed official material for result-page display.
 
-    目前是空操作：`seams.evidence_repository` 的接縫已經備好，但資料層還沒交出實作，
-    而編一份「官方依據」比沒有依據更糟。
+    Candidate citations are deliberately kept out of ``evaluate_ready_items``;
+    only the verified citation path may support an eligibility determination.
     """
-    del seams  # 接縫已經備好，還沒有實作可以注入。
-    return state
+    repository = seams.evidence_repository
+    if repository is None:
+        return state
+
+    items: list[CandidateItem] = []
+    for item in state.items:
+        try:
+            citations = repository.get_candidate_citations(item.item_id)
+        except Exception as exc:  # noqa: BLE001 - isolate one unavailable source
+            log_event(
+                "candidate_evidence_lookup_failed",
+                benefit_id=item.item_id,
+                error_type=type(exc).__name__,
+            )
+            items.append(item)
+            continue
+
+        mapped = tuple(
+            WorkflowCitation(
+                document_id=citation.document_id,
+                title=citation.title,
+                publisher_name=citation.publisher,
+                published_at=(
+                    citation.published_at.isoformat()
+                    if citation.published_at is not None
+                    else None
+                ),
+                url=citation.url,
+                excerpt=citation.excerpt,
+            )
+            for citation in citations
+        )
+        items.append(item.model_copy(update={"citations": mapped}))
+
+    return state.model_copy(update={"items": tuple(items)})
 
 
 def _do_evaluate_eligibility(state: SessionState, seams: _Seams) -> SessionState:

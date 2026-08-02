@@ -30,11 +30,11 @@ AWS_ACCOUNT_ID=
 DATA_STORE_BACKEND=postgresql
 
 # RDS PostgreSQL (ACTIVE — adapters implemented)
-RDS_HOST=database-1.c54m4aak2pcn.us-west-2.rds.amazonaws.com
+RDS_HOST=
 RDS_PORT=5432
-RDS_DATABASE=benefits_navigation
-RDS_USERNAME=benefits_admin
-RDS_PASSWORD=<your-password-here>
+RDS_DATABASE=
+RDS_USERNAME=
+RDS_PASSWORD=
 RDS_SSLMODE=require
 
 # S3 (approved document/attachment target; fill only when adapter exists)
@@ -83,6 +83,63 @@ PostgreSQL adapters are now implemented. The cutover procedure:
    connectivity. Run the integration test suite against the PostgreSQL
    backend.
 4. **Rollback**: Set `DATA_STORE_BACKEND=sqlite` to revert to local SQLite.
+
+### Feature: Case 2 database-backed consultation
+
+The local vertical slice is implemented by
+`backend/app/adapters/sqlite/migration_sql/0008_case2_database_seed.sql`.
+It adds the seven Case 2 candidate programs, canonical event graph conditions,
+database display names/summaries, and candidate official excerpts. It does not
+create approved rules or verified citations.
+
+The runtime paths are:
+
+- `backend/app/adapters/sqlite/graph_repository.py` and
+  `backend/app/adapters/postgresql/graph_repository.py` for candidates and
+  deterministic relevance filtering.
+- `backend/app/adapters/sqlite/evidence_repository.py` and
+  `backend/app/adapters/postgresql/evidence_repository.py` for two distinct
+  evidence paths: display-only candidates and verified eligibility evidence.
+- `frontend/src/components/alt/RelatedProvisionsPanel.tsx` consumes backend
+  citations in live mode. The old frontend fixture remains enabled only in
+  demo mode, so there is no live mock code to remove at RDS cutover.
+
+When RDS access becomes available:
+
+1. Confirm a network path to the private RDS endpoint (team VPN, approved
+   bastion/SSH tunnel, or an app host inside the VPC). `RDS_HOST` and database
+   credentials alone cannot cross a private VPC boundary.
+2. Fill the untracked `.env` variables shown below. Do not put their values in
+   this guide, chat screenshots, commits, or shell history shared with others.
+3. Before copying the SQLite seed, inspect the existing RDS rows. The teammate
+   ingestion uses legacy event IDs, so the PostgreSQL graph adapter translates
+   `occupational_injury -> work_injury` and
+   `long_term_care_need -> long_term_care` only when canonical nodes are absent.
+4. Verify that RDS has graph edges from those event nodes to benefit-program
+   nodes, and that `program_evidence_links`, `evidence_excerpts`, and
+   `source_documents` join to the returned program IDs. Existing program UUIDs
+   are supported because the API now returns database `displayName` and
+   `summary` instead of requiring frontend ID mappings.
+5. Set `DATA_STORE_BACKEND=postgresql`, restart FastAPI, then run the Case 2
+   flow. A successful candidate-data run still returns
+   `needs_human_review`; it must not return `eligible` until rules and evidence
+   have human-approved status.
+6. If RDS lacks Case 2 graph/evidence rows, port migration 0008 as a separate,
+   reviewed PostgreSQL seed. Do not mark imported rows verified and do not
+   overwrite teammate-owned rows merely to match local IDs.
+7. Roll back by setting `DATA_STORE_BACKEND=sqlite` and restarting FastAPI.
+
+Required `.env` names for this feature:
+
+```env
+DATA_STORE_BACKEND=postgresql
+RDS_HOST=
+RDS_PORT=5432
+RDS_DATABASE=
+RDS_USERNAME=
+RDS_PASSWORD=
+RDS_SSLMODE=require
+```
 
 Implemented PostgreSQL adapters:
 - `backend/app/adapters/postgresql/graph_repository.py` — `PgEntitlementGraphRepository`

@@ -147,7 +147,7 @@ def test_version_migration_preserves_known_legacy_schema_and_rows(
     result = migrate_database(database)
 
     assert result.previous_version == 0
-    assert result.current_version == 7
+    assert result.current_version == 8
     assert result.applied_migration_ids == (
         "0001_metadata",
         "0002_programs_fields",
@@ -156,6 +156,7 @@ def test_version_migration_preserves_known_legacy_schema_and_rows(
         "0005_refresh_compatibility",
         "0006_preserve_legacy_rules",
         "0007_mvp_catalog_scaffold",
+        "0008_case2_database_seed",
     )
     assert {
         "schema_metadata",
@@ -172,16 +173,19 @@ def test_version_migration_preserves_known_legacy_schema_and_rows(
         metadata = dict(connection.execute("SELECT key, value FROM schema_metadata"))
         legacy_rows = connection.execute("SELECT * FROM legacy_records").fetchall()
         program = connection.execute(
-            "SELECT program_id, program_status FROM benefit_programs WHERE program_id = 'legacy-program'"
+            "SELECT program_id, program_status FROM benefit_programs "
+            "WHERE program_id = 'legacy-program'"
         ).fetchone()
-        rule_rows = connection.execute("SELECT * FROM program_rule_fields WHERE program_id = 'legacy-program'").fetchall()
+        rule_rows = connection.execute(
+            "SELECT * FROM program_rule_fields WHERE program_id = 'legacy-program'"
+        ).fetchall()
         migration_rows = connection.execute(
             "SELECT migration_id, checksum FROM schema_migrations ORDER BY migration_id"
         ).fetchall()
         foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
     migrations = load_migrations()
     assert metadata["schema_version"] == "legacy-oid-v1"
-    assert metadata[SCHEMA_VERSION_KEY] == "7"
+    assert metadata[SCHEMA_VERSION_KEY] == "8"
     assert legacy_rows == [("legacy-1", "preserve exactly")]
     assert program == ("legacy-program", "under_review")
     assert rule_rows == [
@@ -204,6 +208,7 @@ def test_version_migration_preserves_known_legacy_schema_and_rows(
         ("0005_refresh_compatibility", migrations[4].checksum),
         ("0006_preserve_legacy_rules", migrations[5].checksum),
         ("0007_mvp_catalog_scaffold", migrations[6].checksum),
+        ("0008_case2_database_seed", migrations[7].checksum),
     ]
     assert foreign_key_errors == []
 
@@ -366,7 +371,7 @@ def test_dry_run_uses_disposable_copy_and_never_changes_source(tmp_path: Path) -
     execution = execute_catalog_migration(source, apply=False)
 
     assert execution.mode == "dry-run"
-    assert execution.migration_result.current_version == 7
+    assert execution.migration_result.current_version == 8
     assert execution.working_database_path != source
     assert not execution.working_database_path.exists()
     assert "schema_migrations" not in table_names(source)
@@ -391,17 +396,19 @@ def test_apply_requires_backup_and_preserves_pre_migration_copy(tmp_path: Path) 
     execution = execute_catalog_migration(source, apply=True, backup_path=backup)
 
     assert execution.mode == "apply"
-    assert execution.migration_result.current_version == 7
+    assert execution.migration_result.current_version == 8
     assert execution.backup_path == backup
     assert "schema_migrations" in table_names(source)
     assert "schema_migrations" not in table_names(backup)
     with closing(sqlite3.connect(source)) as connection:
         assert connection.execute(
-            "SELECT program_status FROM benefit_programs WHERE program_id = 'legacy-program'"
+            "SELECT program_status FROM benefit_programs "
+            "WHERE program_id = 'legacy-program'"
         ).fetchone() == ("under_review",)
     with closing(sqlite3.connect(backup)) as connection:
         assert connection.execute(
-            "SELECT program_status FROM benefit_programs WHERE program_id = 'legacy-program'"
+            "SELECT program_status FROM benefit_programs "
+            "WHERE program_id = 'legacy-program'"
         ).fetchone() == ("status_unknown",)
         assert connection.execute("SELECT * FROM program_rule_fields").fetchall() == [
             (

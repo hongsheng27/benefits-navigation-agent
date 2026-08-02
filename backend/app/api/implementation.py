@@ -22,15 +22,15 @@ PLACEHOLDER_NOTICE = "（部分資料為後端佔位內容，尚未進行真實�
 # - STATE_MACHINE：確定性狀態機已完成（ADR-0012）
 # - FIELD_REGISTRY：欄位登記表機制已完成，但內容仍是 draft 種子資料
 PENDING_CAPABILITIES: tuple[PendingCapability, ...] = (
-    # 事件辨識仍寫死回 spouse_death，沒有呼叫任何模型。
+    # 設定 Bedrock 時會呼叫模型；未設定時仍使用可重現的離線示範。
     PendingCapability.LIFE_EVENT_EXTRACTION,
-    # 候選項目仍是寫死的四筆，不是從 entitlement graph 查的。那四筆的資料治理狀態是
-    # candidate，所以離線流程一律回「需人工協助」，不會產出 eligible。
+    # Entitlement graph 已接上 database repository，但目前只有配偶過世與 Case 2 有完整
+    # seed／流程覆蓋，其餘事件仍沒有足夠的 curated programs。
     PendingCapability.ENTITLEMENT_GRAPH,
     # 資料治理狀態的安全閘門已經實作，但還沒有任何已核准的規則可以判定，所以注入的
     # 判定服務對每一項都回「需人工協助」。
     PendingCapability.RULE_EVALUATION,
-    # 檢索仍是空操作。
+    # 候選官方摘錄已可顯示，但尚無足以支撐 eligibility 的人工核對 citations。
     PendingCapability.OFFICIAL_CITATIONS,
     # 白話說明仍是空操作。
     PendingCapability.PLAIN_LANGUAGE_EXPLANATION,

@@ -35,7 +35,6 @@ from app.orchestration.protocols import (
     RefreshRequest,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fake 1: EntitlementGraphRepository
 # ---------------------------------------------------------------------------
@@ -175,6 +174,10 @@ class FakeEvidenceRepository:
         """Return citations for item, or empty tuple."""
         return self.citations.get(item_id, ())
 
+    def get_candidate_citations(self, item_id: str) -> tuple[Citation, ...]:
+        """Return explicitly supplied display citations for an item."""
+        return self.citations.get(item_id, ())
+
     def get_citations_for_references(
         self,
         item_id: str,
@@ -245,9 +248,7 @@ class FakeSourceRefreshService:
             error_source_count=sum(
                 1 for s in sources_tuple if s.crawl_status == "error"
             ),
-            indexed_document_count=sum(
-                s.indexed_document_count for s in sources_tuple
-            ),
+            indexed_document_count=sum(s.indexed_document_count for s in sources_tuple),
             sources=sources_tuple,
             gap_categories=(),
         )

@@ -282,6 +282,8 @@ type IntakeStepsProps = {
   demoAnswers?: Record<string, boolean | number | string>;
   /** 純前端 demo 可選擇用服務對象分組結果，不會改動 API contract。 */
   groupResultsByAudience?: boolean;
+  /** Demo only: no backend exists, so the related-provisions panel may use fixtures. */
+  allowFixtureProvisions?: boolean;
   /** 結果頁回看問題時使用（後端結果快照可能已清空 questionGroups）。 */
   cachedQuestionGroups?: SessionSnapshot["questionGroups"];
   onStart?: () => void;
@@ -316,6 +318,7 @@ function IntakeSteps({
   isReviewing = false,
   demoAnswers,
   groupResultsByAudience = false,
+  allowFixtureProvisions = false,
   cachedQuestionGroups = [],
   onStart,
   onSubmitDescribe,
@@ -353,8 +356,7 @@ function IntakeSteps({
     (snapshot?.items.length ?? 0) === 0 &&
     questionGroups.length === 0;
   /** 確認後沒追問就開閘門：避免「換一頁 ready」體感，維持聊天殼。 */
-  const gateWithoutPriorQuestions =
-    showResultGate && questionGroups.length === 0;
+  const gateWithoutPriorQuestions = showResultGate && questionGroups.length === 0;
   const situationLabel = snapshot?.lifeEvent
     ? lifeEventName(snapshot.lifeEvent)
     : "你剛才說的情況";
@@ -588,9 +590,7 @@ function IntakeSteps({
       {uiStep === "questions" ? (
         <section>
           <StepProgress
-            step={
-              showResultGate && !gateWithoutPriorQuestions ? "ready" : "questions"
-            }
+            step={showResultGate && !gateWithoutPriorQuestions ? "ready" : "questions"}
           />
           <h1
             ref={stepHeadingRef}
@@ -773,6 +773,8 @@ function IntakeSteps({
           lifeEventId={snapshot?.lifeEvent ?? null}
           lifeEventIds={snapshotLifeEvents(snapshot)}
           itemIds={(snapshot?.items ?? []).map((item) => item.itemId)}
+          citations={(snapshot?.items ?? []).flatMap((item) => item.citations)}
+          allowFixtureFallback={allowFixtureProvisions}
           jurisdiction={
             typeof snapshot?.attributes.applicant_jurisdiction === "string"
               ? snapshot.attributes.applicant_jurisdiction
@@ -1014,6 +1016,7 @@ function HomePageDemo({
         readOnly
         demoAnswers={scene.answers}
         groupResultsByAudience={selectedCaseId === "occupational_injury_care"}
+        allowFixtureProvisions
         stepHeadingRef={stepHeadingRef}
         onGoToTracking={onGoToTracking}
         showResultGate={scene.step === "ready"}

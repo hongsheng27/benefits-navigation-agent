@@ -11,6 +11,10 @@
       "used_by": [
         "funeral_benefit",
         "survivor_pension",
+        "labor_funeral_grant",
+        "national_pension_funeral_grant",
+        "labor_survivor_pension",
+        "national_pension_survivor_pension",
         "occupational_injury_recognition",
         "unemployment_benefit"
       ],
@@ -39,7 +43,14 @@
       ],
       "required": true,
       "purpose": "投保身分決定由哪個機關受理，以及適用哪一套給付規則",
-      "used_by": ["funeral_benefit", "survivor_pension"],
+      "used_by": [
+        "funeral_benefit",
+        "survivor_pension",
+        "labor_funeral_grant",
+        "national_pension_funeral_grant",
+        "labor_survivor_pension",
+        "national_pension_survivor_pension"
+      ],
       "topic_id": "deceased_insurance",
       "status": "draft"
     },
@@ -49,7 +60,11 @@
       "option_ids": [],
       "required": true,
       "purpose": "遺屬年金有加給條件，依據是否有未成年子女",
-      "used_by": ["survivor_pension"],
+      "used_by": [
+        "survivor_pension",
+        "labor_survivor_pension",
+        "national_pension_survivor_pension"
+      ],
       "topic_id": "family_situation",
       "status": "draft"
     },
@@ -59,7 +74,11 @@
       "option_ids": ["under_25", "25_to_55", "55_to_65", "65_or_above"],
       "required": true,
       "purpose": "遺屬年金有年齡條件，不同年齡區間適用不同規定",
-      "used_by": ["survivor_pension"],
+      "used_by": [
+        "survivor_pension",
+        "labor_survivor_pension",
+        "national_pension_survivor_pension"
+      ],
       "topic_id": "applicant_situation",
       "status": "draft"
     },

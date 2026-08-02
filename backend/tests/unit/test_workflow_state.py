@@ -98,10 +98,14 @@ def test_no_state_field_can_hold_free_text_or_identifiers(model: type) -> None:
     - `CandidateItem.explanation` 存的是從「已定案結果」衍生出來的模型輸出。它不會
       命中任何片段，但它確實是文字，所以任何對它的改動都應該回頭對照 ADR-0007 的
       保存規則。
+    - `CandidateItem.display_name` 與 `summary` 來自 curated benefit catalog，
+      讓 UUID program ID 仍能顯示；它們不是使用者輸入，也不能由 LLM 寫入。
     """
     exempt = {
         ("Citation", "excerpt"),
         ("Citation", "publisher_name"),
+        ("CandidateItem", "display_name"),
+        ("CandidateItem", "summary"),
     }
 
     for field_name in model.model_fields:

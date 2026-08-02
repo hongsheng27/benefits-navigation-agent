@@ -337,6 +337,8 @@ class ItemView(_View):
     item_id: str
     kind: ItemKind
     status: ItemStatus
+    display_name: str | None = None
+    summary: str | None = None
 
     program_status: str | None = None
 
@@ -474,6 +476,8 @@ class SessionSnapshot(_View):
                     item_id=item.item_id,
                     kind=item.kind,
                     status=item.status,
+                    display_name=item.display_name,
+                    summary=item.summary,
                     program_status=item.program_status,
                     missing_field_ids=item.missing_field_ids,
                     decisive_conditions=tuple(

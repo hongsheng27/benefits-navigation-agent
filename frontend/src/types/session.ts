@@ -223,6 +223,8 @@ export type ItemView = {
   itemId: string;
   kind: ItemKind;
   status: ItemStatus;
+  displayName?: string | null;
+  summary?: string | null;
 
   programStatus: string | null;
 
