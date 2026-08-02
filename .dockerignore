@@ -1,0 +1,34 @@
+# Keep the build context small and free of local state or secrets.
+.git
+.github
+.kiro
+.claude
+.ruff_cache
+
+# Never ship credentials. `.env` is gitignored but would otherwise be copied.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Frontend is deployed separately to S3 + CloudFront.
+frontend
+docs
+record
+tmp
+infra
+scripts
+
+# Python local state
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+backend/tests
+
+# Local databases are rebuilt from migrations at startup.
+**/*.db
+data/local
+data/private
